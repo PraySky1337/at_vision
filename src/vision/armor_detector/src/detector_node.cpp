@@ -83,11 +83,8 @@ void ArmorDetectorNode::detectOnce(const cv::Mat& raw_img, const std_msgs::msg::
     auto armors = detector_->detect(raw_img);
     if (debug_enabled_) {
         cv::Mat dbg_img = raw_img.clone();
-        std_msgs::msg::Header hdr;
-        hdr.stamp    = this->now();
-        hdr.frame_id = "camera_optical_frame";
         debug_pubs_->binary.publish(
-            cv_bridge::CvImage(hdr, "mono8", detector_->binary_img).toImageMsg());
+            cv_bridge::CvImage(header, "mono8", detector_->binary_img).toImageMsg());
         debug_pubs_->lights->publish(detector_->debug_lights);
         debug_pubs_->armors->publish(detector_->debug_armors);
         debug_pubs_->numbers.publish(
@@ -95,11 +92,11 @@ void ArmorDetectorNode::detectOnce(const cv::Mat& raw_img, const std_msgs::msg::
                  .toImageMsg());
         detector_->drawResults(dbg_img);
         cv::circle(dbg_img, cam_center_, 5, cv::Scalar(255, 0, 0), 2);
-        debug_pubs_->result.publish(cv_bridge::CvImage(hdr, "bgr8", dbg_img).toImageMsg());
+        debug_pubs_->result.publish(cv_bridge::CvImage(header, "bgr8", dbg_img).toImageMsg());
     }
     if (armors.empty())
         return;
-    publishArmorsAndMarkers(armors);
+    publishArmorsAndMarkers(armors, header);
 }
 
 void ArmorDetectorNode::initDetectors() {
@@ -139,11 +136,7 @@ void ArmorDetectorNode::initDetectors() {
         std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
 }
 
-void ArmorDetectorNode::publishArmorsAndMarkers(const std::vector<Armor>& armors) {
-    std_msgs::msg::Header header;
-    header.stamp    = this->now();
-    header.frame_id = "camera_optical_frame";
-
+void ArmorDetectorNode::publishArmorsAndMarkers(const std::vector<Armor>& armors, const std_msgs::msg::Header& header) {
     auto_aim_interfaces::msg::Armors msg;
     msg.header = header;
 

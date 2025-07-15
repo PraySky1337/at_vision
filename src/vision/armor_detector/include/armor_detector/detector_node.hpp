@@ -52,19 +52,16 @@ public:
 
 private:
     void detectLoop();
-    void imageCallback(std_msgs::msg::Header::ConstSharedPtr header);
     void detectOnce(const cv::Mat& raw_img, const std_msgs::msg::Header& header);
 
     void initDetectors();
-    void publishArmorsAndMarkers(const std::vector<Armor>& armors);
+    void publishArmorsAndMarkers(const std::vector<Armor>& armors, const std_msgs::msg::Header& header);
     rcl_interfaces::msg::SetParametersResult
         onParametersSet(const std::vector<rclcpp::Parameter>& params);
 
     // Publishers & Subscribers
     rclcpp::Publisher<auto_aim_interfaces::msg::Armors>::SharedPtr armors_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr img_header_pub_;
-    rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr img_header_sub_;
 
     // Camera
     std::unique_ptr<hikcamera::ImageCapturer> img_capturer_;
@@ -76,7 +73,6 @@ private:
 
     // thread
     std::unique_ptr<std::thread> detect_thread;
-    std::unique_ptr<std::thread> capture_thread;
 
     // Camera info
     cv::Point2f cam_center_;

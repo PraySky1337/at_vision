@@ -30,6 +30,18 @@ struct ReceiveImuData {
     uint8_t eof; // 0xA5
 };
 
+struct SendVisionData {
+    HeaderFrame header;
+    struct {
+        uint8_t tracking : 1;
+        uint8_t is_large_armor : 1;
+        uint8_t reserved : 6;
+        float yaw_error;
+        float pitch_error;
+    } data;
+    uint8_t eof;
+};
+
 #pragma pack()
 
 inline constexpr const char* colorName(uint8_t c) {

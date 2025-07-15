@@ -2,8 +2,10 @@
 #include "usb.hpp"
 #include "usb/packet.hpp"
 
+#include <auto_aim_interfaces/msg/detail/control_cmd__struct.hpp>
 #include <memory>
 #include <rclcpp/callback_group.hpp>
+#include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <tf2/LinearMath/Transform.hpp>
@@ -12,6 +14,9 @@
 #include <tf2_ros/buffer_interface.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+
+#include "auto_aim_interfaces/msg/control_cmd.hpp"
+#include "util/atmath.hpp"
 
 #include <cstdint>
 
@@ -27,15 +32,14 @@ struct UsbDriverNode : public rclcpp::Node {
         tf_buffer_        = std::make_shared<tf2_ros::Buffer>(get_clock());
         tf_listener_      = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
         detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, ns_ + "detector");
-        reset_tracker_srv = create_client<std_srvs::srv::Trigger>("/reset_tracker");
-        this->init();
-        this->start();
-    }
-
-    void start() {
+        reset_tracker_srv = create_client<std_srvs::srv::Trigger>(ns_ + "/reset_tracker");
+        this->init_parser();
         if (device_.open(0x0483)) {
             ATLOG_INFO("usb driver already");
         }
+        control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::ControlCmd>(
+            ns_ + "/control_command", rclcpp::SensorDataQoS(),
+            std::bind(&UsbDriverNode::control_cmd_callback, this, std::placeholders::_1));
         device_.handle_events();
     }
 
@@ -47,7 +51,7 @@ struct UsbDriverNode : public rclcpp::Node {
     }
 
 private:
-    void init() {
+    void init_parser() {
         parser_.register_parser(
             0x01, std::bind(
                       &UsbDriverNode::handle_imu_packet, this, std::placeholders::_1,
@@ -77,19 +81,40 @@ private:
         tf_broadcaster_.sendTransform(t);
         if (d.self_color != aiming_color_) {}
     }
+
+    void control_cmd_callback(
+        const auto_aim_interfaces::msg::ControlCmd::SharedPtr control_cmd_msg) {
+        SendVisionData vision_data;
+        vision_data.header.id           = 0x02;
+        vision_data.header.len          = sizeof(decltype(vision_data.data));
+        vision_data.header.sof          = HeaderFrame::SoF();
+        vision_data.eof                 = HeaderFrame::EoF();
+        vision_data.data.tracking       = control_cmd_msg->tracking;
+        vision_data.data.pitch_error    = control_cmd_msg->pitch_error;
+        vision_data.data.yaw_error      = control_cmd_msg->yaw_error;
+        vision_data.data.is_large_armor = control_cmd_msg->is_large_armor;
+        std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
+        if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
+            ATLOG_WARN("Failed to send data");
+        }
+    }
     DeviceParser parser_;
     Device device_;
+    uint8_t buffer_[64];
     std::string ns_;
 
     tf2_ros::Buffer::SharedPtr tf_buffer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     rclcpp::CallbackGroup::SharedPtr call_back_group;
+
     std::atomic<uint8_t> aiming_color_;
 
     std::mutex param_mutex_;
     rclcpp::AsyncParametersClient::SharedPtr detector_client;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
+
+    rclcpp::Subscription<auto_aim_interfaces::msg::ControlCmd>::SharedPtr control_cmd_sub_;
 
     std::atomic_bool running_;
     std::thread thread_;

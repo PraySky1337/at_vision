@@ -33,3 +33,31 @@
           reliability: reliable
     rate: 200
     use_sim_time: false
+
+/ArmorTracker:
+  ros__parameters:
+    debug: false
+    ekf:
+      r_xyz_factor: 4.0e-4
+      r_yaw: 5.0e-3
+      sigma2_q_r: 80.0
+      sigma2_q_xyz_max: 0.1
+      sigma2_q_xyz_min: 0.05
+      sigma2_q_yaw_max: 10.0
+      sigma2_q_yaw_min: 5.0
+    max_armor_distance: 10.0
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    target_frame: odom
+    tracker:
+      lost_time_thres: 1.0
+      max_match_distance: 0.5
+      max_match_yaw_diff: 1.0
+      tracking_thres: 5
+    use_sim_time: false
+

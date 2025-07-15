@@ -188,6 +188,26 @@ public:
             reinterpret_cast<const std::byte*>(transfer->buffer), static_cast<size_t>(got));
     }
 
+    bool sync_send(uint8_t* data, std::size_t size, unsigned timeout_ms = 500) noexcept {
+        if (!handle_) {
+            ATLOG_ERROR("handle null!");
+            return false;
+        }
+        assert(size != 0);
+        int actual = 0;
+        int ret    = libusb_bulk_transfer(
+            handle_, EP_OUT, data, static_cast<int>(size), &actual, timeout_ms);
+        if (ret != 0) {
+            ATLOG_ERROR("sync send data error : {}", libusb_error_name(ret));
+            return false;
+        }
+        if (actual != static_cast<int>(size)) {
+            ATLOG_WARN("sync send partial send {}/{}", actual, size);
+            return false;
+        }
+        return true;
+    }
+
     template <typename Functor>
     struct FinalAction {
         constexpr explicit FinalAction(Functor clean)
@@ -225,39 +245,6 @@ public:
     std::atomic_bool handling_events_{false};
     bool first_reception{true};
 };
-
-struct Device::TransmitBuffer {
-    static constexpr std::size_t BUF_SZ = 64;
-
-    bool add_transmission(const uint8_t* data, std::size_t size) {
-        assert(size < BUF_SZ);
-        if (size > BUF_SZ)
-            return false;
-
-        libusb_transfer* tr = nullptr;
-        // TODO
-
-        std::memcpy(tr->buffer, data, size);
-        tr->length = static_cast<int>(size);
-
-        int ret = libusb_submit_transfer(tr);
-        if (ret != 0) {
-            ATLOG_ERROR("submit_transfer: {}", libusb_error_name(ret));
-            return false;
-        }
-        return true;
-    }
-
-    /* ---------------- 回调：放回空闲池 ---------------- */
-    void LIBUSB_CALL usb_transmit_complete_callback(libusb_transfer* tr) {
-        if (tr->status != LIBUSB_TRANSFER_COMPLETED) [[unlikely]] {
-            ATLOG_WARN("Usb transfer not completed");
-        }
-    }
-
-private:
-};
-
 Device::Device(DeviceParser& device_parser)
     : impl_(std::make_unique<Impl>(device_parser)) {}
 Device::~Device() { this->stop_handling_events(); }
@@ -268,8 +255,8 @@ void Device::handle_events() { impl_->handle_events(); }
 
 void Device::stop_handling_events() { impl_->stop_handling_events(); }
 
-void Device::send_data(uint8_t* data, size_t size) {
-    transmit_buffer_->add_transmission(data, size);
+bool Device::send_data(uint8_t* data, std::size_t size) {
+    return impl_->sync_send(data, size);
 }
 
 } // namespace usb_driver

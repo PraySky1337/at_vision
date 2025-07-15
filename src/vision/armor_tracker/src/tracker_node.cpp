@@ -17,8 +17,7 @@ ArmorTrackerNode::ArmorTrackerNode(
     const rclcpp::Node* detector_node, const std::string& name, const std::string& ns,
     const rclcpp::NodeOptions& options)
     : Node(name, ns, options)
-    , detector_node_name_with_ns(
-          std::string(detector_node->get_namespace()) + detector_node->get_name()) {
+    , detector_node_name_with_ns(detector_node->get_fully_qualified_name()) {
     RCLCPP_INFO(this->get_logger(), "Starting TrackerNode!");
     declareParameters();
     initTrackers();
@@ -163,7 +162,6 @@ void ArmorTrackerNode::initServices() {
 }
 
 void ArmorTrackerNode::initTf() {
-    cb_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     cb_group = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // 共有计时器接口
