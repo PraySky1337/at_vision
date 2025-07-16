@@ -30,8 +30,6 @@ TrajectoryNode::TrajectoryNode(
     bal_.k  = declare_parameter("resistance_coefficient", 0.0);
     bal_.g  = declare_parameter("gravity", 9.81);
     bal_.dt = declare_parameter("integration_step", 1e-3);
-    tgt_.d  = declare_parameter("target_distance", 8.0);
-    tgt_.h  = declare_parameter("target_height", 0.0);
 
     tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);

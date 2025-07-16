@@ -21,7 +21,7 @@ namespace rm_auto_aim {
 
 ArmorDetectorNode::ArmorDetectorNode(
     const std::string& name, const std::string& ns, const rclcpp::NodeOptions& options)
-    : Node("armor_detector", options)
+    : Node(name, ns, options)
     , hik_camera_params_(this)
     , cam_info_manager_(this) {
     RCLCPP_INFO(get_logger(), "Starting ArmorDetectorNode...");

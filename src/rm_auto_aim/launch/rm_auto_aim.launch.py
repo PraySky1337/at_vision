@@ -10,7 +10,7 @@ node_params = os.path.join(
 robot_description = os.path.join(
     get_package_share_directory('rm_gimbal_description'), 'urdf', 'rm_gimbal.urdf.xacro')
 
-camera_node = Node(
+node = Node(
     package='rm_auto_aim',
     executable='rm_auto_aim',
     output='screen',
@@ -19,15 +19,15 @@ camera_node = Node(
     arguments=['--ros-args', '--log-level', 'info'],
 )
 
-foxglove_bridge_node = Node(
-    package='foxglove_bridge',       
-    executable='foxglove_bridge',
-    name='foxglove_bridge',
-    output='screen',
-    parameters=[{
-        'port': 8765
-    }],
-)
+# foxglove_bridge_node = Node(
+#     package='foxglove_bridge',       
+#     executable='foxglove_bridge',
+#     name='foxglove_bridge',
+#     output='screen',
+#     parameters=[{
+#         'port': 8765
+#     }],
+# )
 
 robot_description = Command(['xacro ', robot_description])
 
@@ -41,7 +41,6 @@ robot_state_publisher = Node(
 
 def generate_launch_description():
     return LaunchDescription([
-        robot_state_publisher,
-        camera_node,
-        foxglove_bridge_node
-    ])
+        node,
+        robot_state_publisher 
+])

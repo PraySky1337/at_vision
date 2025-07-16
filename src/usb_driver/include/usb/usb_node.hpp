@@ -41,7 +41,7 @@ struct UsbDriverNode : public rclcpp::Node {
             ATLOG_INFO("usb driver already");
         }
         control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::ControlCmd>(
-            ns_ + "/tracker/control_command", rclcpp::SensorDataQoS(),
+            ns_ + "trajectory/control_command", rclcpp::SensorDataQoS(),
             std::bind(&UsbDriverNode::control_cmd_callback, this, std::placeholders::_1));
         thread_ = std::thread([this] {
             running_ = true;
@@ -104,6 +104,14 @@ private:
         if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
             ATLOG_WARN("Failed to send data");
         }
+        // 打印 buffer 内容（16进制）
+        std::ostringstream oss;
+        oss << "Send buffer: ";
+        for (size_t i = 0; i < sizeof(SendVisionData); ++i) {
+            oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
+                << (static_cast<unsigned>(buffer_[i]) & 0xFF) << " ";
+        }
+        ATLOG_INFO("{}", oss.str());
     }
     static constexpr const int DEV_VID = 0x0483;
     DeviceParser parser_;

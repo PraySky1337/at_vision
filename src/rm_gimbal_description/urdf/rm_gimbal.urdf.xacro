@@ -3,13 +3,13 @@
 <robot name="rm_gimbal"
   xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:arg name="xyz" default="0.10 0 0.05" />
-  <xacro:arg name="rpy" default="0 0 0" />
+  <xacro:arg name="camera_xyz" default="0.04444 0.0 -0.0363" />
+  <xacro:arg name="camera_rpy" default="0 0 0" />
+  <xacro:arg name="muzzle_xyz" default="0.0874 0 -0.0928" />
+  <xacro:arg name="muzzle_rpy" default="0 0 0" />
 
   <link name="odom" />
-
   <link name="gimbal_link" />
-
   <link name="muzzle_link" />
 
   <joint name="gimbal_joint" type="continuous">
@@ -18,7 +18,7 @@
   </joint>
 
   <joint name="gimbal_muzzle_joint" type="fixed">
-    <origin xyz="0.1 0 0" rpy="0.0 0.0 0.0"/>
+    <origin xyz="$(arg muzzle_xyz)" rpy="$(arg muzzle_rpy)"/>
     <parent link="gimbal_link" />
     <child link="muzzle_link" />
   </joint>
@@ -26,7 +26,7 @@
   <link name="camera_link" />
 
   <joint name="camera_joint" type="fixed">
-    <origin xyz="$(arg xyz)" rpy="$(arg rpy)" />
+    <origin xyz="$(arg camera_xyz)" rpy="$(arg camera_rpy)" />
     <parent link="gimbal_link" />
     <child link="camera_link" />
     <axis xyz="0 0 0" />
@@ -36,8 +36,6 @@
 
   <joint name="camera_optical_joint" type="fixed">
     <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}" />
-    <!-- <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/> -->
-    <!-- <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi}"/> -->
     <parent link="camera_link" />
     <child link="camera_optical_frame" />
   </joint>

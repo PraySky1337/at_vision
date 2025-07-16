@@ -10,8 +10,8 @@
     binary_thres: 160
     camera:
       cam_info_url: package://rm_auto_aim/config/camera_info.yaml
-      exposure_time: 4
-      gain: 8.0
+      exposure_time: 2
+      gain: 16.0
       invert: false
       name: camera
       trigger_mode: false
@@ -27,19 +27,19 @@
     qos_overrides:
       /parameter_events:
         publisher:
-          depth: 1000
+          depth: 10
           durability: volatile
           history: keep_last
           reliability: reliable
     rate: 200
     use_sim_time: false
 
-/ArmorTracker:
+/armor_tracker:
   ros__parameters:
-    debug: false
+    debug: true
     ekf:
-      r_xyz_factor: 4.0e-4
-      r_yaw: 5.0e-3
+      r_xyz_factor: 0.0004
+      r_yaw: 0.005
       sigma2_q_r: 80.0
       sigma2_q_xyz_max: 0.1
       sigma2_q_xyz_min: 0.05
@@ -49,7 +49,7 @@
     qos_overrides:
       /parameter_events:
         publisher:
-          depth: 1000
+          depth: 10
           durability: volatile
           history: keep_last
           reliability: reliable
@@ -61,3 +61,19 @@
       tracking_thres: 5
     use_sim_time: false
 
+/trajectory:
+  ros__parameters:
+    bullet_velocity: 25.0
+    gravity: 9.81
+    integration_step: 0.001
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 100
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    resistance_coefficient: 0.0
+    target_distance: 8.0
+    target_height: 0.0
+    use_sim_time: false

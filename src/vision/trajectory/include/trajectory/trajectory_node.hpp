@@ -21,9 +21,9 @@ private:
     static constexpr const uint8_t OUTPOST_ARMOR_NUM = 3;
     static constexpr const uint8_t NORMAL_ARMOR_NUM  = 4;
     struct Target {
-        double d = 8.0;   // 水平距离  (m)
-        double h = 0.0;   // 目标相对高度 (m, 上正下负)
-    } tgt_;
+        double d ; 
+        double h ;
+    };
 
     struct Ballistics {
         double v0 = 25.0; // 初速  (m/s)
