@@ -15,6 +15,7 @@
 
   <!-- depend: build, export, and execution dependency -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
   <depend>eigen</depend>
   <depend>angles</depend>
   <depend>std_srvs</depend>

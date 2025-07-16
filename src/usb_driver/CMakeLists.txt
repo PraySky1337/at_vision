@@ -28,6 +28,11 @@ target_link_libraries(usb_driver
   ${LIBUSB_LINK_LIBRARIES}   # 等价 -lusb-1.0
 )
 
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN rm_auto_aim::ArmorDetectorNode
+  EXECUTABLE armor_detector_node
+)
+
 ament_auto_package(
   INSTALL_TO_SHARE
   config

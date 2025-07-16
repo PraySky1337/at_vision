@@ -5,6 +5,7 @@
 #include <auto_aim_interfaces/msg/detail/control_cmd__struct.hpp>
 #include <memory>
 #include <rclcpp/callback_group.hpp>
+#include <rclcpp/node_options.hpp>
 #include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -23,28 +24,34 @@
 namespace usb_driver {
 struct UsbDriverNode : public rclcpp::Node {
     enum Color { RED, BLUE, UNKNOWN };
-    UsbDriverNode(const std::string& name = "usb_driver", const std::string& ns = "")
-        : rclcpp::Node(name, ns)
+    UsbDriverNode(
+        const std::string& name = "usb_driver", const std::string& ns = "",
+        const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
+        : rclcpp::Node(name, ns, options)
         , device_(parser_)
         , ns_(ns)
         , tf_broadcaster_(*this)
         , aiming_color_(UNKNOWN) {
-        tf_buffer_        = std::make_shared<tf2_ros::Buffer>(get_clock());
-        tf_listener_      = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
-        detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, ns_ + "detector");
+        tf_buffer_      = std::make_shared<tf2_ros::Buffer>(get_clock());
+        tf_listener_    = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
+        detector_client = std::make_shared<rclcpp::AsyncParametersClient>(this, ns_ + "/detector");
         reset_tracker_srv = create_client<std_srvs::srv::Trigger>(ns_ + "/reset_tracker");
         this->init_parser();
         if (device_.open(0x0483)) {
             ATLOG_INFO("usb driver already");
         }
         control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::ControlCmd>(
-            ns_ + "/control_command", rclcpp::SensorDataQoS(),
+            ns_ + "/tracker/control_command", rclcpp::SensorDataQoS(),
             std::bind(&UsbDriverNode::control_cmd_callback, this, std::placeholders::_1));
-        device_.handle_events();
+        thread_ = std::thread([this] {
+            running_ = true;
+            while (running_) {
+                device_.handle_events();
+            }
+        });
     }
 
     ~UsbDriverNode() {
-        running_ = false;
         if (thread_.joinable()) {
             thread_.join();
         }
@@ -98,6 +105,7 @@ private:
             ATLOG_WARN("Failed to send data");
         }
     }
+    static constexpr const int DEV_VID = 0x0483;
     DeviceParser parser_;
     Device device_;
     uint8_t buffer_[64];

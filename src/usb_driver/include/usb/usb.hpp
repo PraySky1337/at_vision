@@ -14,7 +14,6 @@ public:
     bool open(uint16_t vid, uint16_t pid = 0);
     bool send_data(uint8_t* data, std::size_t size);
     void handle_events();
-    void stop_handling_events();
 
 private:
     struct TransmitBuffer;
