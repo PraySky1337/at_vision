@@ -13,11 +13,8 @@
 #include <vector>
 
 namespace rm_auto_aim {
-ArmorTrackerNode::ArmorTrackerNode(
-    const rclcpp::Node* detector_node, const std::string& name, const std::string& ns,
-    const rclcpp::NodeOptions& options)
-    : Node(name, ns, options)
-    , detector_node_name_with_ns(detector_node->get_fully_qualified_name()) {
+ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions& options)
+    : rclcpp::Node("armor_tracker", options) {
     RCLCPP_INFO(this->get_logger(), "Starting TrackerNode!");
     declareParameters();
     initTrackers();
@@ -175,7 +172,7 @@ void ArmorTrackerNode::initTf() {
 
 void ArmorTrackerNode::initSubscribers() {
     armors_sub_.subscribe(
-        this, detector_node_name_with_ns + "/armors", rmw_qos_profile_sensor_data);
+        this, "detector/armors", rmw_qos_profile_sensor_data);
 
     tf2_filter_ = std::make_shared<tf2_filter>(
         armors_sub_, *tf2_buffer_, target_frame_, 10, get_node_logging_interface(),
@@ -187,10 +184,10 @@ void ArmorTrackerNode::initSubscribers() {
 }
 
 void ArmorTrackerNode::initPublishers() {
-    info_pub_ = create_publisher<auto_aim_interfaces::msg::TrackerInfo>("~/info", 10);
+    info_pub_ = create_publisher<auto_aim_interfaces::msg::TrackerInfo>("tracker/info", 10);
 
     target_pub_ =
-        create_publisher<auto_aim_interfaces::msg::Target>("~/target", rclcpp::SensorDataQoS());
+        create_publisher<auto_aim_interfaces::msg::Target>("tracker/target", rclcpp::SensorDataQoS());
 }
 
 void ArmorTrackerNode::initMarkers() {
@@ -229,7 +226,7 @@ void ArmorTrackerNode::initMarkers() {
     angular_v_marker_ = arrow_w;
     armor_marker_     = cube;
 
-    marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", 10);
+    marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("tracker/marker", 10);
 }
 
 void ArmorTrackerNode::armorsCallback(
@@ -391,3 +388,10 @@ void ArmorTrackerNode::publishMarkers(const auto_aim_interfaces::msg::Target& ta
 }
 
 } // namespace rm_auto_aim
+
+#include "rclcpp_components/register_node_macro.hpp"
+
+// Register the component with class_loader.
+// This acts as a sort of entry point, allowing the component to be discoverable when its library
+// is being loaded into a running process.
+RCLCPP_COMPONENTS_REGISTER_NODE(rm_auto_aim::ArmorTrackerNode)

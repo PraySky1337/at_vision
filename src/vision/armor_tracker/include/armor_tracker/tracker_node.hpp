@@ -34,9 +34,7 @@ namespace rm_auto_aim {
 using tf2_filter = tf2_ros::MessageFilter<auto_aim_interfaces::msg::Armors>;
 class ArmorTrackerNode : public rclcpp::Node {
 public:
-    explicit ArmorTrackerNode(
-        const rclcpp::Node* detector_node, const std::string& name = "armor_tracker",
-        const std::string& ns = "", const rclcpp::NodeOptions& options = rclcpp::NodeOptions{});
+    explicit ArmorTrackerNode(const rclcpp::NodeOptions& options);
 
 private:
     /* === 初始化函数 === */
@@ -95,8 +93,6 @@ private:
     visualization_msgs::msg::Marker angular_v_marker_;
     visualization_msgs::msg::Marker armor_marker_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
-
-    const std::string detector_node_name_with_ns;
 };
 
 } // namespace rm_auto_aim

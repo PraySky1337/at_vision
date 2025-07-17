@@ -2,6 +2,8 @@
 #include "armor_detector/detector_node.hpp"
 
 #include <cv_bridge/cv_bridge.h>
+#include <logger/logger.hpp>
+#include <rclcpp/node_options.hpp>
 #include <rmw/qos_profiles.h>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -19,9 +21,8 @@
 
 namespace rm_auto_aim {
 
-ArmorDetectorNode::ArmorDetectorNode(
-    const std::string& name, const std::string& ns, const rclcpp::NodeOptions& options)
-    : Node(name, ns, options)
+ArmorDetector::ArmorDetector(const rclcpp::NodeOptions& options)
+    : rclcpp::Node("armor_detector",options)
     , hik_camera_params_(this)
     , cam_info_manager_(this) {
     RCLCPP_INFO(get_logger(), "Starting ArmorDetectorNode...");
@@ -33,9 +34,9 @@ ArmorDetectorNode::ArmorDetectorNode(
     RCLCPP_INFO(get_logger(), "Detector initialized.");
 
     armors_pub_ =
-        create_publisher<auto_aim_interfaces::msg::Armors>("~/armors", rclcpp::SensorDataQoS());
+        create_publisher<auto_aim_interfaces::msg::Armors>("detector/armors", rclcpp::SensorDataQoS());
     marker_pub_ =
-        create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", rclcpp::QoS(10));
+        create_publisher<visualization_msgs::msg::MarkerArray>("detector/marker", rclcpp::QoS(10));
     RCLCPP_INFO(get_logger(), "Publishers created.");
 
     debug_enabled_ = declare_parameter("debug", false);
@@ -47,7 +48,7 @@ ArmorDetectorNode::ArmorDetectorNode(
     cam_center_   = cv::Point2f(cam_info.k[2], cam_info.k[5]);
 
     param_cb_handle_ = add_on_set_parameters_callback(
-        std::bind(&ArmorDetectorNode::onParametersSet, this, std::placeholders::_1));
+        std::bind(&ArmorDetector::onParametersSet, this, std::placeholders::_1));
 
     if (debug_enabled_) {
         debug_pubs_ = std::make_shared<DebugPublishers>(this);
@@ -59,27 +60,28 @@ ArmorDetectorNode::ArmorDetectorNode(
     });
 }
 
-ArmorDetectorNode::~ArmorDetectorNode() {
+ArmorDetector::~ArmorDetector() {
     if (detect_thread && detect_thread->joinable()) {
         detect_thread->join();
         detect_thread.reset();
     }
-    rclcpp::shutdown();
 }
 
-void ArmorDetectorNode::detectLoop() {
-    cv::Mat img;
-    std_msgs::msg::Header header;
-    header.frame_id = "camera_optical_frame";
+void ArmorDetector::detectLoop() {
     while (rclcpp::ok()) {
-        img          = img_capturer_->read();
-        header.stamp = now();
+        cv::Mat img = img_capturer_->read();
+        if (img.empty()) {
+            ATLOG_WARN("empty imgage");
+            continue;
+        }
+        std_msgs::msg::Header header;
+        header.frame_id = "camera_optical_frame";
+        header.stamp    = now();
         detectOnce(img, header);
-        asm volatile("");
     }
 }
 
-void ArmorDetectorNode::detectOnce(const cv::Mat& raw_img, const std_msgs::msg::Header& header) {
+void ArmorDetector::detectOnce(const cv::Mat& raw_img, const std_msgs::msg::Header& header) {
     auto armors = detector_->detect(raw_img);
     if (debug_enabled_) {
         cv::Mat dbg_img = raw_img.clone();
@@ -99,7 +101,7 @@ void ArmorDetectorNode::detectOnce(const cv::Mat& raw_img, const std_msgs::msg::
     publishArmorsAndMarkers(armors, header);
 }
 
-void ArmorDetectorNode::initDetectors() {
+void ArmorDetector::initDetectors() {
     rcl_interfaces::msg::ParameterDescriptor pd;
     pd.integer_range.resize(1);
     pd.integer_range[0].step       = 1;
@@ -136,7 +138,8 @@ void ArmorDetectorNode::initDetectors() {
         std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
 }
 
-void ArmorDetectorNode::publishArmorsAndMarkers(const std::vector<Armor>& armors, const std_msgs::msg::Header& header) {
+void ArmorDetector::publishArmorsAndMarkers(
+    const std::vector<Armor>& armors, const std_msgs::msg::Header& header) {
     auto_aim_interfaces::msg::Armors msg;
     msg.header = header;
 
@@ -203,15 +206,15 @@ void ArmorDetectorNode::publishArmorsAndMarkers(const std::vector<Armor>& armors
             marray.markers.push_back(text);
         }
     }
+    armors_pub_->publish(msg);
 
     if (debug_enabled_) {
         marker_pub_->publish(marray);
     }
-    armors_pub_->publish(msg);
 }
 
 rcl_interfaces::msg::SetParametersResult
-    ArmorDetectorNode::onParametersSet(const std::vector<rclcpp::Parameter>& params) {
+    ArmorDetector::onParametersSet(const std::vector<rclcpp::Parameter>& params) {
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
     result.reason     = "";
@@ -275,13 +278,13 @@ rcl_interfaces::msg::SetParametersResult
 
 DebugPublishers::DebugPublishers(rclcpp::Node* node_ptr) {
     this->lights =
-        node_ptr->create_publisher<auto_aim_interfaces::msg::DebugLights>("~/debug_lights", 10);
+        node_ptr->create_publisher<auto_aim_interfaces::msg::DebugLights>("detector/debug_lights", 10);
     this->armors =
-        node_ptr->create_publisher<auto_aim_interfaces::msg::DebugArmors>("~/debug_armors", 10);
-    this->binary  = image_transport::create_publisher(node_ptr, "~/binary_img");
-    this->img_raw = image_transport::create_publisher(node_ptr, "~/image_raw");
-    this->numbers = image_transport::create_publisher(node_ptr, "~/number_img");
-    this->result  = image_transport::create_publisher(node_ptr, "~/result_img");
+        node_ptr->create_publisher<auto_aim_interfaces::msg::DebugArmors>("detector/debug_armors", 10);
+    this->binary  = image_transport::create_publisher(node_ptr, "detector/binary_img");
+    this->img_raw = image_transport::create_publisher(node_ptr, "detector/image_raw");
+    this->numbers = image_transport::create_publisher(node_ptr, "detector/number_img");
+    this->result  = image_transport::create_publisher(node_ptr, "detector/result_img");
 }
 
 DebugPublishers::~DebugPublishers() {
@@ -292,3 +295,7 @@ DebugPublishers::~DebugPublishers() {
 }
 
 } // namespace rm_auto_aim
+
+#include <rclcpp_components/register_node_macro.hpp>
+
+RCLCPP_COMPONENTS_REGISTER_NODE(rm_auto_aim::ArmorDetector)

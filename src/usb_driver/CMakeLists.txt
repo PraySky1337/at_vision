@@ -14,7 +14,7 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
 ament_auto_find_build_dependencies()
 
-ament_auto_add_library(${PROJECT_NAME}
+ament_auto_add_library(${PROJECT_NAME} SHARED
   DIRECTORY src
 )
 
@@ -25,12 +25,12 @@ target_include_directories(usb_driver PUBLIC
 )
 
 target_link_libraries(usb_driver
-  ${LIBUSB_LINK_LIBRARIES}   # 等价 -lusb-1.0
+  ${LIBUSB_LINK_LIBRARIES}
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN rm_auto_aim::ArmorDetectorNode
-  EXECUTABLE armor_detector_node
+  PLUGIN usb_driver::UsbDriver
+  EXECUTABLE ${PROJECT_NAME}_node
 )
 
 ament_auto_package(

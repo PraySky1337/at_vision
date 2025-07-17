@@ -1,6 +1,5 @@
 #pragma once
 #include <auto_aim_interfaces/msg/control_cmd.hpp>
-#include <auto_aim_interfaces/msg/detail/control_cmd__struct.hpp>
 #include <auto_aim_interfaces/msg/target.hpp>
 
 #include <rclcpp/node_options.hpp>
@@ -9,24 +8,26 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <visualization_msgs/msg/detail/marker_array__struct.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+
 namespace trajectory {
 
-class TrajectoryNode : public rclcpp::Node {
+class TrajectoryDriver : public rclcpp::Node {
 public:
-    explicit TrajectoryNode(
-        const std::string& name = "trajectory_node", const std::string& ns = "",
-        const rclcpp::NodeOptions& opt = rclcpp::NodeOptions{});
+    explicit TrajectoryDriver(const rclcpp::NodeOptions& options);
 
 private:
     static constexpr const uint8_t OUTPOST_ARMOR_NUM = 3;
     static constexpr const uint8_t NORMAL_ARMOR_NUM  = 4;
+    static constexpr const double ARROW_LEN          = 1.0;
     struct Target {
-        double d ; 
-        double h ;
+        double d;
+        double h;
     };
 
     struct Ballistics {
-        double v0 = 25.0; // 初速  (m/s)
+        double v0 = 21.0; // 初速  (m/s)
         double k  = 0.0;  // 空气阻力系数 ρCdA/(2m)  (1/m)
         double g  = 9.81; // 重力  (m/s²)
         double dt = 1e-3; // 数值积分步长 (s) (k>0 时用)
@@ -37,7 +38,7 @@ private:
     double simulateY(double theta, const Target& tgt);
 
     /// 二分法解俯仰角，使 simulateY(theta) == tgt.h
-    double solvePitch(const Target& tgt, double eps = 1e-4, int max_iter = 20);
+    double solvePitch(const Target& tgt, double eps = 1e-4, int max_iter = 50);
 
     using TargetMsg  = auto_aim_interfaces::msg::Target;
     using ControlCmd = auto_aim_interfaces::msg::ControlCmd;
@@ -48,9 +49,10 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     rclcpp::Publisher<ControlCmd>::SharedPtr control_cmd_pub_;
-
-    double last_yaw_err_;
-    double last_pitch_err_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr aim_marker_pub_;
+    visualization_msgs::msg::MarkerArray mk_array_; // 蓝箭：当前方向
+    visualization_msgs::msg::Marker mk_current_;    // 蓝箭：当前方向
+    visualization_msgs::msg::Marker mk_target_;     // 红箭：期望方向
 };
 
 } // namespace trajectory

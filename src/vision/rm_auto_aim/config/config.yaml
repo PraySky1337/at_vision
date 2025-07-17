@@ -27,7 +27,7 @@
     qos_overrides:
       /parameter_events:
         publisher:
-          depth: 10
+          depth: 1000
           durability: volatile
           history: keep_last
           reliability: reliable
@@ -49,7 +49,7 @@
     qos_overrides:
       /parameter_events:
         publisher:
-          depth: 10
+          depth: 1000
           durability: volatile
           history: keep_last
           reliability: reliable
@@ -63,17 +63,15 @@
 
 /trajectory:
   ros__parameters:
-    bullet_velocity: 25.0
-    gravity: 9.81
+    bullet_velocity: 21.0
+    gravity: 9.83
     integration_step: 0.001
     qos_overrides:
       /parameter_events:
         publisher:
-          depth: 100
+          depth: 1000
           durability: volatile
           history: keep_last
           reliability: reliable
     resistance_coefficient: 0.0
-    target_distance: 8.0
-    target_height: 0.0
     use_sim_time: false

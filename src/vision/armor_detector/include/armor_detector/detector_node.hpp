@@ -43,19 +43,18 @@ struct DebugPublishers {
     image_transport::Publisher img_raw;
 };
 
-class ArmorDetectorNode : public rclcpp::Node {
+class ArmorDetector : public rclcpp::Node {
 public:
-    explicit ArmorDetectorNode(
-        const std::string& name = "armor_detector", const std::string& ns = "",
-        const rclcpp::NodeOptions& options = rclcpp::NodeOptions{});
-    ~ArmorDetectorNode() override;
+    explicit ArmorDetector(const rclcpp::NodeOptions& options);
+    ~ArmorDetector() override;
 
 private:
     void detectLoop();
     void detectOnce(const cv::Mat& raw_img, const std_msgs::msg::Header& header);
 
     void initDetectors();
-    void publishArmorsAndMarkers(const std::vector<Armor>& armors, const std_msgs::msg::Header& header);
+    void publishArmorsAndMarkers(
+        const std::vector<Armor>& armors, const std_msgs::msg::Header& header);
     rcl_interfaces::msg::SetParametersResult
         onParametersSet(const std::vector<rclcpp::Parameter>& params);
 

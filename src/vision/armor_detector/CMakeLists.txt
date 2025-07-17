@@ -15,7 +15,14 @@ ament_auto_find_build_dependencies()
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
   DIRECTORY src
+) 
+ 
+
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN rm_auto_aim::ArmorDetector
+  EXECUTABLE ${PROJECT_NAME}_node
 )
+
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})

@@ -1,5 +1,5 @@
 std_msgs/Header header
-float32 pitch_error
-float32 yaw_error
+float32 target_pitch
+float32 target_yaw
 bool tracking
 bool is_large_armor
