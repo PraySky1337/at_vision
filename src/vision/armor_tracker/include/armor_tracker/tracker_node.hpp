@@ -19,10 +19,8 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 
 // STD
-#include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "armor_tracker/tracker.hpp"
 #include "auto_aim_interfaces/msg/armors.hpp"
@@ -35,6 +33,7 @@ using tf2_filter = tf2_ros::MessageFilter<auto_aim_interfaces::msg::Armors>;
 class ArmorTrackerNode : public rclcpp::Node {
 public:
     explicit ArmorTrackerNode(const rclcpp::NodeOptions& options);
+    ~ArmorTrackerNode() override;
 
 private:
     /* === 初始化函数 === */

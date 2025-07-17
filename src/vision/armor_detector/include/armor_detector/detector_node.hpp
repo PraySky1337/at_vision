@@ -11,18 +11,17 @@
 
 #include <atomic>
 #include <camera_info_manager/camera_info_manager.hpp>
-#include <hikcamera/image_capturer.hpp>
 #include <image_transport/image_transport.hpp>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/detail/image__struct.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include "armor_detector/detector.hpp"
 #include "armor_detector/pnp_solver.hpp"
 #include "auto_aim_interfaces/msg/armors.hpp"
-#include "camera.hpp"
 #include "utility.hpp"
 
 namespace rm_auto_aim {
@@ -40,7 +39,6 @@ struct DebugPublishers {
     image_transport::Publisher binary;
     image_transport::Publisher numbers;
     image_transport::Publisher result;
-    image_transport::Publisher img_raw;
 };
 
 class ArmorDetector : public rclcpp::Node {
@@ -49,8 +47,7 @@ public:
     ~ArmorDetector() override;
 
 private:
-    void detectLoop();
-    void detectOnce(const cv::Mat& raw_img, const std_msgs::msg::Header& header);
+    void image_callback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
 
     void initDetectors();
     void publishArmorsAndMarkers(
@@ -63,15 +60,11 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
     // Camera
-    std::unique_ptr<hikcamera::ImageCapturer> img_capturer_;
-    camera::HikCameraParams hik_camera_params_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
     // Detector & PnP
     std::unique_ptr<Detector> detector_;
     std::shared_ptr<PnPSolver> pnp_solver_;
     camera_info_manager::CameraInfoManager cam_info_manager_;
-
-    // thread
-    std::unique_ptr<std::thread> detect_thread;
 
     // Camera info
     cv::Point2f cam_center_;

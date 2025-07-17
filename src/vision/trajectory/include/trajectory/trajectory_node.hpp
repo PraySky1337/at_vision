@@ -11,11 +11,14 @@
 #include <visualization_msgs/msg/detail/marker_array__struct.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+#include <Eigen/Dense>
+
 namespace trajectory {
 
 class TrajectoryDriver : public rclcpp::Node {
 public:
     explicit TrajectoryDriver(const rclcpp::NodeOptions& options);
+    ~TrajectoryDriver();
 
 private:
     static constexpr const uint8_t OUTPOST_ARMOR_NUM = 3;
@@ -42,7 +45,10 @@ private:
 
     using TargetMsg  = auto_aim_interfaces::msg::Target;
     using ControlCmd = auto_aim_interfaces::msg::ControlCmd;
+
     void target_call_back(const TargetMsg::SharedPtr target_msg);
+
+    void publish_marker(const ControlCmd& msg, const Eigen::Vector3d& best_pos);
 
     rclcpp::Subscription<TargetMsg>::SharedPtr target_sub_;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -53,6 +59,8 @@ private:
     visualization_msgs::msg::MarkerArray mk_array_; // 蓝箭：当前方向
     visualization_msgs::msg::Marker mk_current_;    // 蓝箭：当前方向
     visualization_msgs::msg::Marker mk_target_;     // 红箭：期望方向
+
+    Eigen::Isometry3d t_odom_muzzle_full_;
 };
 
 } // namespace trajectory

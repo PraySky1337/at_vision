@@ -25,6 +25,10 @@ ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions& options)
     initPublishers();
     initMarkers();
 }
+
+ArmorTrackerNode::~ArmorTrackerNode() {
+    
+}
 void ArmorTrackerNode::declareParameters() {
     debug               = declare_parameter("debug", false);
     max_armor_distance_ = declare_parameter("max_armor_distance", 10.0);

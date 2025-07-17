@@ -8,13 +8,7 @@
       min_light_ratio: 0.7
       min_small_center_distance: 0.8
     binary_thres: 160
-    camera:
-      cam_info_url: package://rm_auto_aim/config/camera_info.yaml
-      exposure_time: 2
-      gain: 16.0
-      invert: false
-      name: camera
-      trigger_mode: false
+    cam_info_url: package://rm_auto_aim/config/camera_info.yaml
     classifier_threshold: 0.7
     debug: true
     detect_color: 1
@@ -74,4 +68,34 @@
           history: keep_last
           reliability: reliable
     resistance_coefficient: 0.0
+    use_sim_time: false
+
+
+/camera_node:
+  ros__parameters:
+    camera_info_url: package://hik_camera/config/camera_info.yaml
+    camera_name: narrow_stereo
+    exposure_time: 1500
+    gain: 16.01140022277832
+    image_raw:
+      enable_pub_plugins:
+      - image_transport/compressedDepth
+      - image_transport/compressed
+      - image_transport/raw
+      - image_transport/theora
+      format: jpeg
+      jpeg_quality: 95
+      png_level: 3
+      tiff:
+        res_unit: inch
+        xdpi: -1
+        ydpi: -1
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    use_sensor_data_qos: true
     use_sim_time: false

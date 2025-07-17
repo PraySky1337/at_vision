@@ -37,7 +37,7 @@ detector_node = ComposableNode(
     plugin='rm_auto_aim::ArmorDetector',
     name='armor_detector',
     parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': False}],
+    extra_arguments=[{'use_intra_process_comms': True}],
 )
 
 tracker_node = ComposableNode(
@@ -62,4 +62,12 @@ trajectory_node = ComposableNode(
     name="trajectory",
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
+)
+
+camera_node = ComposableNode(
+    package='hik_camera',
+    plugin='hik_camera::HikCameraNode',
+    name='camera_node',
+    parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': True}]
 )

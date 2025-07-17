@@ -12,7 +12,7 @@ node_params = os.path.join(
 
 
 def generate_launch_description():
-    from common import tracker_node, rsp_component, usb_driver_node, trajectory_node, detector_node
+    from common import tracker_node, rsp_component, usb_driver_node, trajectory_node, detector_node, camera_node
     from launch_ros.actions import ComposableNodeContainer
     from launch.actions import Shutdown
     from launch import LaunchDescription
@@ -25,6 +25,7 @@ def generate_launch_description():
         executable='component_container_mt',
         composable_node_descriptions=[
             rsp_component,
+            camera_node,
             detector_node,
             usb_driver_node,
             tracker_node,
