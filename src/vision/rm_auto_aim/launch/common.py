@@ -58,8 +58,16 @@ usb_driver_node = ComposableNode(
 
 trajectory_node = ComposableNode(
     package='trajectory',
-    plugin='trajectory::TrajectoryDriver',
+    plugin='trajectory::Trajectory',
     name="trajectory",
+    parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': False}],
+)
+
+planner_node = ComposableNode(
+    package='trajectory',
+    plugin='trajectory::Planner',
+    name='planner',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
 )

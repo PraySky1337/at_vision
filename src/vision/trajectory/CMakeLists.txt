@@ -19,8 +19,13 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN trajectory::TrajectoryDriver
-  EXECUTABLE ${PROJECT_NAME}_node
+  PLUGIN trajectory::Trajectory
+  EXECUTABLE trajectory_node
+)
+
+rclcpp_components_register_node(${PROJECT_NAME}
+  PLUGIN trajectory::Planner
+  EXECUTABLE planner_node
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${OpenCV_INCLUDE_DIRS})

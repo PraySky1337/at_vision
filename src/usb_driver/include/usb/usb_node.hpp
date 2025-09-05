@@ -95,10 +95,9 @@ private:
         vision_data.header.len          = sizeof(decltype(vision_data.data));
         vision_data.header.sof          = HeaderFrame::SoF();
         vision_data.eof                 = HeaderFrame::EoF();
-        vision_data.data.tracking       = control_cmd_msg->tracking;
         vision_data.data.target_pitch   = control_cmd_msg->target_pitch;
         vision_data.data.target_yaw     = control_cmd_msg->target_yaw;
-        vision_data.data.is_large_armor = control_cmd_msg->is_large_armor;
+        // vision_data.data.is_large_armor = control_cmd_msg->is_large_armor;
         std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
         if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
             ATLOG_WARN("Failed to send data");

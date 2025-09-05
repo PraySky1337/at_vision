@@ -18,7 +18,7 @@
 namespace trajectory {
 
 /* ---------- 构造 ---------- */
-TrajectoryDriver::TrajectoryDriver(const rclcpp::NodeOptions& options)
+Trajectory::Trajectory(const rclcpp::NodeOptions& options)
     : rclcpp::Node("trajectory", options) {
     /* 读取参数 */
     bal_.v0    = declare_parameter("bullet_velocity", 21.0);
@@ -31,7 +31,7 @@ TrajectoryDriver::TrajectoryDriver(const rclcpp::NodeOptions& options)
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     target_sub_  = create_subscription<TargetMsg>(
         "tracker/target", rclcpp::SensorDataQoS(),
-        std::bind(&TrajectoryDriver::target_call_back, this, std::placeholders::_1));
+        std::bind(&Trajectory::target_call_back, this, std::placeholders::_1));
     control_cmd_pub_ =
         create_publisher<ControlCmd>("trajectory/control_command", rclcpp::SensorDataQoS());
     aim_marker_pub_ =
@@ -61,12 +61,12 @@ TrajectoryDriver::TrajectoryDriver(const rclcpp::NodeOptions& options)
     mk_array_.markers                       = {current, target};
 }
 
-double TrajectoryDriver::simulateY(double theta, const Target& tgt) {
+double Trajectory::simulateY(double theta, double d, double h) {
     // 无阻力解析解
     if (bal_.k == 0.0) {
         double vx = bal_.v0 * std::cos(theta);
         double vy = bal_.v0 * std::sin(theta);
-        double t  = tgt.d / vx;
+        double t  = d / vx;
         return vy * t - 0.5 * bal_.g * t * t;
     }
 
@@ -75,7 +75,7 @@ double TrajectoryDriver::simulateY(double theta, const Target& tgt) {
     double vx = bal_.v0 * std::cos(theta);
     double vy = bal_.v0 * std::sin(theta);
 
-    while (x < tgt.d) {
+    while (x < d) {
         double v  = std::hypot(vx, vy);
         double ax = -bal_.k * v * vx;
         double ay = -bal_.g - bal_.k * v * vy;
@@ -87,17 +87,17 @@ double TrajectoryDriver::simulateY(double theta, const Target& tgt) {
     return y;
 }
 
-double TrajectoryDriver::solvePitch(const Target& tgt, double eps, int max_iter) {
+double Trajectory::solvePitch(double d, double h, double eps, int max_iter) {
     double lo = -M_PI / 8, hi = M_PI / 3;
-    double y_lo = simulateY(lo, tgt) - tgt.h;
-    double y_hi = simulateY(hi, tgt) - tgt.h;
+    double y_lo = simulateY(lo, d, h) - h;
+    double y_hi = simulateY(hi, d, h) - h;
     if (y_lo * y_hi > 0) {
         return 0.0;
     }
 
     for (int i = 0; i < max_iter; ++i) {
         double mid   = 0.5 * (lo + hi);
-        double y_mid = simulateY(mid, tgt) - tgt.h;
+        double y_mid = simulateY(mid, d, h) - h;
         if (std::abs(y_mid) < eps)
             return mid;
         if (y_mid * y_lo < 0)
@@ -110,7 +110,7 @@ double TrajectoryDriver::solvePitch(const Target& tgt, double eps, int max_iter)
     return 0.5 * (lo + hi);
 }
 
-void TrajectoryDriver::target_call_back(const TargetMsg::SharedPtr msg) {
+void Trajectory::target_call_back(const TargetMsg::SharedPtr msg) {
     if (!msg->tracking)
         return;
     Eigen::Isometry3d t_odom_muzzle;
@@ -122,7 +122,7 @@ void TrajectoryDriver::target_call_back(const TargetMsg::SharedPtr msg) {
         t_odom_muzzle.linear() = Eigen::Matrix3d::Identity();
     } catch (const tf2::TransformException& ex) {
         RCLCPP_ERROR(this->get_logger(), "Failed to get static tf: %s", ex.what());
-        throw; // 或循环等待直到获取
+        throw;
     }
 
     const double xc = msg->position.x, yc = msg->position.y, zc = msg->position.z;
@@ -158,6 +158,8 @@ void TrajectoryDriver::target_call_back(const TargetMsg::SharedPtr msg) {
         }
     }
     Eigen::Vector3d best_pos = armors[best_idx];
+    // 弹道解算
+    best_pos.z() += solvePitch(best_pos.head<2>().norm(), best_pos.z());
     best_pos += bias_time_ * Eigen::Vector3d{vx, vy, vz};
 
     // -------------------
@@ -171,25 +173,23 @@ void TrajectoryDriver::target_call_back(const TargetMsg::SharedPtr msg) {
     double best_pitch = std::atan2(-best_pos_in_muzzle.z(), horiz_dist);
 
     // yaw仍然用odom系下计算
-    double best_yaw = std::atan2(best_pos.y(), best_pos.x());
+    double best_yaw = std::atan2(best_pos_in_muzzle.y(), best_pos_in_muzzle.x());
 
     ControlCmd control_cmd;
     control_cmd.header         = msg->header;
-    control_cmd.is_large_armor = msg->id == "1";
     control_cmd.target_pitch   = best_pitch;
     control_cmd.target_yaw     = best_yaw;
-    control_cmd.tracking       = msg->tracking;
     control_cmd_pub_->publish(control_cmd);
     this->publish_marker(control_cmd, best_pos);
 }
 
-void TrajectoryDriver::publish_marker(const ControlCmd& msg, const Eigen::Vector3d& best_pos) {
+void Trajectory::publish_marker(const ControlCmd& msg, const Eigen::Vector3d& best_pos) {
     // 枪口中心在odom下的位置
     Eigen::Vector3d muzzle_in_odom = t_odom_muzzle_full_.translation();
 
     // 目标点在odom
     Eigen::Vector3d target_in_odom =
-        best_pos; // 假设你把best_pos_缓存下来了（target_call_back里赋值）
+        best_pos;
 
     // 目标方向
     Eigen::Vector3d aim_direction = (target_in_odom - muzzle_in_odom).normalized();
@@ -197,7 +197,7 @@ void TrajectoryDriver::publish_marker(const ControlCmd& msg, const Eigen::Vector
     // 枪口正前方
     Eigen::Vector3d muzzle_axis_in_odom = t_odom_muzzle_full_.linear() * Eigen::Vector3d::UnitX();
 
-    double line_length = 10.0; // 可调整
+    double line_length = ARROW_LEN; // 可调整
 
     // 1. 红箭——期望方向
     mk_target_.header.frame_id = "odom";
@@ -236,10 +236,10 @@ void TrajectoryDriver::publish_marker(const ControlCmd& msg, const Eigen::Vector
     aim_marker_pub_->publish(mk_array_);
 }
 
-TrajectoryDriver::~TrajectoryDriver() { rclcpp::shutdown(); }
+Trajectory::~Trajectory() { rclcpp::shutdown(); }
 
 } // namespace trajectory
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(trajectory::TrajectoryDriver)
+RCLCPP_COMPONENTS_REGISTER_NODE(trajectory::Trajectory)

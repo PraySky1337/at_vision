@@ -15,19 +15,15 @@
 
 namespace trajectory {
 
-class TrajectoryDriver : public rclcpp::Node {
+class Trajectory : public rclcpp::Node {
 public:
-    explicit TrajectoryDriver(const rclcpp::NodeOptions& options);
-    ~TrajectoryDriver();
+    explicit Trajectory(const rclcpp::NodeOptions& options);
+    ~Trajectory();
 
 private:
     static constexpr const uint8_t OUTPOST_ARMOR_NUM = 3;
     static constexpr const uint8_t NORMAL_ARMOR_NUM  = 4;
-    static constexpr const double ARROW_LEN          = 1.0;
-    struct Target {
-        double d;
-        double h;
-    };
+    static constexpr const double ARROW_LEN          = 10.0;
 
     struct Ballistics {
         double v0 = 21.0; // 初速  (m/s)
@@ -38,10 +34,10 @@ private:
 
     double bias_time_;
     /// 无/有阻力下，给定 theta 计算落点 y(d)
-    double simulateY(double theta, const Target& tgt);
+    double simulateY(double theta, double d, double h);
 
     /// 二分法解俯仰角，使 simulateY(theta) == tgt.h
-    double solvePitch(const Target& tgt, double eps = 1e-4, int max_iter = 50);
+    double solvePitch(double d, double h, double eps = 1e-4, int max_iter = 14);
 
     using TargetMsg  = auto_aim_interfaces::msg::Target;
     using ControlCmd = auto_aim_interfaces::msg::ControlCmd;

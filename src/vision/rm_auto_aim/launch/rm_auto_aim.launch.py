@@ -12,7 +12,7 @@ node_params = os.path.join(
 
 
 def generate_launch_description():
-    from common import tracker_node, rsp_component, usb_driver_node, trajectory_node, detector_node, camera_node
+    from common import tracker_node, rsp_component, usb_driver_node, trajectory_node, detector_node, camera_node, planner_node
     from launch_ros.actions import ComposableNodeContainer
     from launch.actions import Shutdown
     from launch import LaunchDescription
@@ -30,6 +30,7 @@ def generate_launch_description():
             usb_driver_node,
             tracker_node,
             trajectory_node,
+            planner_node,
         ],
         emulate_tty=True,
         on_exit=Shutdown(),
