@@ -34,13 +34,14 @@ void Planner::onTarget(const ControlCmd::SharedPtr msg) {
 void Planner::controlStep() {
     if (!has_tgt_.load())
         return;
+
     const double ty = tgt_yaw_.load(), tp = tgt_pitch_.load();
 
-    // 参考为常值
+    // 参考常值（也可以换成随时间的 ref 向量）
     Eigen::VectorXd ref_yaw   = Eigen::VectorXd::Constant(N_, ty);
     Eigen::VectorXd ref_pitch = Eigen::VectorXd::Constant(N_, tp);
 
-    // 解 MPC（内部虚拟状态：yaw_hat_/yaw_rate_hat_）
+    // MPC 解：返回加速度序列 z（控制量）
     auto sy = ADMM_QP::for_mpc_with_smoothing(
         N_, T_, lambda_D_, amax_, yaw_hat_, yaw_rate_hat_, ref_yaw, rho_);
     auto sp = ADMM_QP::for_mpc_with_smoothing(
@@ -50,38 +51,56 @@ void Planner::controlStep() {
     warm_yaw_   = Ry.z;
     warm_pitch_ = Rp.z;
 
-    // —— 选拍：无明显时延 → 取第0拍；若有时延 d，用 z(d) —— //
-    int d          = 0; // 有时延就改成 1 或 2
-    double a_yaw   = std::clamp(Ry.z(d), -amax_, amax_);
-    double a_pitch = std::clamp(Rp.z(d), -amax_, amax_);
+    // —— 选拍：按总时延设置 d —— //
+    int d          = 0; // 如果测得 ~1T 时延，就设 1；以此类推
+    auto clampA    = [&](double a) { return std::clamp(a, -amax_, amax_); };
+    double a_yaw   = clampA(Ry.z(d));
+    double a_pitch = clampA(Rp.z(d));
 
-    // 预测下一拍角度（作为 plan_* 给 PID）
-    double yaw_rate_next   = yaw_rate_hat_ + a_yaw * T_;
-    double pitch_rate_next = pitch_rate_hat_ + a_pitch * T_;
-    double yaw_next        = yaw_hat_ + yaw_rate_hat_ * T_ + 0.5 * a_yaw * T_ * T_;
-    double pitch_next      = pitch_hat_ + pitch_rate_hat_ * T_ + 0.5 * a_pitch * T_ * T_;
+    // === 生成 (x_ref, v_ref, a_ref) 三元组 ===
+    // 方案A：d == 0（无预览），直接用当前估计 + 本拍加速度
+    double xref_y = yaw_hat_;
+    double vref_y = yaw_rate_hat_;
+    double aref_y = a_yaw;
 
-    // 发布（不含向量）
+    double xref_p = pitch_hat_;
+    double vref_p = pitch_rate_hat_;
+    double aref_p = a_pitch;
+
+    // 若 d > 0：把 (x,v) 用 Ry.z 的前 d 项推进 d 步（常加速度离散积分）
+    if (d > 0) {
+        auto advance = [&](double x0, double v0, const Eigen::VectorXd& a, int d) {
+            double x = x0, v = v0;
+            for (int i = 0; i < d; ++i) { // ZOH, a[i] 作用一个采样周期
+                v += a[i] * T_;
+                x += v * T_;
+            }
+            return std::pair<double, double>(x, v);
+        };
+        std::tie(xref_y, vref_y) = advance(yaw_hat_, yaw_rate_hat_, Ry.z, d);
+        std::tie(xref_p, vref_p) = advance(pitch_hat_, pitch_rate_hat_, Rp.z, d);
+        aref_y                   = clampA(Ry.z(d));
+        aref_p                   = clampA(Rp.z(d));
+    }
+
+    // === 发布给控制器（位置环/速度环/电流环可分别用） ===
     PlannedControlCmd out;
-    out.header.stamp = now();
-    out.accel_yaw    = a_yaw;
-    out.accel_pitch  = a_pitch;
-    out.plan_yaw     = yaw_next; // 下一拍参考角
-    out.plan_pitch   = pitch_next;
-
-    // 简单开火逻辑（可按需改阈值/策略）
-    double ang_thr = 0.01; // ≈0.57°（弧度）
-    double vel_thr = 0.2;  // rad/s
-    out.fire       = (std::abs(ty - yaw_next) < ang_thr && std::abs(yaw_rate_next) < vel_thr)
-            && (std::abs(tp - pitch_next) < ang_thr && std::abs(pitch_rate_next) < vel_thr);
+    out.header.stamp  = now();
+    out.ref_yaw       = xref_y;
+    out.ref_yaw_vel   = vref_y; // 供位置环速度前馈
+    out.ref_yaw_acc   = aref_y; // 供速度/电流环加速度前馈
+    out.ref_pitch     = xref_p;
+    out.ref_pitch_vel = vref_p;
+    out.ref_pitch_acc = aref_p;
 
     plan_control_cmd_pub_->publish(out);
 
-    // 前向积分虚拟状态（保持轨迹连续）
-    yaw_rate_hat_   = yaw_rate_next;
-    pitch_rate_hat_ = pitch_rate_next;
-    yaw_hat_        = yaw_next;
-    pitch_hat_      = pitch_next;
+    // —— 前向积分内部虚拟状态，保持连续 —— //
+    // 用“本拍实际用的 aref（= z(d)）”推进 1 步
+    yaw_rate_hat_ += aref_y * T_;
+    yaw_hat_ += yaw_rate_hat_ * T_;
+    pitch_rate_hat_ += aref_p * T_;
+    pitch_hat_ += pitch_rate_hat_ * T_;
 }
 
 } // namespace trajectory
