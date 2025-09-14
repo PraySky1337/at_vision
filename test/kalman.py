@@ -42,7 +42,6 @@ for z in meas:
     est_p.append(xhat[0]); est_v.append(xhat[1])
     res.append(r_); Kp.append(K[0]); Kv.append(K[1])
 
-# ====== 可视化（代码内显示，不保存）======
 plt.figure(figsize=(10,9))
 
 # 1) 位置

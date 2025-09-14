@@ -33,10 +33,12 @@ struct ReceiveImuData {
 struct SendVisionData {
     HeaderFrame header;
     struct {
-        uint8_t fire  : 1;
-        uint8_t reserved : 7;
         float target_yaw;
         float target_pitch;
+        float target_yaw_vel;
+        float target_pitch_vel;
+        float target_yaw_acc;
+        float target_pitch_acc;
     } data;
     uint8_t eof;
 };

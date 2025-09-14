@@ -1,7 +1,8 @@
 // Copyright 2022 Chen Jun
 // Licensed under the MIT License.
-#pragma once
 
+#ifndef ARMOR_DETECTOR__DETECTOR_HPP_
+#define ARMOR_DETECTOR__DETECTOR_HPP_
 
 // OpenCV
 #include <opencv2/core.hpp>
@@ -22,7 +23,6 @@ namespace rm_auto_aim
 class Detector
 {
 public:
-
   struct LightParams
   {
     // width / height
@@ -79,3 +79,5 @@ private:
 };
 
 }  // namespace rm_auto_aim
+
+#endif  // ARMOR_DETECTOR__DETECTOR_HPP_

@@ -13,7 +13,7 @@
 
 #include <Eigen/Dense>
 
-namespace trajectory {
+namespace solver {
 
 class Trajectory : public rclcpp::Node {
 public:

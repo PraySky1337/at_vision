@@ -2,3 +2,4 @@ echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE=
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 echo 'export ROS_DOMAIN_ID=10' >> ~/.bashrc && source ~/.bashrc
+# export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

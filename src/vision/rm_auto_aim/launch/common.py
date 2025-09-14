@@ -32,9 +32,17 @@ rsp_component = ComposableNode(
     }]
 )
 
+camera_node = ComposableNode(
+    package='hik_camera',
+    plugin='hik_camera::HikCameraNode',
+    name='camera_node',
+    parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': True}]
+)
+
 detector_node = ComposableNode(
     package='armor_detector',
-    plugin='rm_auto_aim::ArmorDetector',
+    plugin='rm_auto_aim::ArmorDetectorNode',
     name='armor_detector',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': True}],
@@ -57,25 +65,17 @@ usb_driver_node = ComposableNode(
 )
 
 trajectory_node = ComposableNode(
-    package='trajectory',
-    plugin='trajectory::Trajectory',
+    package='solver',
+    plugin='solver::Trajectory',
     name="trajectory",
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
 )
 
 planner_node = ComposableNode(
-    package='trajectory',
-    plugin='trajectory::Planner',
+    package='solver',
+    plugin='solver::Planner',
     name='planner',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
-)
-
-camera_node = ComposableNode(
-    package='hik_camera',
-    plugin='hik_camera::HikCameraNode',
-    name='camera_node',
-    parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': True}]
 )

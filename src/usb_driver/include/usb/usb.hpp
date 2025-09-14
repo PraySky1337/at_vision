@@ -1,8 +1,8 @@
 #pragma once
 #include "packet.hpp"
+#include "usb/logger.hpp"
 #include <cstring>
 #include <functional>
-#include <logger/logger.hpp>
 #include <memory>
 
 namespace usb_driver {

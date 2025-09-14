@@ -5,4 +5,3 @@ float32 ref_yaw_acc
 float32 ref_pitch
 float32 ref_pitch_vel
 float32 ref_pitch_acc
-bool fire

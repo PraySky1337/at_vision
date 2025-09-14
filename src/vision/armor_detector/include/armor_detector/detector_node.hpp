@@ -1,81 +1,81 @@
-/*
- * Refactored ArmorDetectorNode with optimized QoS for image subs,
- * dynamic parameter callback handling,
- * multi-threaded CallbackGroups for parallel image callbacks,
- * including publishArmorsAndMarkers implementation.
- */
+// Copyright 2022 Chen Jun
+// Licensed under the MIT License.
 
-// detector_node.hpp
 #ifndef ARMOR_DETECTOR__DETECTOR_NODE_HPP_
 #define ARMOR_DETECTOR__DETECTOR_NODE_HPP_
 
-#include <atomic>
-#include <camera_info_manager/camera_info_manager.hpp>
+// ROS
 #include <image_transport/image_transport.hpp>
-#include <memory>
+#include <image_transport/publisher.hpp>
+#include <image_transport/subscriber_filter.hpp>
+#include <rclcpp/publisher.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
-#include <sensor_msgs/msg/detail/image__struct.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+// STD
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "armor_detector/detector.hpp"
+#include "armor_detector/number_classifier.hpp"
 #include "armor_detector/pnp_solver.hpp"
 #include "auto_aim_interfaces/msg/armors.hpp"
-#include "utility.hpp"
 
-namespace rm_auto_aim {
+namespace rm_auto_aim
+{
 
-struct MatStamped {
-    cv::Mat img;
-    std_msgs::msg::Header header;
-};
-
-struct DebugPublishers {
-    DebugPublishers(rclcpp::Node* node_ptr);
-    ~DebugPublishers();
-    rclcpp::Publisher<auto_aim_interfaces::msg::DebugLights>::SharedPtr lights;
-    rclcpp::Publisher<auto_aim_interfaces::msg::DebugArmors>::SharedPtr armors;
-    image_transport::Publisher binary;
-    image_transport::Publisher numbers;
-    image_transport::Publisher result;
-};
-
-class ArmorDetector : public rclcpp::Node {
+class ArmorDetectorNode : public rclcpp::Node
+{
 public:
-    explicit ArmorDetector(const rclcpp::NodeOptions& options);
-    ~ArmorDetector() override;
+  ArmorDetectorNode(const rclcpp::NodeOptions & options);
 
 private:
-    void image_callback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
+  void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
 
-    void initDetectors();
-    void publishArmorsAndMarkers(
-        const std::vector<Armor>& armors, const std_msgs::msg::Header& header);
-    rcl_interfaces::msg::SetParametersResult
-        onParametersSet(const std::vector<rclcpp::Parameter>& params);
+  std::unique_ptr<Detector> initDetector();
+  std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr & img_msg);
 
-    // Publishers & Subscribers
-    rclcpp::Publisher<auto_aim_interfaces::msg::Armors>::SharedPtr armors_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+  void createDebugPublishers();
+  void destroyDebugPublishers();
 
-    // Camera
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
-    // Detector & PnP
-    std::unique_ptr<Detector> detector_;
-    std::shared_ptr<PnPSolver> pnp_solver_;
-    camera_info_manager::CameraInfoManager cam_info_manager_;
+  void publishMarkers();
 
-    // Camera info
-    cv::Point2f cam_center_;
+  // Armor Detector
+  std::unique_ptr<Detector> detector_;
 
-    // Debug
-    std::atomic<bool> debug_enabled_{false};
-    std::shared_ptr<DebugPublishers> debug_pubs_;
+  // Detected armors publisher
+  auto_aim_interfaces::msg::Armors armors_msg_;
+  rclcpp::Publisher<auto_aim_interfaces::msg::Armors>::SharedPtr armors_pub_;
 
-    // Parameter client
-    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
+  // Visualization marker publisher
+  visualization_msgs::msg::Marker armor_marker_;
+  visualization_msgs::msg::Marker text_marker_;
+  visualization_msgs::msg::MarkerArray marker_array_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+
+  // Camera info part
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
+  cv::Point2f cam_center_;
+  std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
+  std::unique_ptr<PnPSolver> pnp_solver_;
+
+  // Image subscrpition
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
+
+  // Debug information
+  bool debug_;
+  std::shared_ptr<rclcpp::ParameterEventHandler> debug_param_sub_;
+  std::shared_ptr<rclcpp::ParameterCallbackHandle> debug_cb_handle_;
+  rclcpp::Publisher<auto_aim_interfaces::msg::DebugLights>::SharedPtr lights_data_pub_;
+  rclcpp::Publisher<auto_aim_interfaces::msg::DebugArmors>::SharedPtr armors_data_pub_;
+  image_transport::Publisher binary_img_pub_;
+  image_transport::Publisher number_img_pub_;
+  image_transport::Publisher result_img_pub_;
 };
 
-} // namespace rm_auto_aim
-#endif // ARMOR_DETECTOR__DETECTOR_NODE_HPP_
+}  // namespace rm_auto_aim
+
+#endif  // ARMOR_DETECTOR__DETECTOR_NODE_HPP_

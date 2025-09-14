@@ -1,11 +1,16 @@
 #pragma once
+#include "auto_aim_interfaces/msg/control_cmd.hpp"
+#include "auto_aim_interfaces/msg/planned_control_cmd.hpp"
 #include "usb.hpp"
 #include "usb/packet.hpp"
 
-#include <auto_aim_interfaces/msg/detail/control_cmd__struct.hpp>
 #include <memory>
+#include <rcl_interfaces/msg/detail/parameter_descriptor__struct.hpp>
+#include <rcl_interfaces/msg/detail/set_parameters_result__struct.hpp>
 #include <rclcpp/callback_group.hpp>
+#include <rclcpp/node_interfaces/node_parameters_interface.hpp>
 #include <rclcpp/node_options.hpp>
+#include <rclcpp/parameter_value.hpp>
 #include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -16,31 +21,33 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
-#include "auto_aim_interfaces/msg/control_cmd.hpp"
-#include "util/atmath.hpp"
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
 
 #include <cstdint>
 
 namespace usb_driver {
 struct UsbDriver : public rclcpp::Node {
     enum Color { RED, BLUE, UNKNOWN };
-    UsbDriver(
-        const rclcpp::NodeOptions& options)
+    UsbDriver(const rclcpp::NodeOptions& options)
         : rclcpp::Node("usb_driver", options)
         , device_(parser_)
         , tf_broadcaster_(*this)
         , aiming_color_(UNKNOWN) {
-        tf_buffer_      = std::make_shared<tf2_ros::Buffer>(get_clock());
-        tf_listener_    = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
-        detector_client = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
+        tf_buffer_        = std::make_shared<tf2_ros::Buffer>(get_clock());
+        tf_listener_      = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
+        detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
         reset_tracker_srv = create_client<std_srvs::srv::Trigger>("reset_tracker");
         this->init_parser();
         if (device_.open(0x0483)) {
             ATLOG_INFO("usb driver already");
         }
-        control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::ControlCmd>(
-            "trajectory/control_command", rclcpp::SensorDataQoS(),
-            std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
+        rcl_interfaces::msg::ParameterDescriptor param_desc;
+        param_desc.description = "unit: ms";
+        timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 1, param_desc); // s
+            control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::PlannedControlCmd>(
+                "planner/control_command", rclcpp::SensorDataQoS(),
+                std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
+
         thread_ = std::thread([this] {
             running_ = true;
             while (running_) {
@@ -50,12 +57,33 @@ struct UsbDriver : public rclcpp::Node {
     }
 
     ~UsbDriver() {
+        running_ = false;
         if (thread_.joinable()) {
             thread_.join();
         }
     }
 
 private:
+    rcl_interfaces::msg::SetParametersResult
+        on_params(const std::vector<rclcpp::Parameter>& params) {
+        rcl_interfaces::msg::SetParametersResult res;
+        res.successful = true;
+        res.reason     = "";
+        for (const auto& p : params)
+            try {
+                auto& name = p.get_name();
+                if (name == "timestamp_offset") {
+                    timestamp_offset_ms_ = p.as_double();
+                } else {
+                }
+            } catch (const rclcpp::ParameterTypeException& e) {
+                RCLCPP_ERROR(get_logger(), "Parameter type error: %s", e.what());
+            } catch (...) {
+                RCLCPP_FATAL(get_logger(), "参数热更新回调时发生未知错误");
+            }
+        return res;
+    }
+
     void init_parser() {
         parser_.register_parser(
             0x01,
@@ -69,6 +97,7 @@ private:
                 "IMU packet too small, expected: {:X}, got {:X}", sizeof(ReceiveImuData), size);
             return;
         }
+
         ReceiveImuData imu_pkt;
         std::memcpy(&imu_pkt, data, sizeof(ReceiveImuData));
         tf2::Quaternion q;
@@ -78,9 +107,11 @@ private:
         if (std::isnan(q.x()) || std::isnan(q.y()) || std::isnan(q.z())) [[unlikely]] {
             ATLOG_WARN("roll, pitch or yaw is invalid nan");
         }
+        double offset_ms = timestamp_offset_ms_.load();
+        auto duration    = rclcpp::Duration(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::duration<double, std::milli>(offset_ms)));
         geometry_msgs::msg::TransformStamped t;
-        t.header.stamp = now() - rclcpp::Duration::from_seconds(0.01);
-        ;
+        t.header.stamp       = now();
         t.header.frame_id    = "odom";
         t.child_frame_id     = "gimbal_link";
         t.transform.rotation = tf2::toMsg(q);
@@ -89,15 +120,18 @@ private:
     }
 
     void control_cmd_callback(
-        const auto_aim_interfaces::msg::ControlCmd::SharedPtr control_cmd_msg) {
+        const auto_aim_interfaces::msg::PlannedControlCmd::SharedPtr plan_control_cmd_msg) {
         SendVisionData vision_data;
-        vision_data.header.id           = 0x02;
-        vision_data.header.len          = sizeof(decltype(vision_data.data));
-        vision_data.header.sof          = HeaderFrame::SoF();
-        vision_data.eof                 = HeaderFrame::EoF();
-        vision_data.data.target_pitch   = control_cmd_msg->target_pitch;
-        vision_data.data.target_yaw     = control_cmd_msg->target_yaw;
-        // vision_data.data.is_large_armor = control_cmd_msg->is_large_armor;
+        vision_data.header.id             = 0x02;
+        vision_data.header.len            = sizeof(decltype(vision_data.data));
+        vision_data.header.sof            = HeaderFrame::SoF();
+        vision_data.eof                   = HeaderFrame::EoF();
+        vision_data.data.target_pitch     = plan_control_cmd_msg->ref_pitch;
+        vision_data.data.target_pitch_vel = plan_control_cmd_msg->ref_pitch_vel;
+        vision_data.data.target_pitch_acc = plan_control_cmd_msg->ref_pitch_acc;
+        vision_data.data.target_yaw       = plan_control_cmd_msg->ref_yaw;
+        vision_data.data.target_yaw_vel   = plan_control_cmd_msg->ref_yaw_vel;
+        vision_data.data.target_yaw_acc   = plan_control_cmd_msg->ref_yaw_acc;
         std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
         if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
             ATLOG_WARN("Failed to send data");
@@ -127,9 +161,15 @@ private:
     rclcpp::AsyncParametersClient::SharedPtr detector_client;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
 
-    rclcpp::Subscription<auto_aim_interfaces::msg::ControlCmd>::SharedPtr control_cmd_sub_;
+    rclcpp::Subscription<auto_aim_interfaces::msg::PlannedControlCmd>::SharedPtr control_cmd_sub_;
+    rclcpp::Subscription<auto_aim_interfaces::msg::ControlCmd>::SharedPtr
+        control_cmd_without_plan_sub_;
 
-    std::atomic_bool running_;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
+
+    std::atomic<bool> running_;
     std::thread thread_;
+
+    std::atomic<double> timestamp_offset_ms_;
 };
 } // namespace usb_driver

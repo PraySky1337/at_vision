@@ -53,7 +53,7 @@ public:
         camera_info_manager_ =
             std::make_unique<camera_info_manager::CameraInfoManager>(this, camera_name_);
         auto camera_info_url = this->declare_parameter(
-            "camera_info_url", "package://hik_camera/config/camera_info.yaml");
+            "camera_info_url", "package://rm_auto_aim/config/camera_info.yaml");
         if (camera_info_manager_->validateURL(camera_info_url)) {
             camera_info_manager_->loadCameraInfo(camera_info_url);
             camera_info_msg_ = camera_info_manager_->getCameraInfo();
@@ -93,17 +93,15 @@ public:
                     camera_pub_.publish(image_msg_, camera_info_msg_);
 
                     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
-                    fail_conut_ = 0;
+                    fail_count = 0;
                 } else {
                     RCLCPP_WARN(this->get_logger(), "Get buffer failed! nRet: [%x]", nRet);
-                    MV_CC_StopGrabbing(camera_handle_);
-                    MV_CC_StartGrabbing(camera_handle_);
-                    fail_conut_++;
+                    fail_count++;
                 }
 
-                if (fail_conut_ > 5) {
+                if (fail_count > 10) {
                     RCLCPP_FATAL(this->get_logger(), "Camera failed!");
-                    rclcpp::shutdown();
+                    std::raise(SIGINT);
                 }
             }
         }};
@@ -133,7 +131,7 @@ private:
         MV_CC_GetFloatValue(camera_handle_, "ExposureTime", &f_value);
         param_desc.integer_range[0].from_value = f_value.fMin;
         param_desc.integer_range[0].to_value   = f_value.fMax;
-        double exposure_time = this->declare_parameter("exposure_time", 5000, param_desc);
+        double exposure_time = this->declare_parameter("exposure_time", 2500, param_desc);
         MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time);
         RCLCPP_INFO(this->get_logger(), "Exposure time: %f", exposure_time);
 
@@ -188,7 +186,7 @@ private:
     std::unique_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
     sensor_msgs::msg::CameraInfo camera_info_msg_;
 
-    int fail_conut_ = 0;
+    int fail_count = 0;
     std::thread capture_thread_;
 
     OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;

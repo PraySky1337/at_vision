@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <libusb-1.0/libusb.h>
-#include <logger/logger.hpp>
+#include "usb/logger.hpp"
 #include <stdexcept>
 #include <sys/types.h>
 #include <thread>

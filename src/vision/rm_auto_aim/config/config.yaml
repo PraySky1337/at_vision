@@ -7,7 +7,7 @@
       min_large_center_distance: 3.2
       min_light_ratio: 0.7
       min_small_center_distance: 0.8
-    binary_thres: 160
+    binary_thres: 80
     cam_info_url: package://rm_auto_aim/config/camera_info.yaml
     classifier_threshold: 0.7
     debug: true
@@ -28,32 +28,26 @@
     rate: 200
     use_sim_time: false
 
+
 /armor_tracker:
   ros__parameters:
-    debug: true
+    target_frame: odom
+    max_armor_distance: 10.0
+
     ekf:
+      sigma2_q_xyz: 0.05
+      sigma2_q_yaw: 5.0
+      sigma2_q_r: 80.0
+
       r_xyz_factor: 0.0004
       r_yaw: 0.005
-      sigma2_q_r: 80.0
-      sigma2_q_xyz_max: 0.1
-      sigma2_q_xyz_min: 0.05
-      sigma2_q_yaw_max: 10.0
-      sigma2_q_yaw_min: 5.0
-    max_armor_distance: 10.0
-    qos_overrides:
-      /parameter_events:
-        publisher:
-          depth: 1000
-          durability: volatile
-          history: keep_last
-          reliability: reliable
-    target_frame: odom
+
     tracker:
-      lost_time_thres: 1.0
       max_match_distance: 0.5
       max_match_yaw_diff: 1.0
+
       tracking_thres: 5
-    use_sim_time: false
+      lost_time_thres: 1.0
 
 /trajectory:
   ros__parameters:
@@ -75,7 +69,7 @@
   ros__parameters:
     camera_info_url: package://hik_camera/config/camera_info.yaml
     camera_name: narrow_stereo
-    exposure_time: 1500
+    exposure_time: 4000
     gain: 16.01140022277832
     image_raw:
       enable_pub_plugins:

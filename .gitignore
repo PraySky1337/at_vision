@@ -4,3 +4,6 @@ install
 .vscode
 .cache
 MvFGSdkLog
+third_party
+*.zip
+test

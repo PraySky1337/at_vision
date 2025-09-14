@@ -1,4 +1,4 @@
-#include "trajectory/trajectory_node.hpp"
+#include "solver/trajectory_node.hpp"
 
 #include <Eigen/src/Geometry/Transform.h>
 #include <auto_aim_interfaces/msg/target.hpp>
@@ -15,7 +15,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
-namespace trajectory {
+namespace solver {
 
 /* ---------- 构造 ---------- */
 Trajectory::Trajectory(const rclcpp::NodeOptions& options)
@@ -88,7 +88,7 @@ double Trajectory::simulateY(double theta, double d, double h) {
 }
 
 double Trajectory::solvePitch(double d, double h, double eps, int max_iter) {
-    double lo = -M_PI / 8, hi = M_PI / 3;
+    double lo = 0.0, hi = M_PI / 3;
     double y_lo = simulateY(lo, d, h) - h;
     double y_hi = simulateY(hi, d, h) - h;
     if (y_lo * y_hi > 0) {
@@ -111,26 +111,27 @@ double Trajectory::solvePitch(double d, double h, double eps, int max_iter) {
 }
 
 void Trajectory::target_call_back(const TargetMsg::SharedPtr msg) {
-    if (!msg->tracking)
-        return;
-    Eigen::Isometry3d t_odom_muzzle;
+    if (!msg->tracking) return;
+
+    // 1) odom→muzzle 变换（仅用到平移，因结果发布在 odom）
+    Eigen::Isometry3d T_odom_muzzle;
     try {
         auto tf_msg = tf_buffer_->lookupTransform(
             "odom", "muzzle_link", tf2::TimePointZero, tf2::durationFromSec(1.0));
-        t_odom_muzzle_full_          = tf2::transformToEigen(tf_msg.transform);
-        t_odom_muzzle = t_odom_muzzle_full_;
-        t_odom_muzzle.linear() = Eigen::Matrix3d::Identity();
+        t_odom_muzzle_full_ = tf2::transformToEigen(tf_msg.transform);
+        T_odom_muzzle       = t_odom_muzzle_full_;
     } catch (const tf2::TransformException& ex) {
         RCLCPP_ERROR(this->get_logger(), "Failed to get static tf: %s", ex.what());
-        throw;
+        return;
     }
 
+    // 2) 生成装甲板候选点（odom）
     const double xc = msg->position.x, yc = msg->position.y, zc = msg->position.z;
     const double vx = msg->velocity.x, vy = msg->velocity.y, vz = msg->velocity.z;
     const double yaw_c = msg->yaw;
     const double r1 = msg->radius_1, r2 = msg->radius_2, dz = msg->dz;
-    std::size_t a_n = msg->armors_num;
-    std::string id  = msg->id;
+    const std::size_t a_n = msg->armors_num;
+
     std::vector<Eigen::Vector3d> armors;
     armors.reserve(a_n);
     bool use_r1 = true;
@@ -143,43 +144,42 @@ void Trajectory::target_call_back(const TargetMsg::SharedPtr msg) {
         double y       = yc - r * std::sin(a);
         armors.emplace_back(x, y, z);
     }
-    if (armors.empty())
-        return;
+    if (armors.empty()) return;
 
-    // 选最近装甲板
+    // 3) 选最近
     std::size_t best_idx = 0;
-    double best_dist     = std::numeric_limits<double>::infinity();
+    double best_dist = std::numeric_limits<double>::infinity();
     for (std::size_t i = 0; i < armors.size(); ++i) {
         const auto& p = armors[i];
-        double dist   = std::hypot(p.x(), std::hypot(p.y(), p.z()));
-        if (dist < best_dist) {
-            best_dist = dist;
-            best_idx  = i;
-        }
+        double dist = std::hypot(p.x(), std::hypot(p.y(), p.z()));
+        if (dist < best_dist) { best_dist = dist; best_idx = i; }
     }
-    Eigen::Vector3d best_pos = armors[best_idx];
-    // 弹道解算
-    best_pos.z() += solvePitch(best_pos.head<2>().norm(), best_pos.z());
-    best_pos += bias_time_ * Eigen::Vector3d{vx, vy, vz};
 
-    // -------------------
-    // 关键补偿：odom坐标变换到muzzle_link系，只保留平移
-    // t_odom_muzzle_ 是 Eigen::Isometry3d，且 t_odom_muzzle_.linear() == Identity
-    Eigen::Vector3d best_pos_in_muzzle = best_pos - t_odom_muzzle.translation();
-    // Eigen::Vector3d best_pos_in_muzzle = best_pos;
+    // 4) 目标点时间前推（仍在 odom）
+    Eigen::Vector3d best_pos = armors[best_idx] + bias_time_ * Eigen::Vector3d{vx, vy, vz};
 
-    // pitch在枪口系下计算
-    double horiz_dist = std::hypot(best_pos_in_muzzle.x(), best_pos_in_muzzle.y());
-    double best_pitch = std::atan2(-best_pos_in_muzzle.z(), horiz_dist);
+    // 5) 相对向量（odom）：只做减法即可（两点都在 odom）
+    const Eigen::Vector3d muzzle_in_odom = T_odom_muzzle.translation();
+    const Eigen::Vector3d rel = best_pos - muzzle_in_odom;
 
-    // yaw仍然用odom系下计算
-    double best_yaw = std::atan2(best_pos_in_muzzle.y(), best_pos_in_muzzle.x());
+    // 6) 弹道解算（基于 odom 的水平距离 d 与高度差 h）
+    const double d = std::hypot(rel.x(), rel.y());
+    const double h = rel.z();
+    const double theta = solvePitch(d, h);   // 相对于水平面的仰角（rad）
 
+    // 7) 角度（都在 odom 系）
+    //   - 你的旧实现等价于“向下为正”，沿用此约定：pitch = -theta
+    const double pitch = -theta;
+    const double yaw   = std::atan2(rel.y(), rel.x());
+
+    // 8) 发布（odom 系）
     ControlCmd control_cmd;
-    control_cmd.header         = msg->header;
-    control_cmd.target_pitch   = best_pitch;
-    control_cmd.target_yaw     = best_yaw;
+    control_cmd.header       = msg->header;
+    control_cmd.target_pitch = pitch;
+    control_cmd.target_yaw   = yaw;
     control_cmd_pub_->publish(control_cmd);
+
+    // 9) 可视化：仍按你原先逻辑在 odom 下画期望箭头
     this->publish_marker(control_cmd, best_pos);
 }
 
@@ -242,4 +242,4 @@ Trajectory::~Trajectory() { rclcpp::shutdown(); }
 
 #include <rclcpp_components/register_node_macro.hpp>
 
-RCLCPP_COMPONENTS_REGISTER_NODE(trajectory::Trajectory)
+RCLCPP_COMPONENTS_REGISTER_NODE(solver::Trajectory)

@@ -4,7 +4,6 @@
 
 #include <opencv2/calib3d.hpp>
 #include <vector>
-#include <iostream>
 
 namespace rm_auto_aim
 {
@@ -21,39 +20,26 @@ PnPSolver::PnPSolver(
 
   // Start from bottom left in clockwise order
   // Model coordinate: x forward, y left, z up
-  // small_armor_points_.emplace_back(cv::Point3f(-0, -small_half_y, small_half_z));
-  // small_armor_points_.emplace_back(cv::Point3f(-0, -small_half_y, -small_half_z));
-  // small_armor_points_.emplace_back(cv::Point3f(-0, small_half_y, -small_half_z));
-  // small_armor_points_.emplace_back(cv::Point3f(-0, small_half_y, small_half_z));
+  small_armor_points_.emplace_back(cv::Point3f(0, small_half_y, -small_half_z));
+  small_armor_points_.emplace_back(cv::Point3f(0, small_half_y, small_half_z));
+  small_armor_points_.emplace_back(cv::Point3f(0, -small_half_y, small_half_z));
+  small_armor_points_.emplace_back(cv::Point3f(0, -small_half_y, -small_half_z));
 
-
-  // large_armor_points_.emplace_back(cv::Point3f(-0, -large_half_y, large_half_z));
-  // large_armor_points_.emplace_back(cv::Point3f(-0, -large_half_y, -large_half_z));
-  // large_armor_points_.emplace_back(cv::Point3f(-0, large_half_y, -large_half_z));
-  // large_armor_points_.emplace_back(cv::Point3f(-0, large_half_y, large_half_z));
-
-  small_armor_points_.emplace_back(cv::Point3f(small_half_y, 0,  small_half_z));
-  small_armor_points_.emplace_back(cv::Point3f(small_half_y, 0,  -small_half_z));
-  small_armor_points_.emplace_back(cv::Point3f(-small_half_y,  0, -small_half_z));
-  small_armor_points_.emplace_back(cv::Point3f(-small_half_y,  0, small_half_z));
-
-
-  large_armor_points_.emplace_back(cv::Point3f(large_half_y,0,  large_half_z));
-  large_armor_points_.emplace_back(cv::Point3f(large_half_y,0,  -large_half_z));
-  large_armor_points_.emplace_back(cv::Point3f(-large_half_y, 0, -large_half_z));
-  large_armor_points_.emplace_back(cv::Point3f(-large_half_y, 0, large_half_z));
+  large_armor_points_.emplace_back(cv::Point3f(0, large_half_y, -large_half_z));
+  large_armor_points_.emplace_back(cv::Point3f(0, large_half_y, large_half_z));
+  large_armor_points_.emplace_back(cv::Point3f(0, -large_half_y, large_half_z));
+  large_armor_points_.emplace_back(cv::Point3f(0, -large_half_y, -large_half_z));
 }
 
 bool PnPSolver::solvePnP(const Armor & armor, cv::Mat & rvec, cv::Mat & tvec)
 {
-  // armor.printArmorPoint();
   std::vector<cv::Point2f> image_armor_points;
 
   // Fill in image points
-  image_armor_points.emplace_back(armor.left_light.top);
   image_armor_points.emplace_back(armor.left_light.bottom);
-  image_armor_points.emplace_back(armor.right_light.bottom);
+  image_armor_points.emplace_back(armor.left_light.top);
   image_armor_points.emplace_back(armor.right_light.top);
+  image_armor_points.emplace_back(armor.right_light.bottom);
 
   // Solve pnp
   auto object_points = armor.type == ArmorType::SMALL ? small_armor_points_ : large_armor_points_;

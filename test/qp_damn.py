@@ -22,7 +22,7 @@ class ADMM_QP:
     f : (n,)  线性项
     lb, ub : (n,) 变量逐元素下界/上界（可含 ±np.inf）
     rho : ADMM 罚参数ρ，影响原始/对偶残差的平衡（一般 0.1~10 做初值，必要时自适应调整）
-    max_iter : 最大迭代次数
+    max_iter : 最大迭代次
     eps_abs, eps_rel : 停止阈值（原始/对偶残差的绝对/相对容差）
 
     复杂度
