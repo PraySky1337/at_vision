@@ -64,18 +64,10 @@ usb_driver_node = ComposableNode(
     extra_arguments=[{'use_intra_process_comms': False}],
 )
 
-trajectory_node = ComposableNode(
+controller_node = ComposableNode(
     package='solver',
-    plugin='solver::Trajectory',
-    name="trajectory",
-    parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': False}],
-)
-
-planner_node = ComposableNode(
-    package='solver',
-    plugin='solver::Planner',
-    name='planner',
+    plugin='solver::Controller',
+    name="controller",
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
 )

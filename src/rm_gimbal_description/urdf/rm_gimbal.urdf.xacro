@@ -5,7 +5,7 @@
 
   <xacro:arg name="camera_xyz" default="0.04444 0.0 -0.0363" />
   <xacro:arg name="camera_rpy" default="0 0 0" />
-  <xacro:arg name="muzzle_xyz" default="0.0874 0 -0.08" />
+  <xacro:arg name="muzzle_xyz" default="0.0874 0 -0.06" />
   <xacro:arg name="muzzle_rpy" default="0 0 0" />
 
   <link name="odom" />

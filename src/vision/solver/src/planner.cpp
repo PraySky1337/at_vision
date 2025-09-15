@@ -1,15 +1,16 @@
-#include "solver/planner_node.hpp"
+// planner_di.cpp
+#include "solver/planner.hpp"
 #include <algorithm>
 #include <chrono>
-#include <rclcpp/qos.hpp>
 
 namespace solver {
 
 // ---------- TinyMPC 构建/销毁 ----------
 void Planner::destroySolver(TinySolver*& s) {
-    // 某些 TinyMPC 版本没有显式释放 API；先不释放，避免编译错误
+    // 若 TinyMPC 提供销毁 API，请在此调用；当前工程里原实现就是置空
     s = nullptr;
 }
+
 void Planner::buildOneSolver(
     TinySolver*& solver, int N, double dt, double amax, double q_pos, double q_vel, double r_acc) {
     destroySolver(solver);
@@ -43,45 +44,48 @@ void Planner::rebuildSolvers(double dt) {
 }
 
 // ---------- 构造/析构 ----------
-Planner::Planner(const rclcpp::NodeOptions& options)
-    : rclcpp::Node("planner", options) {
-    // 基本参数
-    N_            = this->declare_parameter<int>("N", 20);
-    T_            = this->declare_parameter<double>("T", 0.01);
-    amax_         = this->declare_parameter<double>("amax", 50.0);
-    dt_min_       = this->declare_parameter<double>("dt_min", 0.002);
-    dt_max_       = this->declare_parameter<double>("dt_max", 0.03);
-    dt_ema_alpha_ = this->declare_parameter<double>("dt_ema_alpha", 0.2);
+Planner::Planner(rclcpp::Node* node)
+    : node_(node) {
+    // 参数声明（与原版一致）
+    N_            = node_->declare_parameter<int>("N", 20);
+    T_            = node_->declare_parameter<double>("T", 0.01);
+    amax_         = node_->declare_parameter<double>("amax", 50.0);
+    dt_min_       = node_->declare_parameter<double>("dt_min", 0.002);
+    dt_max_       = node_->declare_parameter<double>("dt_max", 0.03);
+    dt_ema_alpha_ = node_->declare_parameter<double>("dt_ema_alpha", 0.2);
 
-    // 权重
-    q_yaw_pos_ = this->declare_parameter<double>("q_yaw_pos", 9e6);
-    q_yaw_vel_ = this->declare_parameter<double>("q_yaw_vel", 0.);
-    r_yaw_acc_ = this->declare_parameter<double>("r_yaw_acc", 1.);
+    q_yaw_pos_ = node_->declare_parameter<double>("q_yaw_pos", 9e6);
+    q_yaw_vel_ = node_->declare_parameter<double>("q_yaw_vel", 0.);
+    r_yaw_acc_ = node_->declare_parameter<double>("r_yaw_acc", 1.);
 
-    q_pitch_pos_ = this->declare_parameter<double>("q_pitch_pos", 9e6);
-    q_pitch_vel_ = this->declare_parameter<double>("q_pitch_vel", 0.);
-    r_pitch_acc_ = this->declare_parameter<double>("r_pitch_acc", 1.);
+    q_pitch_pos_ = node_->declare_parameter<double>("q_pitch_pos", 9e6);
+    q_pitch_vel_ = node_->declare_parameter<double>("q_pitch_vel", 0.);
+    r_pitch_acc_ = node_->declare_parameter<double>("r_pitch_acc", 1.);
 
     last_dt_ = T_;
 
-    auto qos = rclcpp::SensorDataQoS();
-    plan_control_cmd_pub_ =
-        this->create_publisher<PlannedControlCmd>("planner/control_command", qos);
-    target_sub_ = this->create_subscription<ControlCmd>(
-        "trajectory/control_command", qos,
-        std::bind(&Planner::onTarget, this, std::placeholders::_1));
-
-    // 首次构建 TinyMPC
+    // 构建 TinyMPC
     rebuildSolvers(T_);
 
-    // 参数热更新
-    param_cb_handle_ = this->add_on_set_parameters_callback(
+    // 参数热更新（挂在注入的 node 上）
+    param_cb_handle_ = node_->add_on_set_parameters_callback(
         std::bind(&Planner::onParam, this, std::placeholders::_1));
 }
 
 Planner::~Planner() {
     destroySolver(yaw_solver_);
     destroySolver(pitch_solver_);
+    // param_cb_handle_ 由 node 管理，通常无需手动释放
+}
+
+void Planner::reset(double yaw, double yaw_rate, double pitch, double pitch_rate) {
+    std::scoped_lock lk(param_mtx_);
+    yaw_hat_        = yaw;
+    yaw_rate_hat_   = yaw_rate;
+    pitch_hat_      = pitch;
+    pitch_rate_hat_ = pitch_rate;
+    have_last_now_  = false;
+    last_dt_        = T_;
 }
 
 // ---------- 参数回调 ----------
@@ -176,11 +180,11 @@ rcl_interfaces::msg::SetParametersResult
     return res;
 }
 
-// ---------- 目标回调（纯 TinyMPC） ----------
-void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
+// ---------- 核心求解（外部调用） ----------
+auto Planner::process(const FireSolution& msg) -> PlanControlCmd {
     auto to_f32 = [](double v) -> float {
         if (!std::isfinite(v))
-            return 0.0f; // 或按需要处理
+            return 0.0f;
         constexpr float FMAX = std::numeric_limits<float>::max();
         if (v > FMAX)
             return FMAX;
@@ -188,18 +192,15 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
             return -FMAX;
         return static_cast<float>(v);
     };
-    const auto t0 = std::chrono::steady_clock::now();
 
-    // 1) dt 估计 + EMA
-    rclcpp::Time stamp = msg->header.stamp;
-    double raw_dt      = have_last_stamp_ ? (stamp - last_stamp_).seconds() : T_;
-    last_stamp_        = stamp;
-    have_last_stamp_   = true;
+    auto now       = std::chrono::steady_clock::now();
+    double raw_dt  = have_last_now_ ? std::chrono::duration<double>(now - last_now_).count() : T_;
+    last_now_      = now;
+    have_last_now_ = true;
 
     double dt_min, dt_max, alpha;
     int N;
-    double Tnow;
-    double amax;
+    double Tnow, amax;
     {
         std::scoped_lock lk(param_mtx_);
         dt_min = dt_min_;
@@ -213,16 +214,15 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
     double dt = alpha * raw_dt + (1.0 - alpha) * last_dt_;
     last_dt_  = dt;
 
-    // dt 偏离较大时重建
     if (std::abs(dt - Tnow) > 3e-3) {
         std::scoped_lock lk(param_mtx_);
         T_ = dt;
         rebuildSolvers(T_);
     }
 
-    // 2) 参考：整段目标角 + 0 角速
-    const double ty = msg->target_yaw;
-    const double tp = msg->target_pitch;
+    // 2) 参考轨迹：整段目标角 + 0 角速
+    const double ty = msg.target_yaw;
+    const double tp = msg.target_pitch;
 
     Eigen::MatrixXd Xref_y(2, N), Xref_p(2, N);
     Xref_y.row(0).setConstant(ty);
@@ -230,7 +230,7 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
     Xref_p.row(0).setConstant(tp);
     Xref_p.row(1).setZero();
 
-    // 3) 初始状态（内部估计值）
+    // 3) 初始状态（内部估计）
     double yaw0, yv0, pit0, pv0;
     {
         std::scoped_lock lk(param_mtx_);
@@ -241,15 +241,16 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
     }
     Eigen::Vector2d x0y(yaw0, yv0), x0p(pit0, pv0);
 
-    // 4) TinyMPC 求解（两轴独立）
+    // 4) TinyMPC（两轴独立）
     tiny_set_x0(yaw_solver_, x0y);
     yaw_solver_->work->Xref = Xref_y;
     tiny_solve(yaw_solver_);
+
     tiny_set_x0(pitch_solver_, x0p);
     pitch_solver_->work->Xref = Xref_p;
     tiny_solve(pitch_solver_);
 
-    // 5) 拿首个控制 & 一步预测
+    // 5) 首个控制 + 一步状态
     const double a_yaw   = std::clamp(yaw_solver_->work->u(0, 0), -amax, amax);
     const double a_pitch = std::clamp(pitch_solver_->work->u(0, 0), -amax, amax);
 
@@ -258,18 +259,7 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
     const double p1  = pitch_solver_->work->x(0, 1);
     const double pv1 = pitch_solver_->work->x(1, 1);
 
-    // 6) 发布
-    PlannedControlCmd out;
-    out.header.stamp  = stamp;
-    out.ref_yaw       = to_f32(y1);
-    out.ref_yaw_vel   = to_f32(yv1);
-    out.ref_yaw_acc   = to_f32(a_yaw);
-    out.ref_pitch     = to_f32(p1);
-    out.ref_pitch_vel = to_f32(pv1);
-    out.ref_pitch_acc = to_f32(a_pitch);
-    plan_control_cmd_pub_->publish(out);
-
-    // 7) 刷新内部预测状态
+    // 6) 刷新内部预测状态
     {
         std::scoped_lock lk(param_mtx_);
         yaw_hat_        = y1;
@@ -278,16 +268,15 @@ void Planner::onTarget(const ControlCmd::ConstSharedPtr msg) {
         pitch_rate_hat_ = pv1;
     }
 
-    // 8) 简要日志
-    const auto t1   = std::chrono::steady_clock::now();
-    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    // static size_t cnt=0; if((++cnt & 0x1F)==0){
-    //     RCLCPP_INFO(rclcpp::get_logger("planner"),
-    //         "proc=%.3f ms | dt=%.3f ms | N=%d", ms, dt*1000.0, N);
-    // }
+    // 7) 返回结果（由外部发布）
+    PlanControlCmd out;
+    out.target_yaw       = to_f32(y1);
+    out.target_yaw_vel   = to_f32(yv1);
+    out.target_yaw_acc   = to_f32(a_yaw);
+    out.target_pitch     = to_f32(p1);
+    out.target_pitch_vel = to_f32(pv1);
+    out.target_pitch_acc = to_f32(a_pitch);
+    return out;
 }
 
 } // namespace solver
-
-#include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE(solver::Planner)

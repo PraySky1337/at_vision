@@ -28,7 +28,6 @@
     rate: 200
     use_sim_time: false
 
-
 /armor_tracker:
   ros__parameters:
     target_frame: odom
@@ -48,22 +47,6 @@
 
       tracking_thres: 5
       lost_time_thres: 1.0
-
-/trajectory:
-  ros__parameters:
-    bullet_velocity: 21.0
-    gravity: 9.83
-    integration_step: 0.001
-    qos_overrides:
-      /parameter_events:
-        publisher:
-          depth: 1000
-          durability: volatile
-          history: keep_last
-          reliability: reliable
-    resistance_coefficient: 0.0
-    use_sim_time: false
-
 
 /camera_node:
   ros__parameters:
