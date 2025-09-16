@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "armor_detector/detector.hpp"
+#include "armor_detector/openvino.hpp"
 #include "auto_aim_interfaces/msg/debug_armor.hpp"
 #include "auto_aim_interfaces/msg/debug_light.hpp"
 
@@ -25,11 +26,55 @@ Detector::Detector(
     , l(l)
     , a(a) {}
 
-std::vector<Armor> Detector::detect(const cv::Mat& input) {
-    binary_img = preprocessImage(input);
-    lights_    = findLights(input, binary_img);
-    armors_    = matchLights(lights_);
+Detector::Detector(const InferenceParams& inference_p) {
+    inference_ = std::make_unique<OpenVinoInference>(
+        inference_p.model_path, inference_p.device, inference_p.score_threshold,
+        inference_p.nms_iou, inference_p.roi_expand, inference_p.roi_offset);
+}
 
+std::vector<Armor> Detector::detect(const cv::Mat& input) {
+    armors_.clear();
+    lights_.clear();
+    if (inference_) {
+        auto dets = inference_->infer(input);
+        // === 2) 转换 ArmorDet → Armor ===
+        for (const auto& det : dets.detections) {
+            // 构造左右灯条
+            Light left, right;
+            left.top     = det.kps[0]; // TL
+            left.bottom  = det.kps[1]; // BL
+            right.bottom = det.kps[2]; // BR
+            right.top    = det.kps[3]; // TR
+
+            left.center  = (left.top + left.bottom) * 0.5f;
+            right.center = (right.top + right.bottom) * 0.5f;
+            left.color = right.color = (det.class_id == 0 ? RED : BLUE);
+
+            // 保存到内部列表
+            lights_.push_back(left);
+            lights_.push_back(right);
+
+            Armor armor(left, right);
+            armor.type                 = ArmorType::SMALL; // 默认 SMALL，你可以按 box 大小再区分
+            armor.classfication_result = std::to_string(det.class_id); // 先用id占位
+            armor.number_img = input(det.box & cv::Rect(0, 0, input.cols, input.rows)); // 裁个ROI
+
+            // Debug 数据
+            auto_aim_interfaces::msg::DebugArmor dbg;
+            dbg.type            = ARMOR_TYPE_STR[static_cast<int>(armor.type)];
+            dbg.center_x        = (left.center.x + right.center.x) / 2.f;
+            dbg.light_ratio     = 1.0f;
+            dbg.center_distance = cv::norm(left.center - right.center);
+            dbg.angle           = 0.0f;
+            debug_armors.data.push_back(dbg);
+
+            armors_.push_back(armor);
+        }
+    } else {
+        binary_img = preprocessImage(input);
+        lights_    = findLights(input, binary_img);
+        armors_    = matchLights(lights_);
+    }
     if (!armors_.empty()) {
         classifier->extractNumbers(input, armors_);
         classifier->classify(armors_);

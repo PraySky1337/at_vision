@@ -1,32 +1,16 @@
 /armor_detector:
   ros__parameters:
+    debug: true
     armor:
       max_angle: 35.0
-      max_large_center_distance: 5.5
-      max_small_center_distance: 3.2
-      min_large_center_distance: 3.2
-      min_light_ratio: 0.7
-      min_small_center_distance: 0.8
-    binary_thres: 80
-    cam_info_url: package://rm_auto_aim/config/camera_info.yaml
-    classifier_threshold: 0.7
-    debug: true
+      min_light_ratio: 0.8
     detect_color: 1
-    ignore_classes:
-    - negative
-    light:
-      max_angle: 40.0
-      max_ratio: 0.4
-      min_ratio: 0.1
-    qos_overrides:
-      /parameter_events:
-        publisher:
-          depth: 1000
-          durability: volatile
-          history: keep_last
-          reliability: reliable
-    rate: 200
-    use_sim_time: false
+    binary_thres: 80
+
+    light.min_ratio: 0.1
+
+    classifier_threshold: 0.8
+    ignore_classes: ["negative"]
 
 /armor_tracker:
   ros__parameters:

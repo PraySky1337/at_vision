@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "armor_detector/armor.hpp"
+#include "armor_detector/detector.hpp"
 #include "armor_detector/detector_node.hpp"
 
 namespace rm_auto_aim {
@@ -165,6 +166,7 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     param_desc.description                 = "0-RED, 1-BLUE";
     param_desc.integer_range[0].from_value = 0;
     param_desc.integer_range[0].to_value   = 1;
+    bool use_nn                            = declare_parameter("use_nn", true);
     auto detect_color                      = declare_parameter("detect_color", RED, param_desc);
 
     Detector::LightParams l_params = {
@@ -180,20 +182,36 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         .max_large_center_distance = declare_parameter("armor.max_large_center_distance", 5.5),
         .max_angle                 = declare_parameter("armor.max_angle", 35.0)};
 
-    auto detector = std::make_unique<Detector>(binary_thres, detect_color, l_params, a_params);
+    auto pkg_path   = ament_index_cpp::get_package_share_directory("armor_detector");
+    auto model_path = pkg_path + "/model/mlp.onnx";
+    auto label_path = pkg_path + "/model/label.txt";
+    auto xml_path   = pkg_path + "/model/last.xml";
 
+    Detector::InferenceParams i_param = {
+        .model_path = xml_path,
+        .device     = declare_parameter("inference.device", "CPU"),
+        .score_threshold =
+            static_cast<float>(declare_parameter("inference.score_threshold", 0.25f)),
+        .nms_iou    = static_cast<float>(declare_parameter("inference.nms", 0.45f)),
+        .roi_expand = static_cast<float>(declare_parameter("inference.roi_expand", 1.2f)),
+        .roi_offset = static_cast<float>(declare_parameter("inference.roi_offset", 2.0f))};
+    auto nn_detector_or_tradition = [&]() -> std::unique_ptr<Detector> {
+        if (use_nn) {
+            return std::make_unique<Detector>(i_param);
+        } else {
+            return std::make_unique<Detector>(binary_thres, detect_color, l_params, a_params);
+        }
+    };
     // Init classifier
-    auto pkg_path    = ament_index_cpp::get_package_share_directory("armor_detector");
-    auto model_path  = pkg_path + "/model/mlp.onnx";
-    auto label_path  = pkg_path + "/model/label.txt";
-    double threshold = this->declare_parameter("classifier_threshold", 0.7);
+    std::unique_ptr<Detector> detector = nn_detector_or_tradition();
+    double threshold                   = this->declare_parameter("classifier_threshold", 0.7);
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
     detector->classifier =
         std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
 
     return detector;
-}
+} // namespace rm_auto_aim
 
 std::vector<Armor>
     ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg) {

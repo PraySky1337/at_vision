@@ -5,6 +5,7 @@
 #define ARMOR_DETECTOR__DETECTOR_HPP_
 
 // OpenCV
+#include "openvino.hpp"
 #include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
 
@@ -40,7 +41,17 @@ public:
         double max_angle;
     };
 
+    struct InferenceParams {
+        std::string model_path;
+        std::string device;
+        float score_threshold{0.15f};
+        float nms_iou{0.45f};
+        float roi_expand{1.2f};
+        float roi_offset{2.0f};
+    };
+
     Detector(const int& bin_thres, const int& color, const LightParams& l, const ArmorParams& a);
+    Detector(const InferenceParams& inference_p);
 
     std::vector<Armor> detect(const cv::Mat& input);
 
@@ -71,6 +82,7 @@ private:
 
     std::vector<Light> lights_;
     std::vector<Armor> armors_;
+    std::unique_ptr<OpenVinoInference> inference_;
 };
 
 } // namespace rm_auto_aim
