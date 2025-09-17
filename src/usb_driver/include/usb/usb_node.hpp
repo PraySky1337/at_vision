@@ -1,12 +1,8 @@
 #pragma once
-#include "auto_aim_interfaces/msg/control_cmd.hpp"
-#include "auto_aim_interfaces/msg/planned_control_cmd.hpp"
 #include "usb.hpp"
 #include "usb/packet.hpp"
 
 #include <memory>
-#include <rcl_interfaces/msg/detail/parameter_descriptor__struct.hpp>
-#include <rcl_interfaces/msg/detail/set_parameters_result__struct.hpp>
 #include <rclcpp/callback_group.hpp>
 #include <rclcpp/node_interfaces/node_parameters_interface.hpp>
 #include <rclcpp/node_options.hpp>
@@ -21,7 +17,8 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
-#include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include "rm_interfaces/msg/gimbal_cmd.hpp"
+#include "rm_interfaces/msg/plan_control_cmd.hpp"
 
 #include <cstdint>
 
@@ -44,9 +41,9 @@ struct UsbDriver : public rclcpp::Node {
         rcl_interfaces::msg::ParameterDescriptor param_desc;
         param_desc.description = "unit: ms";
         timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 1, param_desc); // s
-            control_cmd_sub_ = create_subscription<auto_aim_interfaces::msg::PlannedControlCmd>(
-                "planner/control_command", rclcpp::SensorDataQoS(),
-                std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
+        control_cmd_sub_       = create_subscription<rm_interfaces::msg::GimbalCmd>(
+            "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS(),
+            std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
 
         thread_ = std::thread([this] {
             running_ = true;
@@ -120,30 +117,20 @@ private:
     }
 
     void control_cmd_callback(
-        const auto_aim_interfaces::msg::PlannedControlCmd::SharedPtr plan_control_cmd_msg) {
+        const rm_interfaces::msg::GimbalCmd::ConstSharedPtr plan_control_cmd_msg) {
         SendVisionData vision_data;
-        vision_data.header.id             = 0x02;
-        vision_data.header.len            = sizeof(decltype(vision_data.data));
-        vision_data.header.sof            = HeaderFrame::SoF();
-        vision_data.eof                   = HeaderFrame::EoF();
-        vision_data.data.target_pitch     = plan_control_cmd_msg->ref_pitch;
-        vision_data.data.target_pitch_vel = plan_control_cmd_msg->ref_pitch_vel;
-        vision_data.data.target_pitch_acc = plan_control_cmd_msg->ref_pitch_acc;
-        vision_data.data.target_yaw       = plan_control_cmd_msg->ref_yaw;
-        vision_data.data.target_yaw_vel   = plan_control_cmd_msg->ref_yaw_vel;
-        vision_data.data.target_yaw_acc   = plan_control_cmd_msg->ref_yaw_acc;
+        vision_data.header.id         = 0x02;
+        vision_data.header.len        = sizeof(decltype(vision_data.data));
+        vision_data.header.sof        = HeaderFrame::SoF();
+        vision_data.eof               = HeaderFrame::EoF();
+        vision_data.data.fire_advice  = plan_control_cmd_msg->fire_advice;
+        vision_data.data.target_pitch = -plan_control_cmd_msg->pitch;
+        vision_data.data.target_yaw   = plan_control_cmd_msg->yaw;
+        vision_data.data.distance     = plan_control_cmd_msg->distance;
         std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
         if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
             ATLOG_WARN("Failed to send data");
         }
-        // 打印 buffer 内容（16进制）
-        // std::ostringstream oss;
-        // oss << "Send buffer: ";
-        // for (size_t i = 0; i < sizeof(SendVisionData); ++i) {
-        //     oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
-        //         << (static_cast<unsigned>(buffer_[i]) & 0xFF) << " ";
-        // }
-        // ATLOG_INFO("{}", oss.str());
     }
     static constexpr const int DEV_VID = 0x0483;
     DeviceParser parser_;
@@ -161,9 +148,7 @@ private:
     rclcpp::AsyncParametersClient::SharedPtr detector_client;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
 
-    rclcpp::Subscription<auto_aim_interfaces::msg::PlannedControlCmd>::SharedPtr control_cmd_sub_;
-    rclcpp::Subscription<auto_aim_interfaces::msg::ControlCmd>::SharedPtr
-        control_cmd_without_plan_sub_;
+    rclcpp::Subscription<rm_interfaces::msg::GimbalCmd>::SharedPtr control_cmd_sub_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
 

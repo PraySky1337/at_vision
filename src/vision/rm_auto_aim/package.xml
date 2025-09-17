@@ -11,8 +11,7 @@
 
   <depend>auto_aim_interfaces</depend>
   <depend>armor_detector</depend>
-  <depend>armor_tracker</depend>
-  <depend>solver</depend>
+  <depend>armor_solver</depend>
   <depend>usb_driver</depend>
 
   <depend>core</depend>

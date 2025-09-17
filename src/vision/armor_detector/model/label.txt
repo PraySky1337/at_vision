@@ -4,6 +4,6 @@
 4
 5
 outpost
-guard
+sentry
 base
 negative

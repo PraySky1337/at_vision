@@ -1,7 +1,7 @@
 #pragma once
 
-#include <auto_aim_interfaces/msg/planned_control_cmd.hpp>
-#include <auto_aim_interfaces/msg/target.hpp>
+#include <rm_interfaces/msg/plan_control_cmd.hpp>
+#include <rm_interfaces/msg/target.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <rclcpp/time.hpp>
@@ -24,7 +24,7 @@ struct Target {
     double radius_1;
     double radius_2;
     double dz;
-    void fromMsg(const auto_aim_interfaces::msg::Target& msg) {
+    void fromMsg(const rm_interfaces::msg::Target& msg) {
         stamp      = msg.header.stamp;
         tracking   = msg.tracking;
         id         = msg.id;

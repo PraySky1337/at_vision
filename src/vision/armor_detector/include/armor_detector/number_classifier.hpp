@@ -1,38 +1,43 @@
-// Copyright 2022 Chen Jun
+#pragma once
 
-#ifndef ARMOR_DETECTOR__NUMBER_CLASSIFIER_HPP_
-#define ARMOR_DETECTOR__NUMBER_CLASSIFIER_HPP_
-
-// OpenCV
-#include <opencv2/opencv.hpp>
-
-// STL
-#include <cstddef>
-#include <iostream>
-#include <map>
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
 #include <string>
 #include <vector>
+#include <mutex>
 
-#include "armor_detector/armor.hpp"
+#include "armor_detector/types.hpp"
 
-namespace rm_auto_aim {
+namespace fyt::auto_aim {
+
 class NumberClassifier {
 public:
     NumberClassifier(
-        const std::string& model_path, const std::string& label_path, const double threshold,
-        const std::vector<std::string>& ignore_classes = {});
+        const std::string& model_path,
+        const std::string& label_path,
+        double threshold,
+        const std::vector<std::string>& ignore_classes,
+        cv::Size input_size = cv::Size(28, 28), 
+        bool use_softmax = false
+    );
 
-    void extractNumbers(const cv::Mat& src, std::vector<Armor>& armors);
+    // 提取数字 ROI
+    cv::Mat extractNumber(const cv::Mat& src, const Armor& armor) const noexcept;
 
-    void classify(std::vector<Armor>& armors);
+    // 分类（单个装甲板）
+    void classify(const cv::Mat& src, Armor& armor) noexcept;
 
+    // 批量过滤
+    void eraseIgnoreClasses(std::vector<Armor>& armors) noexcept;
     double threshold;
 
 private:
     cv::dnn::Net net_;
     std::vector<std::string> class_names_;
     std::vector<std::string> ignore_classes_;
+    cv::Size input_size_;
+    bool use_softmax_;                // ⭐ softmax 开关
+    mutable std::mutex mutex_;
 };
-} // namespace rm_auto_aim
 
-#endif // ARMOR_DETECTOR__NUMBER_CLASSIFIER_HPP_
+}  // namespace fyt::auto_aim

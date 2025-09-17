@@ -40,34 +40,25 @@ camera_node = ComposableNode(
     extra_arguments=[{'use_intra_process_comms': True}]
 )
 
-detector_node = ComposableNode(
-    package='armor_detector',
-    plugin='rm_auto_aim::ArmorDetectorNode',
+armor_detector_node = ComposableNode(
+    package='armor_detector', 
+    plugin='fyt::auto_aim::ArmorDetectorNode',
     name='armor_detector',
     parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': True}],
+    extra_arguments=[{'use_intra_process_comms': True}]
 )
 
-tracker_node = ComposableNode(
-    package='armor_tracker',
-    plugin='rm_auto_aim::ArmorTrackerNode',
-    name='armor_tracker',
+armor_solver_node = ComposableNode(
+    package='armor_solver',
+    plugin='fyt::auto_aim::ArmorSolverNode',
+    name='armor_solver',
     parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': False}],
 )
 
 usb_driver_node = ComposableNode(
     package='usb_driver',
     plugin='usb_driver::UsbDriver',
     name='usb_driver',
-    parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': False}],
-)
-
-controller_node = ComposableNode(
-    package='solver',
-    plugin='solver::Controller',
-    name="controller",
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
 )

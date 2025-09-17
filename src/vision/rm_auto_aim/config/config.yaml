@@ -1,62 +1,72 @@
 /armor_detector:
   ros__parameters:
     debug: true
-    armor:
-      max_angle: 35.0
-      min_light_ratio: 0.8
-    detect_color: 1
-    binary_thres: 80
+    target_frame: odom
+    detect_color: 0
+    binary_thres: 90
 
-    light.min_ratio: 0.1
+    use_pca: true # 使用PCA算法矫正灯条的角点
+    use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
 
-    classifier_threshold: 0.8
+    light.min_ratio: 0.0001
+    light.max_ratio: 1.0
+    light.max_angle: 40.0
+    light.color_diff_thresh: 20
+    armor.min_light_ratio: 0.8
+    armor.min_small_center_distance: 0.8
+    armor.max_small_center_distance: 3.5
+    armor.min_large_center_distance: 3.5
+    armor.max_large_center_distance: 8.0
+    armor.max_angle: 35.0
+
+    classifier_threshold: 0.7
     ignore_classes: ["negative"]
 
-/armor_tracker:
+
+/armor_solver:
   ros__parameters:
+    debug: true
     target_frame: odom
     max_armor_distance: 10.0
 
     ekf:
-      sigma2_q_xyz: 0.05
-      sigma2_q_yaw: 5.0
+      sigma2_q_x: 0.05
+      sigma2_q_y: 0.05
+      sigma2_q_z: 0.05
+      sigma2_q_yaw: 1.0
       sigma2_q_r: 80.0
 
-      r_xyz_factor: 0.0004
-      r_yaw: 0.005
+      r_x: 0.0004
+      r_y: 0.0004
+      r_z: 0.0009
+      r_yaw: 0.003
 
     tracker:
       max_match_distance: 0.5
       max_match_yaw_diff: 1.0
 
-      tracking_thres: 5
+      tracking_thres: 2
       lost_time_thres: 1.0
-
-/camera_node:
-  ros__parameters:
-    camera_info_url: package://hik_camera/config/camera_info.yaml
-    camera_name: narrow_stereo
-    exposure_time: 4000
-    gain: 16.01140022277832
-    image_raw:
-      enable_pub_plugins:
-      - image_transport/compressedDepth
-      - image_transport/compressed
-      - image_transport/raw
-      - image_transport/theora
-      format: jpeg
-      jpeg_quality: 95
-      png_level: 3
-      tiff:
-        res_unit: inch
-        xdpi: -1
-        ydpi: -1
-    qos_overrides:
-      /parameter_events:
-        publisher:
-          depth: 1000
-          durability: volatile
-          history: keep_last
-          reliability: reliable
-    use_sensor_data_qos: true
-    use_sim_time: false
+    
+    solver:
+      prediction_delay: 0.0
+      controller_delay: 0.0
+      max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
+      side_angle: 20.0 
+      bullet_speed: 21.0
+      compenstator_type: "ideal"
+      gravity: 9.83
+      resistance: 0.092
+      iteration_times: 20 # 补偿的迭代次数
+      # ["距离下限, 距离上限, 高度下限, 高度下限, pitch轴补偿值"]
+      pitch_offset: [
+        "5.0 6.0 -1.0 0.4 0.0",
+        "5.0 6.0  0.4 0.8 0.0",
+        "5.0 6.0  0.8 1.2 0.0",
+        "6.0 7.0 -1.0 0.4 0.0",
+        "6.0 7.0  0.4 0.8 0.0",
+        "6.0 7.0  0.8 1.2 0.0",
+        "7.0 8.0 -1.0 0.4 0.0",
+        "7.0 8.0  0.4 0.8 0.0",
+        "7.0 8.0  0.8 1.2 0.0",
+      ]
