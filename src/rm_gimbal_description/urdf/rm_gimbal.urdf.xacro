@@ -5,22 +5,13 @@
 
   <xacro:arg name="camera_xyz" default="0.04444 0.0 0.04" />
   <xacro:arg name="camera_rpy" default="0 0 0" />
-  <xacro:arg name="muzzle_xyz" default="0.0874 0 -0.06" />
-  <xacro:arg name="muzzle_rpy" default="0 0 0" />
 
   <link name="odom" />
   <link name="gimbal_link" />
-  <link name="muzzle_link" />
 
   <joint name="gimbal_joint" type="continuous">
     <parent link="odom" />
     <child link="gimbal_link" />
-  </joint>
-
-  <joint name="gimbal_muzzle_joint" type="fixed">
-    <origin xyz="$(arg muzzle_xyz)" rpy="$(arg muzzle_rpy)"/>
-    <parent link="gimbal_link" />
-    <child link="muzzle_link" />
   </joint>
 
   <link name="camera_link" />
