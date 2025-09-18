@@ -40,11 +40,12 @@ struct UsbDriver : public rclcpp::Node {
         }
         rcl_interfaces::msg::ParameterDescriptor param_desc;
         param_desc.description = "unit: ms";
-        timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 1, param_desc); // s
+        timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 0.1, param_desc); // s
         control_cmd_sub_       = create_subscription<rm_interfaces::msg::GimbalCmd>(
             "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS(),
             std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
-
+        on_set_params_cb_ = add_on_set_parameters_callback(
+            std::bind(&UsbDriver::on_params, this, std::placeholders::_1));
         thread_ = std::thread([this] {
             running_ = true;
             while (running_) {
@@ -70,7 +71,7 @@ private:
             try {
                 auto& name = p.get_name();
                 if (name == "timestamp_offset") {
-                    timestamp_offset_ms_ = p.as_double();
+                    timestamp_offset_ms_.store(p.as_double());
                 } else {
                 }
             } catch (const rclcpp::ParameterTypeException& e) {
@@ -108,7 +109,7 @@ private:
         auto duration    = rclcpp::Duration(std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double, std::milli>(offset_ms)));
         geometry_msgs::msg::TransformStamped t;
-        t.header.stamp       = now();
+        t.header.stamp       = now() - duration;
         t.header.frame_id    = "odom";
         t.child_frame_id     = "gimbal_link";
         t.transform.rotation = tf2::toMsg(q);

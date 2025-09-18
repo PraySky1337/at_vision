@@ -29,7 +29,8 @@ rsp_component = ComposableNode(
     parameters=[{
         'robot_description': robot_description,
         'publish_frequency': 1000.0
-    }]
+    }],
+    extra_arguments=[{'use_intra_process_comms': False}]
 )
 
 camera_node = ComposableNode(
@@ -60,5 +61,21 @@ usb_driver_node = ComposableNode(
     plugin='usb_driver::UsbDriver',
     name='usb_driver',
     parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': False}],
+)
+
+foxglove_node = ComposableNode(
+    package='foxglove_bridge',
+    plugin='foxglove_bridge::FoxgloveBridge',
+    name='foxglove_bridge',
+    parameters=[{
+        'port': 8765,
+        'address': '0.0.0.0',
+        'send_buffer_limit': 10000000,   # bytes
+        'min_qos_depth': 1,
+        'max_qos_depth': 25,
+        'include_hidden': False,
+        'capabilities': ['clientPublish','parameters','parametersSubscribe','services','connectionGraph','assets'],
+    }],
     extra_arguments=[{'use_intra_process_comms': False}],
 )

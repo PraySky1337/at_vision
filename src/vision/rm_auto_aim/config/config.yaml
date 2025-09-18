@@ -3,7 +3,7 @@
     debug: true
     target_frame: odom
     detect_color: 0
-    binary_thres: 90
+    binary_thres: 80
 
     use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
@@ -19,7 +19,7 @@
     armor.max_large_center_distance: 8.0
     armor.max_angle: 35.0
 
-    classifier_threshold: 0.7
+    classifier_threshold: 0.5
     ignore_classes: ["negative"]
 
 
@@ -70,3 +70,11 @@
         "7.0 8.0  0.4 0.8 0.0",
         "7.0 8.0  0.8 1.2 0.0",
       ]
+
+/camera_node:
+  ros__parameters:
+    camera_name: camera
+
+    exposure_time: 4000
+    gain: 16.0
+
