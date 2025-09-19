@@ -19,6 +19,8 @@
     armor.max_large_center_distance: 8.0
     armor.max_angle: 35.0
 
+    use_nn: true
+
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
 
@@ -42,17 +44,17 @@
       r_yaw: 0.003
 
     tracker:
-      max_match_distance: 0.5
-      max_match_yaw_diff: 1.0
+      max_match_distance: 0.3
+      max_match_yaw_diff: 0.7
 
-      tracking_thres: 2
-      lost_time_thres: 1.0
+      tracking_thres: 5
+      lost_time_thres: 0.6
     
     solver:
       prediction_delay: 0.0
       controller_delay: 0.0
       max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
-      side_angle: 20.0 
+      side_angle: 15.0 
       bullet_speed: 21.0
       compenstator_type: "ideal"
       gravity: 9.83
@@ -75,6 +77,6 @@
   ros__parameters:
     camera_name: camera
 
-    exposure_time: 4000
+    exposure_time: 7000
     gain: 16.0
 

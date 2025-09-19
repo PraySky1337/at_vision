@@ -206,7 +206,7 @@ void ArmorSolverNode::initMarkers() noexcept {
     position_marker_.ns      = "position";
     position_marker_.type    = visualization_msgs::msg::Marker::SPHERE;
     position_marker_.scale.x = position_marker_.scale.y = position_marker_.scale.z = 0.1;
-    position_marker_.color.a                                                       = 1.0;
+    position_marker_.color.a                                                       = 0.3;
     position_marker_.color.g                                                       = 0.3;
     linear_v_marker_.type     = visualization_msgs::msg::Marker::ARROW;
     linear_v_marker_.ns       = "linear_v";
@@ -232,14 +232,14 @@ void ArmorSolverNode::initMarkers() noexcept {
     selection_marker_.ns      = "selection";
     selection_marker_.type    = visualization_msgs::msg::Marker::SPHERE;
     selection_marker_.scale.x = selection_marker_.scale.y = selection_marker_.scale.z = 0.1;
-    selection_marker_.color.a                                                         = 1.0;
+    selection_marker_.color.a                                                         = 0.3;
     selection_marker_.color.g                                                         = 1.0;
     selection_marker_.color.r                                                         = 1.0;
     trajectory_marker_.ns      = "trajectory";
     trajectory_marker_.type    = visualization_msgs::msg::Marker::POINTS;
     trajectory_marker_.scale.x = 0.01;
     trajectory_marker_.scale.y = 0.01;
-    trajectory_marker_.color.a = 1.0;
+    trajectory_marker_.color.a = 0.2;
     trajectory_marker_.color.r = 1.0;
     trajectory_marker_.color.g = 0.75;
     trajectory_marker_.color.b = 0.79;

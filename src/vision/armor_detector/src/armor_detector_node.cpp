@@ -151,8 +151,7 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
     try {
         rclcpp::Time target_time = img_msg->header.stamp;
         auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
-            odom_frame_, img_msg->header.frame_id, target_time,
-            rclcpp::Duration::from_seconds(1));
+            odom_frame_, img_msg->header.frame_id, target_time, rclcpp::Duration::from_seconds(1));
         auto msg_q = odom_to_gimbal.transform.rotation;
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
@@ -215,6 +214,7 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     param_desc.integer_range[0].from_value = 0;
     param_desc.integer_range[0].to_value   = 255;
     int binary_thres                       = declare_parameter("binary_thres", 160, param_desc);
+    use_nn_                                = declare_parameter("use_nn", true);
 
     Detector::LightParams l_params = {
         .min_ratio         = declare_parameter("light.min_ratio", 0.08),
@@ -238,14 +238,23 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         utils::URLResolver::getResolvedPath("package://armor_detector/model/lenet.onnx");
     fs::path label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/label.txt");
+    fs::path tup_label_path =
+        utils::URLResolver::getResolvedPath("package://armor_detector/model/tup_label.txt");
+    fs::path xml_path =
+        utils::URLResolver::getResolvedPath("package://armor_detector/model/opt-0527-001.xml");
     FYT_ASSERT_MSG(
         fs::exists(model_path) && fs::exists(label_path), model_path.string() + " Not Found!");
 
     double threshold = this->declare_parameter("classifier_threshold", 0.7);
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
-    detector->classifier =
-        std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
+    if (use_nn_) {
+        detector->inference = std::make_unique<armor_auto_aim::Inference>(xml_path);
+        detector->inference->setLabelUrl(tup_label_path);
+    } else {
+        detector->classifier =
+            std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
+    }
 
     // Init Corrector
     bool use_pca = this->declare_parameter("use_pca", true);
@@ -263,33 +272,34 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
 std::vector<Armor>
     ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg) {
     // Convert ROS img to cv::Mat
-    auto img = cv_bridge::toCvShare(img_msg, "rgb8")->image;
-
-    auto armors = detector_->detect(img);
+    auto img    = cv_bridge::toCvShare(img_msg, "rgb8")->image;
+    auto armors = detector_->detect(img, use_nn_);
 
     auto final_time = this->now();
     auto latency    = (final_time - img_msg->header.stamp).seconds() * 1000;
 
     // Publish debug info
     if (debug_) {
-        binary_img_pub_.publish(
-            cv_bridge::CvImage(img_msg->header, "mono8", detector_->binary_img).toImageMsg());
+        if (!use_nn_) {
+            binary_img_pub_.publish(
+                cv_bridge::CvImage(img_msg->header, "mono8", detector_->binary_img).toImageMsg());
 
-        // Sort lights and armors data by x coordinate
-        std::sort(
-            detector_->debug_lights.data.begin(), detector_->debug_lights.data.end(),
-            [](const auto& l1, const auto& l2) { return l1.center_x < l2.center_x; });
-        std::sort(
-            detector_->debug_armors.data.begin(), detector_->debug_armors.data.end(),
-            [](const auto& a1, const auto& a2) { return a1.center_x < a2.center_x; });
+            // Sort lights and armors data by x coordinate
+            std::sort(
+                detector_->debug_lights.data.begin(), detector_->debug_lights.data.end(),
+                [](const auto& l1, const auto& l2) { return l1.center_x < l2.center_x; });
+            std::sort(
+                detector_->debug_armors.data.begin(), detector_->debug_armors.data.end(),
+                [](const auto& a1, const auto& a2) { return a1.center_x < a2.center_x; });
 
-        lights_data_pub_->publish(detector_->debug_lights);
-        armors_data_pub_->publish(detector_->debug_armors);
+            lights_data_pub_->publish(detector_->debug_lights);
+            armors_data_pub_->publish(detector_->debug_armors);
 
-        if (!armors.empty()) {
-            auto all_num_img = detector_->getAllNumbersImage();
-            number_img_pub_.publish(
-                *cv_bridge::CvImage(img_msg->header, "mono8", all_num_img).toImageMsg());
+            if (!armors.empty()) {
+                auto all_num_img = detector_->getAllNumbersImage();
+                number_img_pub_.publish(
+                    *cv_bridge::CvImage(img_msg->header, "mono8", all_num_img).toImageMsg());
+            }
         }
 
         detector_->drawResults(img);

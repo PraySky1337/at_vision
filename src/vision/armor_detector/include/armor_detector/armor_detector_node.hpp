@@ -57,87 +57,83 @@ namespace fyt::auto_aim {
 // the detected armors
 class ArmorDetectorNode : public rclcpp::Node {
 public:
-  ArmorDetectorNode(const rclcpp::NodeOptions &options);
+    ArmorDetectorNode(const rclcpp::NodeOptions& options);
 
 private:
-  void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
-  // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
-  // target_msg);
+    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
+    // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
+    // target_msg);
 
-  std::unique_ptr<Detector> initDetector();
+    std::unique_ptr<Detector> initDetector();
 
-  std::vector<Armor>
-  detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg);
+    std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg);
 
-  void createDebugPublishers() noexcept;
-  void destroyDebugPublishers() noexcept;
+    void createDebugPublishers() noexcept;
+    void destroyDebugPublishers() noexcept;
 
-  void publishMarkers() noexcept;
+    void publishMarkers() noexcept;
 
-  void setModeCallback(
-      const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-      std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
+    void setModeCallback(
+        const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
+        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
 
-  // Dynamic Parameter
-  rcl_interfaces::msg::SetParametersResult
-  onSetParameters(std::vector<rclcpp::Parameter> parameters);
-  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr
-      on_set_parameters_callback_handle_;
+    // Dynamic Parameter
+    rcl_interfaces::msg::SetParametersResult
+        onSetParameters(std::vector<rclcpp::Parameter> parameters);
+    rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_handle_;
 
-  // Heartbeat
-  HeartBeatPublisher::SharedPtr heartbeat_;
+    // Heartbeat
+    HeartBeatPublisher::SharedPtr heartbeat_;
 
-  // Armor Detector
-  std::unique_ptr<Detector> detector_;
+    // Armor Detector
+    std::unique_ptr<Detector> detector_;
 
-  // Pose Solver
-  bool use_ba_;
-  std::unique_ptr<ArmorPoseEstimator> armor_pose_estimator_;
+    // Pose Solver
+    bool use_ba_;
+    bool use_nn_;
+    std::unique_ptr<ArmorPoseEstimator> armor_pose_estimator_;
 
-  // Detected armors publisher
-  rm_interfaces::msg::Armors armors_msg_;
-  rclcpp::Publisher<rm_interfaces::msg::Armors>::SharedPtr armors_pub_;
+    // Detected armors publisher
+    rm_interfaces::msg::Armors armors_msg_;
+    rclcpp::Publisher<rm_interfaces::msg::Armors>::SharedPtr armors_pub_;
 
-  // Visualization marker publisher
-  visualization_msgs::msg::Marker armor_marker_;
-  visualization_msgs::msg::Marker text_marker_;
-  visualization_msgs::msg::MarkerArray marker_array_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
-      marker_pub_;
+    // Visualization marker publisher
+    visualization_msgs::msg::Marker armor_marker_;
+    visualization_msgs::msg::Marker text_marker_;
+    visualization_msgs::msg::MarkerArray marker_array_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
-  // Camera info part
-  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
-  cv::Point2f cam_center_;
-  std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
+    // Camera info part
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
+    cv::Point2f cam_center_;
+    std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
 
-  // Image subscription
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
+    // Image subscription
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
 
-  // Target subscription
-  // rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
-  // rm_interfaces::msg::Target::SharedPtr tracked_target_;
-  std::deque<Armor> tracked_armors_;
+    // Target subscription
+    // rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
+    // rm_interfaces::msg::Target::SharedPtr tracked_target_;
+    std::deque<Armor> tracked_armors_;
 
-  // ReceiveData subscripiton
-  std::string odom_frame_;
-  Eigen::Matrix3d imu_to_camera_;
-  std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
-  std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
+    // ReceiveData subscripiton
+    std::string odom_frame_;
+    Eigen::Matrix3d imu_to_camera_;
+    std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
 
-  // Enable/Disable Armor Detector
-  rclcpp::Service<rm_interfaces::srv::SetMode>::SharedPtr set_mode_srv_;
+    // Enable/Disable Armor Detector
+    rclcpp::Service<rm_interfaces::srv::SetMode>::SharedPtr set_mode_srv_;
 
-  // Debug information
-  bool debug_;
-  std::shared_ptr<rclcpp::ParameterEventHandler> debug_param_sub_;
-  std::shared_ptr<rclcpp::ParameterCallbackHandle> debug_cb_handle_;
-  rclcpp::Publisher<rm_interfaces::msg::DebugLights>::SharedPtr
-      lights_data_pub_;
-  rclcpp::Publisher<rm_interfaces::msg::DebugArmors>::SharedPtr
-      armors_data_pub_;
-  image_transport::Publisher binary_img_pub_;
-  image_transport::Publisher number_img_pub_;
-  image_transport::Publisher result_img_pub_;
+    // Debug information
+    bool debug_;
+    std::shared_ptr<rclcpp::ParameterEventHandler> debug_param_sub_;
+    std::shared_ptr<rclcpp::ParameterCallbackHandle> debug_cb_handle_;
+    rclcpp::Publisher<rm_interfaces::msg::DebugLights>::SharedPtr lights_data_pub_;
+    rclcpp::Publisher<rm_interfaces::msg::DebugArmors>::SharedPtr armors_data_pub_;
+    image_transport::Publisher binary_img_pub_;
+    image_transport::Publisher number_img_pub_;
+    image_transport::Publisher result_img_pub_;
 };
 
 } // namespace fyt::auto_aim

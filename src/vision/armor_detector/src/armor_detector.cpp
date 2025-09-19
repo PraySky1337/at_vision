@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <execution>
+#include <rm_utils/logger/log.hpp>
 #include <vector>
 // OpenCV
 #include <opencv2/core.hpp>
@@ -43,7 +44,49 @@ Detector::Detector(
     , light_params(l)
     , armor_params(a) {}
 
-std::vector<Armor> Detector::detect(const cv::Mat& input) noexcept {
+std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept {
+    armors_.clear();
+    if (use_nn) {
+        std::vector<armor_auto_aim::InferenceResult> results;
+        bool ok = false;
+        try {
+            ok = inference->inference(input, &results);
+        } catch (...) {
+            ok = false;
+        }
+        if (!ok || results.empty()) {
+            return {};
+        }
+        for (const auto& res : results) {
+            // std::cout << res << std::endl;
+            Light left(res.armor_apex[0], res.armor_apex[1]);
+            Light right(res.armor_apex[3], res.armor_apex[2]);
+            Armor armor{left, right};
+
+            // Angle of light center connection
+            cv::Point2f diff = left.center - right.center;
+            float angle      = std::abs(std::atan(diff.y / diff.x)) / CV_PI * 180;
+            if (angle > armor_params.max_angle) {
+                continue;
+            }
+            armor.confidence = static_cast<float>(res.probability);
+            armor.number     = inference->labels_lookup[res.classification];
+            armor.type       = res.classification == 1 ? ArmorType::LARGE : ArmorType::SMALL;
+            armor.classfication_result =
+                fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
+            armors_.emplace_back(std::move(armor));
+        }
+        if (!armors_.empty()) {
+            cv::cvtColor(input, gray_img_, cv::COLOR_RGB2GRAY);
+            std::for_each(
+                std::execution::par, armors_.begin(), armors_.end(), [this](Armor& armor) {
+                    if (corner_corrector != nullptr) {
+                        corner_corrector->correctCorners(armor, gray_img_);
+                    }
+                });
+        }
+        return armors_;
+    }
     // 1. Preprocess the image
     binary_img = preprocessImage(input);
     // 2. Find lights

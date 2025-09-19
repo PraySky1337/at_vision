@@ -24,77 +24,80 @@
 #include <rm_utils/common.hpp>
 #include <string>
 #include <vector>
-// third party 
+// third party
 #include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
 // project
 #include "armor_detector/light_corner_corrector.hpp"
-#include "armor_detector/types.hpp"
 #include "armor_detector/number_classifier.hpp"
+#include "armor_detector/types.hpp"
 #include "rm_interfaces/msg/debug_armors.hpp"
 #include "rm_interfaces/msg/debug_lights.hpp"
+
+#include "inference.hpp"
 
 namespace fyt::auto_aim {
 class Detector {
 public:
-  struct LightParams {
-    // width / height
-    double min_ratio;
-    double max_ratio;
-    // vertical angle
-    double max_angle;
-    // judge color
-    int color_diff_thresh;
-  };
+    struct LightParams {
+        // width / height
+        double min_ratio;
+        double max_ratio;
+        // vertical angle
+        double max_angle;
+        // judge color
+        int color_diff_thresh;
+    };
 
-  struct ArmorParams {
-    double min_light_ratio;
-    // light pairs distance
-    double min_small_center_distance;
-    double max_small_center_distance;
-    double min_large_center_distance;
-    double max_large_center_distance;
-    // horizontal angle
-    double max_angle;
-  };
+    struct ArmorParams {
+        double min_light_ratio;
+        // light pairs distance
+        double min_small_center_distance;
+        double max_small_center_distance;
+        double min_large_center_distance;
+        double max_large_center_distance;
+        // horizontal angle
+        double max_angle;
+    };
 
-  Detector(const int &bin_thres, const EnemyColor &color, const LightParams &l,
-           const ArmorParams &a);
+    Detector(
+        const int& bin_thres, const EnemyColor& color, const LightParams& l, const ArmorParams& a);
 
-  std::vector<Armor> detect(const cv::Mat &input) noexcept;
+    std::vector<Armor> detect(const cv::Mat& input, bool use_nn = true) noexcept;
 
-  cv::Mat preprocessImage(const cv::Mat &input) noexcept;
-  std::vector<Light> findLights(const cv::Mat &rbg_img,
-                                const cv::Mat &binary_img) noexcept;
-  std::vector<Armor> matchLights(const std::vector<Light> &lights) noexcept;
+    cv::Mat preprocessImage(const cv::Mat& input) noexcept;
+    std::vector<Light> findLights(const cv::Mat& rbg_img, const cv::Mat& binary_img) noexcept;
+    std::vector<Armor> matchLights(const std::vector<Light>& lights) noexcept;
 
-  // For debug usage
-  cv::Mat getAllNumbersImage() const noexcept;
-  void drawResults(cv::Mat &img) const noexcept;
+    // For debug usage
+    cv::Mat getAllNumbersImage() const noexcept;
+    void drawResults(cv::Mat& img) const noexcept;
 
-  // Parameters
-  int binary_thres;
-  EnemyColor detect_color;
-  LightParams light_params;
-  ArmorParams armor_params;
+    // Parameters
+    int binary_thres;
+    EnemyColor detect_color;
+    LightParams light_params;
+    ArmorParams armor_params;
 
-  std::unique_ptr<NumberClassifier> classifier;
-  std::unique_ptr<LightCornerCorrector> corner_corrector;
+    std::unique_ptr<NumberClassifier> classifier;
+    std::unique_ptr<LightCornerCorrector> corner_corrector;
 
-  // Debug msgs
-  cv::Mat binary_img;
-  rm_interfaces::msg::DebugLights debug_lights;
-  rm_interfaces::msg::DebugArmors debug_armors;
+    std::unique_ptr<armor_auto_aim::Inference> inference;
+
+    // Debug msgs
+    cv::Mat binary_img;
+    rm_interfaces::msg::DebugLights debug_lights;
+    rm_interfaces::msg::DebugArmors debug_armors;
 
 private:
-  bool isLight(const Light &possible_light) noexcept;
-  bool containLight(const int i,const int j,const std::vector<Light> &lights) noexcept;
-  ArmorType isArmor(const Light &light_1, const Light &light_2) noexcept;
+    bool isLight(const Light& possible_light) noexcept;
+    bool containLight(const int i, const int j, const std::vector<Light>& lights) noexcept;
+    ArmorType isArmor(const Light& light_1, const Light& light_2) noexcept;
 
-  cv::Mat gray_img_;
+    cv::Mat gray_img_;
 
-  std::vector<Light> lights_;
-  std::vector<Armor> armors_;
+    std::vector<Light> lights_;
+    std::vector<Armor> armors_;
 };
 
 } // namespace fyt::auto_aim
