@@ -81,7 +81,7 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
     armor_marker_.scale.x  = 0.03;
     armor_marker_.scale.y  = 0.15;
     armor_marker_.scale.z  = 0.12;
-    armor_marker_.color.a  = 1.0;
+    armor_marker_.color.a  = 0.2;
     armor_marker_.color.r  = 1.0;
     armor_marker_.lifetime = rclcpp::Duration::from_seconds(0.1);
 
@@ -151,7 +151,7 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
     try {
         rclcpp::Time target_time = img_msg->header.stamp;
         auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
-            odom_frame_, img_msg->header.frame_id, target_time, rclcpp::Duration::from_seconds(1));
+            odom_frame_, img_msg->header.frame_id, target_time, rclcpp::Duration::from_seconds(0.001));
         auto msg_q = odom_to_gimbal.transform.rotation;
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
@@ -233,15 +233,16 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     auto detector = std::make_unique<Detector>(binary_thres, EnemyColor::BLUE, l_params, a_params);
 
     // Init classifier
-    namespace fs = std::filesystem;
+    namespace fs               = std::filesystem;
+    const std::string nn_model = declare_parameter("openvino.model_path", "best_06_02.xml");
     fs::path model_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/lenet.onnx");
     fs::path label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/label.txt");
     fs::path tup_label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/tup_label.txt");
-    fs::path xml_path =
-        utils::URLResolver::getResolvedPath("package://armor_detector/model/opt-0527-001.xml");
+    fs::path xml_path = utils::URLResolver::getResolvedPath("package://armor_detector/model");
+    xml_path /= nn_model;
     FYT_ASSERT_MSG(
         fs::exists(model_path) && fs::exists(label_path), model_path.string() + " Not Found!");
 
@@ -249,8 +250,8 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
     if (use_nn_) {
-        detector->inference = std::make_unique<armor_auto_aim::Inference>(xml_path);
-        detector->inference->setLabelUrl(tup_label_path);
+        detector->inference = std::make_unique<armor_detector::Inference>();
+        detector->inference->initModel(xml_path);
     } else {
         detector->classifier =
             std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
@@ -280,20 +281,18 @@ std::vector<Armor>
 
     // Publish debug info
     if (debug_) {
+        // Sort lights and armors data by x coordinate
+        std::sort(
+            detector_->debug_lights.data.begin(), detector_->debug_lights.data.end(),
+            [](const auto& l1, const auto& l2) { return l1.center_x < l2.center_x; });
+        std::sort(
+            detector_->debug_armors.data.begin(), detector_->debug_armors.data.end(),
+            [](const auto& a1, const auto& a2) { return a1.center_x < a2.center_x; });
+        lights_data_pub_->publish(detector_->debug_lights);
+        armors_data_pub_->publish(detector_->debug_armors);
         if (!use_nn_) {
             binary_img_pub_.publish(
                 cv_bridge::CvImage(img_msg->header, "mono8", detector_->binary_img).toImageMsg());
-
-            // Sort lights and armors data by x coordinate
-            std::sort(
-                detector_->debug_lights.data.begin(), detector_->debug_lights.data.end(),
-                [](const auto& l1, const auto& l2) { return l1.center_x < l2.center_x; });
-            std::sort(
-                detector_->debug_armors.data.begin(), detector_->debug_armors.data.end(),
-                [](const auto& a1, const auto& a2) { return a1.center_x < a2.center_x; });
-
-            lights_data_pub_->publish(detector_->debug_lights);
-            armors_data_pub_->publish(detector_->debug_armors);
 
             if (!armors.empty()) {
                 auto all_num_img = detector_->getAllNumbersImage();

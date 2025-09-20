@@ -1,52 +1,86 @@
-/**
- * @projectName armor_auto_aim
- * @file inference.cpp
- * @brief 推理
- * 
- * @author yx 
- * @date 2023-10-27 20:05
+/*
+ * @Description: This is a ros-based project!
+ * @Author: Liu Biao
+ * @Date: 2022-10-21 16:24:35
+ * @LastEditTime: 2023-03-17 18:53:13
+ * @FilePath:
+ * /TUP-Vision-2023-Based/src/vehicle_system/autoaim/armor_detector/include/inference/inference_api2.hpp
  */
+#ifndef INFERENCE_API2_HPP_
+#define INFERENCE_API2_HPP_
 
-#pragma once
-
-
+// c++
+#include <iostream>
+#include <iterator>
+#include <memory>
 #include <string>
+#include <vector>
 
-#include <Eigen/Dense>
+// openvino
 #include <openvino/openvino.hpp>
 
-#include "armor_detector/parser.hpp"
+// opencv
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
 
-namespace armor_auto_aim {
-class Inference {
-public:
-    static constexpr int INPUT_WIDTH = 416;
-    static constexpr int INPUT_HEIGHT = 416;
+// eigen
+#include <Eigen/Core>
 
-    Inference();
-
-    explicit Inference(const std::string& model_path);
-
-    Inference(const std::string& model_path, const std::string& driver);
-
-    void initModel(const std::string& model_path);
-
-    void setLabelUrl(const std::string& label_path);
-
-    bool inference(const cv::Mat& src, std::vector<InferenceResult>* inference_armors);
-
-    std::vector<std::string> labels_lookup;
-private:
-    const std::string m_MODEL_PATH = "../../model/opt-0527-001.xml";
-    const std::string m_CACHE_DIR = "../.cache";
-
-    std::string m_device = "CPU";
-    ov::Core m_core;
-    std::shared_ptr<ov::Model> m_model;
-    ov::CompiledModel m_compiled_model;
-    float* m_inference_result_ptr{};
-    ov::InferRequest m_infer_request;
-    Eigen::Matrix<float, 3, 3> m_transformation_matrix;
+namespace armor_detector {
+struct Object {
+    cv::Rect_<float> rect;
+    int cls;
+    int color;
+    float prob;
+    std::vector<cv::Point2f> pts;
+};
+struct GridAndStride {
+    int grid0;
+    int grid1;
+    int stride;
 };
 
-} // armor_auto_aim
+struct ArmorObject : Object {
+    int area;
+    cv::Point2f apex[4];
+};
+
+class Inference {
+public:
+    Inference();
+    ~Inference();
+    bool detect(const cv::Mat& src, std::vector<ArmorObject>& objects);
+    bool initModel(const std::string& path);
+
+    const std::vector<std::string> labels_lookup = {
+        "outpost",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "outpost",
+        "sentry",
+        "base",
+        "negative"
+    };
+
+private:
+    // int dw, dh;
+    // float rescale_ratio;
+
+    ov::Core core;
+    std::shared_ptr<ov::Model> model; // 网络
+    ov::CompiledModel compiled_model; // 可执行网络
+    ov::InferRequest infer_request;   // 推理请求
+    ov::Tensor input_tensor;
+
+    std::string input_name;
+    std::string output_name;
+
+    Eigen::Matrix<float, 3, 3> transfrom_matrix;
+};
+
+} // namespace armor_detector
+
+#endif

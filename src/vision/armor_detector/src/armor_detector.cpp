@@ -33,6 +33,7 @@
 
 #include <format>
 // project
+#include "armor_detector/inference.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_utils/common.hpp"
 
@@ -46,11 +47,13 @@ Detector::Detector(
 
 std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept {
     armors_.clear();
+    debug_lights.data.clear();
+    debug_armors.data.clear();
     if (use_nn) {
-        std::vector<armor_auto_aim::InferenceResult> results;
+        std::vector<armor_detector::ArmorObject> results;
         bool ok = false;
         try {
-            ok = inference->inference(input, &results);
+            ok = inference->detect(input, results);
         } catch (...) {
             ok = false;
         }
@@ -59,19 +62,15 @@ std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept 
         }
         for (const auto& res : results) {
             // std::cout << res << std::endl;
-            Light left(res.armor_apex[0], res.armor_apex[1]);
-            Light right(res.armor_apex[3], res.armor_apex[2]);
-            Armor armor{left, right};
-
-            // Angle of light center connection
-            cv::Point2f diff = left.center - right.center;
-            float angle      = std::abs(std::atan(diff.y / diff.x)) / CV_PI * 180;
-            if (angle > armor_params.max_angle) {
+            Light left(res.apex[0], res.apex[1]);
+            Light right(res.apex[3], res.apex[2]);
+            if ((isLight(left) && isLight(right)) == false) {
                 continue;
             }
-            armor.confidence = static_cast<float>(res.probability);
-            armor.number     = inference->labels_lookup[res.classification];
-            armor.type       = res.classification == 1 ? ArmorType::LARGE : ArmorType::SMALL;
+            Armor armor{left, right};
+            armor.confidence = static_cast<float>(res.prob);
+            armor.number     = inference->labels_lookup[res.cls];
+            armor.type       = res.cls == 1 ? ArmorType::LARGE : ArmorType::SMALL;
             armor.classfication_result =
                 fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
             armors_.emplace_back(std::move(armor));

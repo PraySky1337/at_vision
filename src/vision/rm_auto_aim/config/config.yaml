@@ -3,10 +3,10 @@
     debug: true
     target_frame: odom
     detect_color: 0
-    binary_thres: 80
+    binary_thres: 90
 
     use_pca: true # 使用PCA算法矫正灯条的角点
-    use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
+    use_ba: false # 使用BA优化算法求解装甲板的Yaw角 
 
     light.min_ratio: 0.0001
     light.max_ratio: 1.0
@@ -19,7 +19,7 @@
     armor.max_large_center_distance: 8.0
     armor.max_angle: 35.0
 
-    use_nn: true
+    use_nn: false
 
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
@@ -44,11 +44,11 @@
       r_yaw: 0.003
 
     tracker:
-      max_match_distance: 0.3
-      max_match_yaw_diff: 0.7
+      max_match_distance: 0.5
+      max_match_yaw_diff: 1.0
 
-      tracking_thres: 5
-      lost_time_thres: 0.6
+      tracking_thres: 2
+      lost_time_thres: 1.0
     
     solver:
       prediction_delay: 0.0
@@ -75,8 +75,28 @@
 
 /camera_node:
   ros__parameters:
+    camera_info_url: package://rm_auto_aim/config/camera_info.yaml
     camera_name: camera
-
-    exposure_time: 7000
-    gain: 16.0
-
+    exposure_time: 5000
+    gain: 16.7
+    image_raw:
+      enable_pub_plugins:
+      - image_transport/raw
+      format: jpeg
+      jpeg_quality: 95
+      png_level: 3
+      tiff:
+        res_unit: inch
+        xdpi: -1
+        ydpi: -1
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    reconnect_interval_ms: 2000
+    reconnect_max_attempts: -1
+    use_sensor_data_qos: true
+    use_sim_time: false

@@ -82,7 +82,7 @@ public:
     std::unique_ptr<NumberClassifier> classifier;
     std::unique_ptr<LightCornerCorrector> corner_corrector;
 
-    std::unique_ptr<armor_auto_aim::Inference> inference;
+    std::unique_ptr<armor_detector::Inference> inference;
 
     // Debug msgs
     cv::Mat binary_img;
