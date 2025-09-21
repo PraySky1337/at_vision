@@ -46,10 +46,10 @@ Detector::Detector(
     , armor_params(a) {}
 
 std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept {
-    armors_.clear();
-    debug_lights.data.clear();
-    debug_armors.data.clear();
     if (use_nn) {
+        armors_.clear();
+        debug_lights.data.clear();
+        debug_armors.data.clear();
         std::vector<armor_detector::ArmorObject> results;
         bool ok = false;
         try {

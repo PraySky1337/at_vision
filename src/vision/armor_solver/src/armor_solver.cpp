@@ -238,12 +238,12 @@ int Solver::selectBestArmor(
     double beta = target_yaw;
 
     // clang-format off
-  Eigen::Matrix2d R_odom2center;
-  Eigen::Matrix2d R_odom2armor;
-  R_odom2center << std::cos(alpha), std::sin(alpha), 
-                  -std::sin(alpha), std::cos(alpha);
-  R_odom2armor << std::cos(beta), std::sin(beta), 
-                 -std::sin(beta), std::cos(beta);
+    Eigen::Matrix2d R_odom2center;
+    Eigen::Matrix2d R_odom2armor;
+    R_odom2center << std::cos(alpha), std::sin(alpha), 
+                    -std::sin(alpha), std::cos(alpha);
+    R_odom2armor << std::cos(beta), std::sin(beta), 
+                    -std::sin(beta), std::cos(beta);
     // clang-format on
     Eigen::Matrix2d R_center2armor = R_odom2center.transpose() * R_odom2armor;
 

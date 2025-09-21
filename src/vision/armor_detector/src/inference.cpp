@@ -14,10 +14,10 @@ static constexpr int INPUT_H = 416;    // Height of input
 static constexpr int NUM_CLASSES = 8;  // Number of classes
 static constexpr int NUM_COLORS = 8;   // Number of color
 static constexpr int TOPK = 128;       // TopK
-static constexpr float NMS_THRESH = 0.8;
+static constexpr float NMS_THRESH = 0.5;
 static constexpr float BBOX_CONF_THRESH = 0.9;
 static constexpr float MERGE_CONF_ERROR = 0.15;
-static constexpr float MERGE_MIN_IOU = 0.9;
+static constexpr float MERGE_MIN_IOU = 0.85;
 
 namespace armor_detector
 {

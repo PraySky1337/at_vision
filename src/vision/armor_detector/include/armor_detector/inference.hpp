@@ -53,7 +53,7 @@ public:
     bool initModel(const std::string& path);
 
     const std::vector<std::string> labels_lookup = {
-        "outpost",
+        "",
         "1",
         "2",
         "3",
@@ -62,7 +62,6 @@ public:
         "outpost",
         "sentry",
         "base",
-        "negative"
     };
 
 private:

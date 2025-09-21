@@ -151,7 +151,8 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
     try {
         rclcpp::Time target_time = img_msg->header.stamp;
         auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
-            odom_frame_, img_msg->header.frame_id, target_time, rclcpp::Duration::from_seconds(0.001));
+            odom_frame_, img_msg->header.frame_id, target_time,
+            rclcpp::Duration::from_seconds(0.001));
         auto msg_q = odom_to_gimbal.transform.rotation;
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
@@ -249,7 +250,12 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     double threshold = this->declare_parameter("classifier_threshold", 0.7);
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
-    if (use_nn_) {
+    if (debug_) {
+        detector->inference = std::make_unique<armor_detector::Inference>();
+        detector->inference->initModel(xml_path);
+        detector->classifier =
+            std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
+    } else if (use_nn_) {
         detector->inference = std::make_unique<armor_detector::Inference>();
         detector->inference->initModel(xml_path);
     } else {
@@ -347,6 +353,8 @@ rcl_interfaces::msg::SetParametersResult
             detector_->armor_params.max_large_center_distance = param.as_double();
         } else if (param.get_name() == "armor.max_angle") {
             detector_->armor_params.max_angle = param.as_double();
+        } else if (param.get_name() == "use_nn") {
+            use_nn_ = param.as_bool();
         }
     }
     return result;
