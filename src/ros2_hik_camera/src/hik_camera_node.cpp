@@ -99,17 +99,10 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                 fail_count = 0;
             } else {
                 RCLCPP_WARN(this->get_logger(), "Get buffer failed! nRet: [%x]", nRet);
-                fail_count++;
-                // 当连续失败次数过多时，触发重连（这里阈值取 5）
-                if (fail_count > 5) {
-                    RCLCPP_ERROR(
-                        this->get_logger(),
-                        "Consecutive failures exceeded threshold, reconnecting...");
-                    // 进入重连（阻塞直到成功或退出）
-                    if (!reconnectLoop()) {
-                        break;
-                    }
-                    fail_count = 0;
+                RCLCPP_ERROR(
+                    this->get_logger(), "Consecutive failures exceeded threshold, reconnecting...");
+                if (!reconnectLoop()) {
+                    break;
                 }
             }
 

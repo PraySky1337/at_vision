@@ -38,6 +38,8 @@ struct UsbDriver : public rclcpp::Node {
         if (device_.open(0x0483)) {
             ATLOG_INFO("usb driver already");
         }
+
+        use_roll_ = declare_parameter("use_roll", false);
         rcl_interfaces::msg::ParameterDescriptor param_desc;
         param_desc.description = "unit: ms";
         timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 0.1, param_desc); // s
@@ -100,7 +102,11 @@ private:
         std::memcpy(&imu_pkt, data, sizeof(ReceiveImuData));
         tf2::Quaternion q;
         const auto& d = imu_pkt.data;
-        q.setRPY(d.roll, d.pitch, d.yaw);
+        float roll    = 0;
+        if (use_roll_) {
+            roll = d.roll;
+        }
+        q.setRPY(roll, d.pitch, d.yaw);
         q.normalize();
         if (std::isnan(q.x()) || std::isnan(q.y()) || std::isnan(q.z())) [[unlikely]] {
             ATLOG_WARN("roll, pitch or yaw is invalid nan");
@@ -157,5 +163,6 @@ private:
     std::thread thread_;
 
     std::atomic<double> timestamp_offset_ms_;
+    bool use_roll_;
 };
 } // namespace usb_driver

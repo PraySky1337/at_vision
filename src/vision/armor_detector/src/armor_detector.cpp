@@ -33,7 +33,6 @@
 
 #include <format>
 // project
-#include "armor_detector/inference.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_utils/common.hpp"
 
@@ -46,43 +45,27 @@ Detector::Detector(
     , armor_params(a) {}
 
 std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept {
-    if (use_nn) {
+
+    if (use_nn && openvino_inference) {
         armors_.clear();
         debug_lights.data.clear();
         debug_armors.data.clear();
-        std::vector<armor_detector::ArmorObject> results;
-        bool ok = false;
-        try {
-            ok = inference->detect(input, results);
-        } catch (...) {
-            ok = false;
-        }
-        if (!ok || results.empty()) {
-            return {};
-        }
-        for (const auto& res : results) {
-            // std::cout << res << std::endl;
-            Light left(res.apex[0], res.apex[1]);
-            Light right(res.apex[3], res.apex[2]);
-            if ((isLight(left) && isLight(right)) == false) {
-                continue;
-            }
+        auto& objs = openvino_inference->tmp_objects;
+        openvino_inference->infer(input, 1);
+        for (const auto& obj : objs) {
+            cv::Point2f tl{obj.landmarks[0], obj.landmarks[1]};
+            cv::Point2f bl{obj.landmarks[2], obj.landmarks[3]};
+            cv::Point2f br{obj.landmarks[4], obj.landmarks[5]};
+            cv::Point2f tr{obj.landmarks[6], obj.landmarks[7]};
+            Light right{tl, bl};
+            Light left{tr, br};
             Armor armor{left, right};
-            armor.confidence = static_cast<float>(res.prob);
-            armor.number     = inference->labels_lookup[res.cls];
-            armor.type       = res.cls == 1 ? ArmorType::LARGE : ArmorType::SMALL;
-            armor.classfication_result =
-                fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
+            armor.number     = openvino_inference->labels_lookup[obj.label];
+            armor.type = armor.number == "1" ? ArmorType::LARGE : ArmorType::SMALL;
+            armor.confidence = obj.prob;
+            armor.color      = obj.color == 1 ? EnemyColor::BLUE : EnemyColor::RED;
+            armor.classfication_result = fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
             armors_.emplace_back(std::move(armor));
-        }
-        if (!armors_.empty()) {
-            cv::cvtColor(input, gray_img_, cv::COLOR_RGB2GRAY);
-            std::for_each(
-                std::execution::par, armors_.begin(), armors_.end(), [this](Armor& armor) {
-                    if (corner_corrector != nullptr) {
-                        corner_corrector->correctCorners(armor, gray_img_);
-                    }
-                });
         }
         return armors_;
     }
@@ -306,8 +289,9 @@ void Detector::drawResults(cv::Mat& img) const noexcept {
 
     // Draw armors
     for (const auto& armor : armors_) {
-        // cv::line(img, armor.left_light.top, armor.right_light.bottom, cv::Scalar(0, 255, 0), 1);
-        // cv::line(img, armor.left_light.bottom, armor.right_light.top, cv::Scalar(0, 255, 0), 1);
+        // cv::line(img, armor.left_light.top, armor.right_light.bottom, cv::Scalar(0, 255, 0),
+        // 1); cv::line(img, armor.left_light.bottom, armor.right_light.top, cv::Scalar(0, 255,
+        // 0), 1);
 
         cv::line(
             img, armor.left_light.top, armor.left_light.bottom, cv::Scalar(0, 255, 0), 1,

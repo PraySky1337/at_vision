@@ -88,8 +88,13 @@ struct Light : public cv::RotatedRect {
         : cv::RotatedRect()
         , color(EnemyColor::WHITE) {
         // 直接赋值 top/bottom/center
-        top    = top_pt;
-        bottom = bottom_pt;
+        if (top_pt.y < bottom_pt.y) {
+            top    = top_pt;
+            bottom = bottom_pt;
+        } else {
+            top = bottom_pt;
+            bottom = top_pt;
+        }
         center = (top + bottom) * 0.5f;
 
         // length = distance between top and bottom
@@ -119,8 +124,8 @@ struct Light : public cv::RotatedRect {
         float angle_deg =
             static_cast<float>(std::atan2(bottom.y - top.y, bottom.x - top.x) * 180.0 / CV_PI);
         // RotatedRect 的 size 一般是 (width, length)，保持 length 为高度方向
-        this->size   = cv::Size2f(static_cast<float>(width), static_cast<float>(length));
-        this->angle  = angle_deg;
+        this->size  = cv::Size2f(static_cast<float>(width), static_cast<float>(length));
+        this->angle = angle_deg;
     }
     EnemyColor color;
     cv::Point2f top, bottom, center;

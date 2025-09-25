@@ -46,6 +46,7 @@
 // project
 #include "armor_detector/armor_detector_node.hpp"
 #include "armor_detector/ba_solver.hpp"
+#include "armor_detector/openvino_infer.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_utils/assert.hpp"
 #include "rm_utils/common.hpp"
@@ -236,31 +237,32 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     // Init classifier
     namespace fs               = std::filesystem;
     const std::string nn_model = declare_parameter("openvino.model_path", "best_06_02.xml");
-    fs::path model_path =
+    fs::path lenet_model_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/lenet.onnx");
     fs::path label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/label.txt");
     fs::path tup_label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/tup_label.txt");
-    fs::path xml_path = utils::URLResolver::getResolvedPath("package://armor_detector/model");
-    xml_path /= nn_model;
+    fs::path openvino_model_path =
+        utils::URLResolver::getResolvedPath("package://armor_detector/model");
+    openvino_model_path /= nn_model;
     FYT_ASSERT_MSG(
-        fs::exists(model_path) && fs::exists(label_path), model_path.string() + " Not Found!");
+        fs::exists(lenet_model_path) && fs::exists(label_path),
+        lenet_model_path.string() + " Not Found!");
 
     double threshold = this->declare_parameter("classifier_threshold", 0.7);
+    std::string device = this->declare_parameter("device", "CPU");
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
     if (debug_) {
-        detector->inference = std::make_unique<armor_detector::Inference>();
-        detector->inference->initModel(xml_path);
-        detector->classifier =
-            std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
+        detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
+        detector->classifier = std::make_unique<NumberClassifier>(
+            lenet_model_path, label_path, threshold, ignore_classes);
     } else if (use_nn_) {
-        detector->inference = std::make_unique<armor_detector::Inference>();
-        detector->inference->initModel(xml_path);
+        detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
     } else {
-        detector->classifier =
-            std::make_unique<NumberClassifier>(model_path, label_path, threshold, ignore_classes);
+        detector->classifier = std::make_unique<NumberClassifier>(
+            lenet_model_path, label_path, threshold, ignore_classes);
     }
 
     // Init Corrector
