@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     libceres-dev \
     libeigen3-dev \
     libopencv-dev \
+    git \
     ros-humble-foxglove-bridge \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,19 +31,21 @@ WORKDIR /home/third-party
 
 # 拷贝源码，仅用于依赖解析
 COPY atvision_ws/src /tmp/atvision_ws/src
-RUN apt-get update && \
-    rosdep install --from-paths /tmp/atvision_ws/src --ignore-src -r -y && \
+RUN apt-get update && rosdep install --from-paths /tmp/atvision_ws/src --ignore-src -r -y && \
     rm -rf /tmp/atvision_ws/src && \
     rm -rf /var/lib/apt/lists/*
 
-# g2o
-COPY third-party/g2o /tmp/g2o
-RUN apt-get update && apt-get install -y \
-      libspdlog-dev libsuitesparse-dev qtdeclarative5-dev qt5-qmake libqglviewer-dev-qt5 && \
+RUN apt-get update && apt-get install -y software-properties-common && \
+    add-apt-repository universe && \
+    apt-get update && apt-get install -y \
+    libspdlog-dev libsuitesparse-dev \
+    qtbase5-dev qtdeclarative5-dev qt5-qmake qtchooser \
+    libqglviewer-dev-qt5 && \
+    git clone https://github.com/RainerKuemmerle/g2o.git /tmp/g2o && \
     cd /tmp/g2o && \
-    cmake -B build && \
+    cmake -S . -B build && \
     cmake --build build -j$(nproc) && \
-    sudo cmake --install build && \
+    cmake --install build && \
     rm -rf /tmp/g2o && rm -rf /var/lib/apt/lists/*
 
 # OpenVINO runtime
@@ -64,12 +67,16 @@ RUN apt-get update && apt-get install -y \
     > /etc/apt/sources.list.d/llvm-apt.list && \
     apt-get update && \
     version=$(apt-cache search clangd- | grep clangd- | awk '{print $1}' | sort -V | tail -1 | cut -d- -f2) && \
-    apt-get install -y clangd-$version && \
+    apt-get install -y \
+      clangd-$version \
+      clang-format-$version \
+      clang-tidy-$version && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 50 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 50 && \
     update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-$version 50 && \
+    update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$version 50 && \
+    update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$version 50 && \
     rm -rf /var/lib/apt/lists/*
-
 # ---------- 用户 ----------
 RUN useradd -m developer --shell /bin/bash && \
     echo "developer:developer" | chpasswd && adduser developer sudo && \
@@ -80,6 +87,6 @@ WORKDIR /home/ws
 
 ENV USER=developer \
     WORKDIR=/home/at_vision
-# ---------- 默认入口 ----------
-ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && exec \"$@\"", "--"]
-CMD ["bash"]
+
+ENTRYPOINT ["tini", "--"]
+CMD [ "/entrypoint" ]

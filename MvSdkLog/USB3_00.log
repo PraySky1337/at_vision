@@ -1,0 +1,682 @@
+Info    2025-09-28 15:09:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0097)     Description:Current dynamic library path[/workspace/install/hik_camera/lib/libMvUsb3vTL.so]     Solution:
+Info    2025-09-28 15:09:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0100)     Description:U3V_Version: 3.2.1.0     Solution:
+Info    2025-09-28 15:09:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0101)     Description:U3V_Description: BaseLine Build 20211203     Solution:
+Info    2025-09-28 15:09:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0419)     Description:device speed: [0x3]     Solution:
+Info    2025-09-28 15:09:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0368)     Description:[IsSupportEvent]     Solution:
+Info    2025-09-28 15:09:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0706)     Description:U3V EventSendThread Start     Solution:
+Info    2025-09-28 15:09:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0280)     Description:U3V EventRecvThread Start     Solution:
+Info    2025-09-28 15:09:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1003)     Description:U3V RecvThread Start     Solution:
+Info    2025-09-28 15:09:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1275)     Description:AcquisitionStart Execute Success     Solution:
+Error   2025-09-28 15:09:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:09:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:10:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Error   2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1315)     Description:AcquisitionStop Execute Success     Solution:
+Error   2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1065)     Description:[ReadAsync] error code is:[3],i = [0], errno[11], Halt Total Count[1]     Solution:
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1101)     Description:[ReadAsync] Async Canceled error,i = [0]     Solution:
+Warning 2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1192)     Description:RecvThread process exit     Solution:
+Info    2025-09-28 15:10:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0530)     Description:getfcnt [1241], getfcntsucceed[1241], totalRecv[1255]     Solution:
+Error   2025-09-28 15:10:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:10:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0708)     Description:U3V EventSendThread End     Solution:
+Error   2025-09-28 15:10:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:10:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0282)     Description:U3V EventRecvThread End     Solution:
+Info    2025-09-28 15:10:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0097)     Description:Current dynamic library path[/workspace/install/hik_camera/lib/libMvUsb3vTL.so]     Solution:
+Info    2025-09-28 15:10:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0100)     Description:U3V_Version: 3.2.1.0     Solution:
+Info    2025-09-28 15:10:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0101)     Description:U3V_Description: BaseLine Build 20211203     Solution:
+Info    2025-09-28 15:10:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0419)     Description:device speed: [0x3]     Solution:
+Info    2025-09-28 15:10:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0368)     Description:[IsSupportEvent]     Solution:
+Info    2025-09-28 15:10:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0706)     Description:U3V EventSendThread Start     Solution:
+Info    2025-09-28 15:10:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0280)     Description:U3V EventRecvThread Start     Solution:
+Info    2025-09-28 15:10:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1003)     Description:U3V RecvThread Start     Solution:
+Info    2025-09-28 15:10:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1275)     Description:AcquisitionStart Execute Success     Solution:
+Error   2025-09-28 15:10:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:10:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:11:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:11:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Error   2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1315)     Description:AcquisitionStop Execute Success     Solution:
+Error   2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1065)     Description:[ReadAsync] error code is:[3],i = [0], errno[11], Halt Total Count[1]     Solution:
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1101)     Description:[ReadAsync] Async Canceled error,i = [0]     Solution:
+Warning 2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1192)     Description:RecvThread process exit     Solution:
+Info    2025-09-28 15:11:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0530)     Description:getfcnt [992], getfcntsucceed[992], totalRecv[1014]     Solution:
+Error   2025-09-28 15:11:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:11:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0708)     Description:U3V EventSendThread End     Solution:
+Error   2025-09-28 15:11:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:11:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0282)     Description:U3V EventRecvThread End     Solution:
+Info    2025-09-28 15:12:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0097)     Description:Current dynamic library path[/workspace/install/hik_camera/lib/libMvUsb3vTL.so]     Solution:
+Info    2025-09-28 15:12:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0100)     Description:U3V_Version: 3.2.1.0     Solution:
+Info    2025-09-28 15:12:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0101)     Description:U3V_Description: BaseLine Build 20211203     Solution:
+Info    2025-09-28 15:12:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0419)     Description:device speed: [0x3]     Solution:
+Info    2025-09-28 15:12:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0368)     Description:[IsSupportEvent]     Solution:
+Info    2025-09-28 15:12:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0706)     Description:U3V EventSendThread Start     Solution:
+Info    2025-09-28 15:12:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0280)     Description:U3V EventRecvThread Start     Solution:
+Info    2025-09-28 15:12:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1003)     Description:U3V RecvThread Start     Solution:
+Info    2025-09-28 15:12:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1275)     Description:AcquisitionStart Execute Success     Solution:
+Error   2025-09-28 15:12:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:12:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:18  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:13:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Error   2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:13:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Info    2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1315)     Description:AcquisitionStop Execute Success     Solution:
+Warning 2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Error   2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1065)     Description:[ReadAsync] error code is:[3],i = [0], errno[11], Halt Total Count[1]     Solution:
+Warning 2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1101)     Description:[ReadAsync] Async Canceled error,i = [0]     Solution:
+Warning 2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1192)     Description:RecvThread process exit     Solution:
+Info    2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0530)     Description:getfcnt [1581], getfcntsucceed[1581], totalRecv[1598]     Solution:
+Error   2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0282)     Description:U3V EventRecvThread End     Solution:
+Info    2025-09-28 15:13:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0708)     Description:U3V EventSendThread End     Solution:
+Info    2025-09-28 15:14:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0097)     Description:Current dynamic library path[/workspace/install/hik_camera/lib/libMvUsb3vTL.so]     Solution:
+Info    2025-09-28 15:14:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0100)     Description:U3V_Version: 3.2.1.0     Solution:
+Info    2025-09-28 15:14:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0101)     Description:U3V_Description: BaseLine Build 20211203     Solution:
+Info    2025-09-28 15:14:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0419)     Description:device speed: [0x4]     Solution:
+Info    2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0368)     Description:[IsSupportEvent]     Solution:
+Info    2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0706)     Description:U3V EventSendThread Start     Solution:
+Info    2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0280)     Description:U3V EventRecvThread Start     Solution:
+Info    2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1003)     Description:U3V RecvThread Start     Solution:
+Info    2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1275)     Description:AcquisitionStart Execute Success     Solution:
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:14:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0844)     Description:[GetOneFrame] PreFrameNum[0], CurFrameNum[6]     Solution:
+Error   2025-09-28 15:14:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:14:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:18  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Error   2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1315)     Description:AcquisitionStop Execute Success     Solution:
+Error   2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1065)     Description:[ReadAsync] error code is:[3],i = [0], errno[11], Halt Total Count[1]     Solution:
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1101)     Description:[ReadAsync] Async Canceled error,i = [0]     Solution:
+Warning 2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1192)     Description:RecvThread process exit     Solution:
+Info    2025-09-28 15:15:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0530)     Description:getfcnt [9467], getfcntsucceed[9467], totalRecv[9623]     Solution:
+Error   2025-09-28 15:15:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:15:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0282)     Description:U3V EventRecvThread End     Solution:
+Info    2025-09-28 15:15:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0708)     Description:U3V EventSendThread End     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0097)     Description:Current dynamic library path[/workspace/install/hik_camera/lib/libMvUsb3vTL.so]     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0100)     Description:U3V_Version: 3.2.1.0     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0101)     Description:U3V_Description: BaseLine Build 20211203     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0419)     Description:device speed: [0x4]     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(Manager.cpp-L0368)     Description:[IsSupportEvent]     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0706)     Description:U3V EventSendThread Start     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0280)     Description:U3V EventRecvThread Start     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1003)     Description:U3V RecvThread Start     Solution:
+Info    2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1275)     Description:AcquisitionStart Execute Success     Solution:
+Warning 2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:15:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0844)     Description:[GetOneFrame] PreFrameNum[0], CurFrameNum[5]     Solution:
+Error   2025-09-28 15:15:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:15:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:18  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:16:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:18  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:22  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:23  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:24  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:25  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:26  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:27  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:28  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:29  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:30  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:31  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:32  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:33  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:34  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:35  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:36  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:37  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:38  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:39  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:40  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:41  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:42  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:43  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:44  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:45  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:46  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:47  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:48  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:49  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:50  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:51  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:52  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:53  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:54  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:55  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:56  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:57  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:58  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:17:59  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:00  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:01  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:02  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:03  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:04  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:05  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:06  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:07  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:08  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:09  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:10  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:11  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:12  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:13  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:14  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:15  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:16  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:17  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:18  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Error   2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1426)     Description:Delete one DataNode     Solution:Please confirm that there is a blocking operation when you grab frame
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DeviceControl.cpp-L1315)     Description:AcquisitionStop Execute Success     Solution:
+Error   2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1065)     Description:[ReadAsync] error code is:[3],i = [0], errno[11], Halt Total Count[1]     Solution:
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1101)     Description:[ReadAsync] Async Canceled error,i = [0]     Solution:
+Warning 2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1144)     Description:Get an abnormal image !£¬ nRet = 0x8000000b
+     Solution:
+Info    2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L1192)     Description:RecvThread process exit     Solution:
+Info    2025-09-28 15:18:19  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(StreamProcess.cpp-L0530)     Description:getfcnt [23486], getfcntsucceed[23486], totalRecv[23494]     Solution:
+Error   2025-09-28 15:18:20  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:18:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0708)     Description:U3V EventSendThread End     Solution:
+Error   2025-09-28 15:18:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(DriverLayer.cpp-L0785)     Description:timesOut, num_iso_packets: ff     Solution:
+Info    2025-09-28 15:18:21  DevID:MV-CS016-10UC(DA0213769)  Source-Line:libMvUsb3vTL.so(EventProcess.cpp-L0282)     Description:U3V EventRecvThread End     Solution:

@@ -1,11 +1,12 @@
 {
   "name": "ATVISION Dev",
   "image": "atvision", 
-  "workspaceFolder": "/home/atvision",
+  "privileged": true,
+  "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "runArgs": [
-    "--net=host",
-    "--privileged" 
+	"--network",
+	"host"
   ],
   "mounts": [
   {
@@ -19,6 +20,9 @@
     "type": "bind"
   }
   ],
+  "containerEnv": {
+	  "DISPLAY": "${localEnv:DISPLAY}"
+  },
 
   "customizations": {
     "vscode": {
