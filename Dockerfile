@@ -1,5 +1,5 @@
 # ---------- 基础阶段 ----------
-FROM ros:humble
+FROM ros:humble AS atvision
 
 LABEL maintainer="3159890292@qq.com" \
       version="1.0-allinone" \
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     libceres-dev \
     libeigen3-dev \
     libopencv-dev \
-    git \
+    tini \
     ros-humble-foxglove-bridge \
     && rm -rf /var/lib/apt/lists/*
 
@@ -86,7 +86,7 @@ USER developer
 WORKDIR /home/ws
 
 ENV USER=developer \
-    WORKDIR=/home/at_vision
+    WORKDIR=/home/ws
 
 ENTRYPOINT ["tini", "--"]
 CMD [ "/entrypoint" ]
