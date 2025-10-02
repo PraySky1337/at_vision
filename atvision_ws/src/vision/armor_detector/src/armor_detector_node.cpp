@@ -127,12 +127,6 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
         "image_raw", rclcpp::SensorDataQoS(),
         std::bind(&ArmorDetectorNode::imageCallback, this, std::placeholders::_1));
 
-    // target_sub_ = this->create_subscription<rm_interfaces::msg::Target>(
-    //   "armor_solver/target",
-    //   rclcpp::SensorDataQoS(),
-    //   std::bind(&ArmorDetectorNode::targetCallback, this,
-    //   std::placeholders::_1));
-
     tf2_buffer_          = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
         this->get_node_base_interface(), this->get_node_timers_interface());

@@ -1,4 +1,5 @@
 #include "hik_camera_node.hpp"
+#include "MvCameraControl.h"
 
 #include <chrono>
 #include <csignal>
@@ -13,9 +14,10 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     : Node("hik_camera", options) {
     RCLCPP_INFO(this->get_logger(), "Starting HikCameraNode!");
 
-    // 读取重连参数（可被动态参数覆盖）
-    reconnect_interval_ms_  = this->declare_parameter("reconnect_interval_ms", 2000);
+    reconnect_interval_ms_  = this->declare_parameter("reconnect_interval_ms", 500);
     reconnect_max_attempts_ = this->declare_parameter("reconnect_max_attempts", -1);
+    timestamp_offset_ms_    = this->declare_parameter("timestamp_offset_ms", 10);
+    bayer_cvt_quality_      = this->declare_parameter("bayer_cvt_color_quality", 1);
 
     // 尝试打开相机（第一次初始化）
     if (!openCamera()) {
@@ -67,6 +69,8 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                     }
                 }
                 // 此处 camera_handle_ 非空，尝试抓帧
+                image_msg_.header.stamp = this->now();
+
                 nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
             } // unlock camera_mutex_ while processing buffer conversion to reduce hold time
 
@@ -83,10 +87,9 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                     MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
                 }
 
-                image_msg_.header.stamp = this->now();
-                image_msg_.height       = out_frame.stFrameInfo.nHeight;
-                image_msg_.width        = out_frame.stFrameInfo.nWidth;
-                image_msg_.step         = out_frame.stFrameInfo.nWidth * 3;
+                image_msg_.height = out_frame.stFrameInfo.nHeight;
+                image_msg_.width  = out_frame.stFrameInfo.nWidth;
+                image_msg_.step   = out_frame.stFrameInfo.nWidth * 3;
                 image_msg_.data.resize(image_msg_.width * image_msg_.height * 3);
 
                 camera_info_msg_.header = image_msg_.header;
@@ -234,6 +237,7 @@ bool HikCameraNode::openCamera() {
     }
 
     ret = MV_CC_OpenDevice(camera_handle_);
+    MV_CC_SetBayerCvtQuality(camera_handle_, bayer_cvt_quality_);
     if (ret != MV_OK) {
         RCLCPP_ERROR(this->get_logger(), "OpenDevice failed: 0x%x", ret);
         MV_CC_DestroyHandle(&camera_handle_);

@@ -29,6 +29,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SerialReceiveData.msg"
   "msg/PlanControlCmd.msg"
   "srv/SetMode.srv"
+  "srv/RunHandEyeCalibration.srv"
   DEPENDENCIES
     std_msgs
     geometry_msgs

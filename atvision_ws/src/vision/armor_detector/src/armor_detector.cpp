@@ -60,10 +60,11 @@ std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept 
             Light left{tr, br};
             Armor armor{left, right};
             armor.number     = openvino_inference->labels_lookup[obj.label];
-            armor.type = armor.number == "1" ? ArmorType::LARGE : ArmorType::SMALL;
+            armor.type       = armor.number == "1" ? ArmorType::LARGE : ArmorType::SMALL;
             armor.confidence = obj.prob;
             armor.color      = obj.color == 1 ? EnemyColor::BLUE : EnemyColor::RED;
-            armor.classfication_result = fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
+            armor.classfication_result =
+                fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
             armors_.emplace_back(std::move(armor));
         }
         return armors_;
@@ -279,31 +280,21 @@ cv::Mat Detector::getAllNumbersImage() const noexcept {
 void Detector::drawResults(cv::Mat& img) const noexcept {
     // Draw Lights
 
-    // for (const auto &light : lights_) {
-    //   auto line_color =
-    //     light.color == EnemyColor::RED ? cv::Scalar(0, 255, 255) : cv::Scalar(255, 255, 0);
-    //   // cv::ellipse(img, light, line_color, 2);
-    //   cv::line(img, light.top, light.bottom, line_color, 1);
-    // }
+    for (const auto& light : lights_) {
+        auto line_color =
+            light.color == EnemyColor::RED ? cv::Scalar(0, 255, 255) : cv::Scalar(255, 255, 0);
+        // cv::ellipse(img, light, line_color, 2);
+        cv::line(img, light.top, light.bottom, line_color, 1);
+    }
 
-    // Draw armors
     for (const auto& armor : armors_) {
-        // cv::line(img, armor.left_light.top, armor.right_light.bottom, cv::Scalar(0, 255, 0),
-        // 1); cv::line(img, armor.left_light.bottom, armor.right_light.top, cv::Scalar(0, 255,
-        // 0), 1);
-
         cv::line(
-            img, armor.left_light.top, armor.left_light.bottom, cv::Scalar(0, 255, 0), 1,
+            img, armor.left_light.top, armor.right_light.bottom, cv::Scalar(0, 255, 0), 1,
             cv::LINE_AA);
         cv::line(
-            img, armor.right_light.bottom, armor.right_light.top, cv::Scalar(0, 255, 0), 1,
+            img, armor.left_light.bottom, armor.right_light.top, cv::Scalar(0, 255, 0), 1,
             cv::LINE_AA);
-        cv::line(
-            img, armor.left_light.top, armor.right_light.top, cv::Scalar(0, 255, 0), 1,
-            cv::LINE_AA);
-        cv::line(
-            img, armor.right_light.bottom, armor.left_light.bottom, cv::Scalar(0, 255, 0), 1,
-            cv::LINE_AA);
+        cv::circle(img, armor.center, 2, cv::Scalar(0, 255, 0), 2);
     }
     // Show numbers and confidence
     for (const auto& armor : armors_) {

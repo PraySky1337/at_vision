@@ -38,8 +38,6 @@
 	  	"ms-python.debugpy",
 	  	// CMake language support
 	  	"twxs.cmake",
-	  	// Code spell checking
-	  	"streetsidesoftware.code-spell-checker",
 	  	// Git enhancements
 	  	"mhutchie.git-graph"
 	  ]

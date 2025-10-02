@@ -3,19 +3,19 @@
 
 #include "MvCameraControl.h"
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <atomic>
 #include <vector>
-#include <mutex>
 
-#include <rclcpp/rclcpp.hpp>
-#include <rcl_interfaces/msg/set_parameters_result.hpp>
-#include <image_transport/image_transport.hpp>
 #include <camera_info_manager/camera_info_manager.hpp>
-#include <sensor_msgs/msg/image.hpp>
+#include <image_transport/image_transport.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 namespace hik_camera {
 
@@ -27,16 +27,19 @@ public:
 private:
     void declareParameters();
     rcl_interfaces::msg::SetParametersResult
-    parametersCallback(const std::vector<rclcpp::Parameter>& parameters);
+        parametersCallback(const std::vector<rclcpp::Parameter>& parameters);
 
     // camera control helpers (重连相关)
-    bool openCamera();               // 尝试打开相机（建立 handle、OpenDevice、GetImageInfo、StartGrabbing）
-    void closeCamera();              // 优雅关闭相机（StopGrabbing/Close/Destroy）
-    bool reconnectLoop();            // 循环重连，直到成功或 exit_flag_
+    bool openCamera();    // 尝试打开相机（建立 handle、OpenDevice、GetImageInfo、StartGrabbing）
+    void closeCamera();   // 优雅关闭相机（StopGrabbing/Close/Destroy）
+    bool reconnectLoop(); // 循环重连，直到成功或 exit_flag_
 
     // ROS msgs / pubs
     sensor_msgs::msg::Image image_msg_;
     image_transport::CameraPublisher camera_pub_;
+
+    double timestamp_offset_ms_{};
+    int bayer_cvt_quality_ = 1;
 
     // Hikvision SDK
     int nRet = MV_OK;
@@ -58,7 +61,7 @@ private:
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
 
     // reconnect params
-    int reconnect_interval_ms_ = 2000;
+    int reconnect_interval_ms_  = 2000;
     int reconnect_max_attempts_ = -1; // <=0 表示无限次
 
     // mutex to protect camera_handle_ and SDK calls
