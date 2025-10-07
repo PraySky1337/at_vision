@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>usb_driver</name>
+  <name>rm_gimbal</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="3159890292@qq.com">sxs</maintainer>
@@ -19,6 +19,9 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>rm_interfaces</depend>
+
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
 
   <export>

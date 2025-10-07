@@ -1,6 +1,6 @@
 #pragma once
+#include "packet.hpp"
 #include "usb.hpp"
-#include "usb/packet.hpp"
 
 #include <memory>
 #include <rclcpp/callback_group.hpp>
@@ -22,10 +22,10 @@
 
 #include <cstdint>
 
-namespace usb_driver {
-struct UsbDriver : public rclcpp::Node {
+namespace rm_gimbal {
+struct GimbalNode : public rclcpp::Node {
     enum Color { RED, BLUE, UNKNOWN };
-    UsbDriver(const rclcpp::NodeOptions& options)
+    GimbalNode(const rclcpp::NodeOptions& options)
         : rclcpp::Node("usb_driver", options)
         , device_(parser_)
         , tf_broadcaster_(*this)
@@ -45,9 +45,9 @@ struct UsbDriver : public rclcpp::Node {
         timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 0.1, param_desc); // s
         control_cmd_sub_       = create_subscription<rm_interfaces::msg::GimbalCmd>(
             "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS(),
-            std::bind(&UsbDriver::control_cmd_callback, this, std::placeholders::_1));
+            std::bind(&GimbalNode::control_cmd_callback, this, std::placeholders::_1));
         on_set_params_cb_ = add_on_set_parameters_callback(
-            std::bind(&UsbDriver::on_params, this, std::placeholders::_1));
+            std::bind(&GimbalNode::on_params, this, std::placeholders::_1));
         thread_ = std::thread([this] {
             running_ = true;
             while (running_) {
@@ -56,7 +56,7 @@ struct UsbDriver : public rclcpp::Node {
         });
     }
 
-    ~UsbDriver() {
+    ~GimbalNode() {
         running_ = false;
         if (thread_.joinable()) {
             thread_.join();
@@ -86,9 +86,9 @@ private:
 
     void init_parser() {
         parser_.register_parser(
-            0x01,
-            std::bind(
-                &UsbDriver::handle_imu_packet, this, std::placeholders::_1, std::placeholders::_2));
+            0x01, std::bind(
+                      &GimbalNode::handle_imu_packet, this, std::placeholders::_1,
+                      std::placeholders::_2));
     }
 
     void handle_imu_packet(const std::byte* data, size_t size) {
@@ -112,8 +112,9 @@ private:
             ATLOG_WARN("roll, pitch or yaw is invalid nan");
         }
         double offset_ms = timestamp_offset_ms_.load();
-        auto duration    = rclcpp::Duration(std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::duration<double, std::milli>(offset_ms)));
+        auto duration    = rclcpp::Duration(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::duration<double, std::milli>(offset_ms)));
         geometry_msgs::msg::TransformStamped t;
         t.header.stamp       = now() - duration;
         t.header.frame_id    = "odom";
@@ -165,4 +166,4 @@ private:
     std::atomic<double> timestamp_offset_ms_;
     bool use_roll_;
 };
-} // namespace usb_driver
+} // namespace rm_gimbal

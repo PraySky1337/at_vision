@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(usb_driver)
+project(rm_gimbal)
 
 ## Use C++20
 set(CMAKE_CXX_STANDARD 20)
@@ -20,18 +20,23 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 
 include_directories(include)
 
-target_include_directories(usb_driver PUBLIC
+target_include_directories(${PROJECT_NAME} PUBLIC
   ${LIBUSB_INCLUDE_DIRS}
 )
 
-target_link_libraries(usb_driver
+target_link_libraries(${PROJECT_NAME}
   ${LIBUSB_LINK_LIBRARIES}
 )
 
+install(DIRECTORY
+        urdf
+        DESTINATION share/${PROJECT_NAME}_description)
+
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN usb_driver::UsbDriver
+  PLUGIN rm_gimbal::GimbalNode
   EXECUTABLE ${PROJECT_NAME}_node
 )
+
 
 ament_auto_package(
   INSTALL_TO_SHARE

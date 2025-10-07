@@ -6,8 +6,8 @@ from launch.substitutions import Command
 from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode
 
-# launch_params = yaml.safe_load(open(os.path.join(
-#     get_package_share_directory('rm_auto_aim'), 'config', 'launch_params.yaml')))
+launch_params = yaml.safe_load(open(os.path.join(
+    get_package_share_directory('rm_bringup'), 'config', 'launch_params.yaml')))
 
 
 node_params = os.path.join(
@@ -57,9 +57,9 @@ armor_solver_node = ComposableNode(
 )
 
 usb_driver_node = ComposableNode(
-    package='usb_driver',
-    plugin='usb_driver::UsbDriver',
-    name='usb_driver',
+    package='rm_gimbal',
+    plugin='rm_gimbal::GimbalNode',
+    name='rm_gimbal',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
 )

@@ -1,4 +1,4 @@
-#include "usb/usb.hpp"
+#include "rm_gimbal/usb.hpp"
 
 #include <atomic>
 #include <cassert>
@@ -8,13 +8,12 @@
 #include <cstdint>
 #include <cstring>
 #include <libusb-1.0/libusb.h>
-#include "usb/logger.hpp"
 #include <stdexcept>
 #include <sys/types.h>
 #include <thread>
 
 /* ------------------- error ------------------- */
-namespace usb_driver {
+namespace rm_gimbal {
 template <class F>
 class FinalAction {
 public:
@@ -61,30 +60,19 @@ public:
             libusb_exit(ctx_);
     }
 
-    // ==========================================================
-    // 公开接口
-    // ==========================================================
     bool open(uint16_t vid, uint16_t pid = 0);
     void process_once(); // handle_events() 调用的封装
-    bool sync_send(uint8_t* data, std::size_t size, unsigned tout_ms = 500);
+    bool sync_send(uint8_t* data, std::size_t size, unsigned tout_ms = 500) const;
 
-    // ==========================================================
-    // Hot‑plug 回调
-    // ==========================================================
+private:
+    uint16_t find_device(uint16_t vid) const;
     void on_hotplug(libusb_hotplug_event ev);
-
-    // ==========================================================
-    // 内部工具
-    // ==========================================================
-    uint16_t find_device(uint16_t vid);
     void alloc_transfer();
-    void submit_transfer();
+    void submit_transfer() const;
     void cleanup(); // 关闭/释放资源
     bool try_reopen();
 
-    // ==========================================================
-    // 成员变量
-    // ==========================================================
+private:
     DeviceParser& device_parser_;
 
     libusb_context* ctx_          = nullptr;
@@ -146,7 +134,7 @@ bool Device::Impl::open(uint16_t vid, uint16_t pid) {
 }
 
 // 查找 PID (若仅给 VID)
-uint16_t Device::Impl::find_device(uint16_t vid) {
+uint16_t Device::Impl::find_device(uint16_t vid) const {
     libusb_device** list;
     ssize_t cnt = libusb_get_device_list(ctx_, &list);
     if (cnt < 0)
@@ -203,7 +191,7 @@ void Device::Impl::alloc_transfer() {
 }
 
 // 提交 transfer
-void Device::Impl::submit_transfer() {
+void Device::Impl::submit_transfer() const {
     if (libusb_submit_transfer(rx_transfer_) != 0)
         throw error(LIBUSB_ERROR_IO);
 }
@@ -261,7 +249,7 @@ bool Device::Impl::try_reopen() {
 }
 
 // 同步发送
-bool Device::Impl::sync_send(uint8_t* data, std::size_t size, unsigned tout_ms) {
+bool Device::Impl::sync_send(uint8_t* data, std::size_t size, unsigned tout_ms) const {
     if (!handle_)
         return false;
     int actual = 0;
@@ -272,12 +260,12 @@ bool Device::Impl::sync_send(uint8_t* data, std::size_t size, unsigned tout_ms) 
 // ============================================================
 // Device 封装
 // ============================================================
-Device::Device(DeviceParser& p)
-    : impl_(std::make_unique<Impl>(p)) {}
+Device::Device(DeviceParser& rhs)
+    : impl_(std::make_unique<Impl>(rhs)) {}
 Device::~Device() = default;
 
-bool Device::open(uint16_t vid, uint16_t pid) { return impl_->open(vid, pid); }
-bool Device::send_data(uint8_t* d, std::size_t s) { return impl_->sync_send(d, s); }
-void Device::handle_events() { impl_->process_once(); }
+bool Device::open(uint16_t vid, uint16_t pid) const { return impl_->open(vid, pid); }
+bool Device::send_data(uint8_t* d, std::size_t s) const { return impl_->sync_send(d, s); }
+void Device::handle_events() const { impl_->process_once(); }
 
-} // namespace usb_driver
+} // namespace rm_gimbal

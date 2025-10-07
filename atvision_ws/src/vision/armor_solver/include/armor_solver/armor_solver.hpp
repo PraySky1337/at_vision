@@ -53,9 +53,9 @@ public:
 
 private:
     // Get the armor positions from the target robot
-    std::vector<Eigen::Vector3d> getArmorPositions(
+    static std::vector<Eigen::Vector3d> getArmorPositions(
         const Eigen::Vector3d& target_center, double yaw, double r1, double r2, double d_zc,
-        double d_za, size_t armors_num) const noexcept;
+        double d_za, size_t armors_num) noexcept;
 
     // Select the best armor to shoot
     // Return: selected idx in {0, 1, ..., armors_num - 1}

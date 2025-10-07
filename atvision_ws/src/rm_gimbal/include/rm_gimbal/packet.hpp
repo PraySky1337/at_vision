@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <iostream>
 
-namespace usb_driver {
+namespace rm_gimbal {
 #pragma pack(1)
 struct HeaderFrame {
     static constexpr uint8_t SoF() { return 0x5A; }

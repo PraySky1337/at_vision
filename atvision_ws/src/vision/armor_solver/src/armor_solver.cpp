@@ -209,7 +209,7 @@ bool Solver::isOnTarget(
 
 std::vector<Eigen::Vector3d> Solver::getArmorPositions(
     const Eigen::Vector3d& target_center, const double target_yaw, const double r1, const double r2,
-    const double d_zc, const double d_za, const size_t armors_num) const noexcept {
+    const double d_zc, const double d_za, const size_t armors_num) noexcept {
     auto armor_positions = std::vector<Eigen::Vector3d>(armors_num, Eigen::Vector3d::Zero());
     // Calculate the position of each armor
     bool is_current_pair = true;

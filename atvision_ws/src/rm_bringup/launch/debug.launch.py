@@ -4,11 +4,11 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.substitutions import Command
 from ament_index_python.packages import get_package_share_directory
-sys.path.append(os.path.join(get_package_share_directory('rm_auto_aim'), 'launch'))
+sys.path.append(os.path.join(get_package_share_directory('rm_bringup'), 'launch'))
 
 
 node_params = os.path.join(
-    get_package_share_directory('rm_auto_aim'), 'config', 'config.yaml')
+    get_package_share_directory('rm_bringup'), 'config', 'config.yaml')
 
 
 def generate_launch_description():

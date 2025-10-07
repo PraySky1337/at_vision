@@ -1,19 +1,20 @@
 #pragma once
 #include "packet.hpp"
-#include "usb/logger.hpp"
+#include "logger.hpp"
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <utility>
 
-namespace usb_driver {
+namespace rm_gimbal {
 struct DeviceParser;
 class Device {
 public:
-    Device(DeviceParser& rhs);
+    explicit Device(DeviceParser& rhs);
     ~Device();
-    bool open(uint16_t vid, uint16_t pid = 0);
-    bool send_data(uint8_t* data, std::size_t size);
-    void handle_events();
+    bool open(uint16_t vid, uint16_t pid = 0) const ;
+    bool send_data(uint8_t* data, std::size_t size) const ;
+    void handle_events() const;
 
 private:
     struct TransmitBuffer;
@@ -24,7 +25,7 @@ private:
 struct DeviceParser {
     using ParserFunc = std::function<void(const std::byte*, size_t)>;
 
-    void parse(const std::byte* data, size_t size) {
+    void parse(const std::byte* data, size_t size) const {
         /* ---------- 原有校验 ---------- */
         if (size < sizeof(HeaderFrame)) [[unlikely]] {
             ATLOG_WARN("Frame size too small, expected {:X}, got {:X}", sizeof(HeaderFrame), size);
@@ -45,7 +46,7 @@ struct DeviceParser {
 
     }
 
-    void register_parser(uint8_t id, ParserFunc func) { parser_table_[id] = func; }
+    void register_parser(uint8_t id, ParserFunc func) { parser_table_[id] = std::move(func); }
 
 private:
     std::unordered_map<uint8_t, ParserFunc> parser_table_;

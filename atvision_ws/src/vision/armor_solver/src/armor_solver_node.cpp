@@ -43,7 +43,6 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         static_cast<int>(this->declare_parameter("tracker.tracking_thres", 5));
     lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
 
-    // ✅ 初始化 EKF
     initEkf();
 
     // TF2
