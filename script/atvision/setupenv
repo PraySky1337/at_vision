@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -e
+
+# ===============================
+#  基础 ROS 环境设置
+# ===============================
+export ROS_LOCALHOST_ONLY=1
+
+# 加载系统 ROS 环境（基础层）
+if [ -f "/opt/ros/$ROS_DISTRO/setup.bash" ]; then
+    source /opt/ros/$ROS_DISTRO/setup.bash
+else
+    echo "[WARN] /opt/ros/$ROS_DISTRO/setup.bash not found."
+fi
+
+# ===============================
+#  容器内环境处理
+# ===============================
+if [[ "${IN_DOCKER:-false}" == "true" ]]; then
+    RUNTIME_SETUP="/home/developer/atvruntime/install/setup.bash"
+
+    if [ -f "${RUNTIME_SETUP}" ]; then
+        echo "[INFO] Detected container environment."
+        echo "[INFO] Sourcing runtime workspace: ${RUNTIME_SETUP}"
+        source "${RUNTIME_SETUP}"
+    else
+        echo "[WARN] Runtime setup file not found at ${RUNTIME_SETUP}"
+        echo "[WARN] You may need to run the build script first."
+    fi
+else
+    echo "[INFO] Not inside Docker, skipping runtime setup."
+fi
+
+echo "[OK] Environment setup complete."

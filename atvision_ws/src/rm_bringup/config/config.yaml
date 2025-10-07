@@ -2,7 +2,7 @@
   ros__parameters:
     debug: true
     target_frame: odom
-    detect_color: 0
+    detect_color: "BLUE"
     binary_thres: 90
 
     use_nn: false
@@ -40,10 +40,10 @@
       sigma2_q_yaw: 1.0
       sigma2_q_r: 80.0
 
-      r_x: 0.0016
+      r_x: 0.0004
       r_y: 0.0004
       r_z: 0.0009
-      r_yaw: 0.003
+      r_yaw: 0.005
 
     tracker:
       max_match_distance: 0.5
@@ -77,7 +77,7 @@
 
 /camera_node:
   ros__parameters:
-    camera_info_url: package://rm_auto_aim/config/camera_info.yaml
+    camera_info_url: package://rm_bringup/config/camera_info.yaml
     camera_name: camera
     exposure_time: 5000
     gain: 16.7

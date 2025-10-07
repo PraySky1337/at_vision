@@ -63,7 +63,7 @@ struct Light : public cv::RotatedRect {
         center = std::accumulate(
             contour.begin(), contour.end(), cv::Point2f(0, 0),
             [n = static_cast<float>(contour.size())](const cv::Point2f& a, const cv::Point& b) {
-                return a + cv::Point2f(b.x, b.y) / n;
+                return a + cv::Point2f(static_cast<float>(b.x) / n, static_cast<float>(b.y) / n);
             });
 
         cv::Point2f p[4];
@@ -81,7 +81,7 @@ struct Light : public cv::RotatedRect {
         // Calculate the tilt angle
         // The angle is the angle between the light bar and the horizontal line
         tilt_angle = std::atan2(std::abs(top.x - bottom.x), std::abs(top.y - bottom.y));
-        tilt_angle = tilt_angle / CV_PI * 180;
+        tilt_angle = static_cast<float>(tilt_angle / CV_PI * 180);
     }
     // 新增：用 top 和 bottom 两点构造 Light（top、bottom 顺序约定为上点->下点）
     explicit Light(const cv::Point2f& top_pt, const cv::Point2f& bottom_pt)
@@ -92,7 +92,7 @@ struct Light : public cv::RotatedRect {
             top    = top_pt;
             bottom = bottom_pt;
         } else {
-            top = bottom_pt;
+            top    = bottom_pt;
             bottom = top_pt;
         }
         center = (top + bottom) * 0.5f;

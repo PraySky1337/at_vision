@@ -1,92 +1,106 @@
-# ---------- 基础阶段 ----------
 FROM ros:humble AS atvision
 
 LABEL maintainer="3159890292@qq.com" \
-      version="1.0-allinone" \
+      version="1.0-allinone"  \
       description="ATVISION dev + runtime image with ROS2 + deps"
 
 SHELL ["/bin/bash", "-c"]
+ENV TZ=Asia/Shanghai DEBIAN_FRONTEND=noninteractive
+ARG CLANG_VERSION=20
 
-ENV TZ=Asia/Shanghai \
-    DEBIAN_FRONTEND=noninteractive
-
-# apt 优化：不装推荐/建议包
-RUN echo 'APT::Install-Recommends "false";\nAPT::Install-Suggests "false";' \
-    > /etc/apt/apt.conf.d/99no-recommends
-
-# 基础依赖
+COPY atvision_ws/src /tmp/atvision_ws/src
 RUN apt-get update && apt-get install -y \
-    build-essential gdb cmake git vim curl wget htop usbutils net-tools iputils-ping openssh-server \
+    # 基础工具
+    build-essential gdb cmake git curl wget htop vim \
+    usbutils net-tools iputils-ping openssh-server \
+    # 项目依赖
     libusb-1.0-0-dev \
     libfmt-dev \
     libceres-dev \
     libeigen3-dev \
     libopencv-dev \
-    tini \
+    libspdlog-dev \
+    libsuitesparse-dev \
+    # Foxglove-Bridge
     ros-humble-foxglove-bridge \
-    && rm -rf /var/lib/apt/lists/*
+    # g2o 依赖
+    qtbase5-dev \
+    qtdeclarative5-dev \
+    qttools5-dev-tools \
+    libqglviewer-dev-qt5 \
+    # 其他
+    tini \
+    tmux \
+    sudo \
+    python3-colorama \
+    python3-dpkt \
+ && rosdep install --from-paths /tmp/atvision_ws/src --ignore-src -r -y \
+ && rm -rf /var/lib/apt/lists/* /tmp/atvision_ws/src
 
-# ---------- 第三方库 ----------
-WORKDIR /home/third-party
+# g2o
+RUN git clone --depth=1 https://github.com/RainerKuemmerle/g2o.git /tmp/g2o && \
+    cmake -S /tmp/g2o -B /tmp/g2o/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    cmake --build /tmp/g2o/build --parallel $(nproc) && \
+    cmake --install /tmp/g2o/build && \
+    rm -rf /tmp/g2o
 
-# 拷贝源码，仅用于依赖解析
-COPY atvision_ws/src /tmp/atvision_ws/src
-RUN apt-get update && rosdep install --from-paths /tmp/atvision_ws/src --ignore-src -r -y && \
-    rm -rf /tmp/atvision_ws/src && \
-    rm -rf /var/lib/apt/lists/*
+# openvino
+RUN wget -qO - https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor -o /usr/share/keyrings/intel-openvino.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/intel-openvino.gpg] https://apt.repos.intel.com/openvino/2024 ubuntu22 main" > /etc/apt/sources.list.d/intel-openvino-2024.list && \
+    apt-get update && apt-get install -y openvino-2024.6.0 && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y software-properties-common && \
-    add-apt-repository universe && \
+# llvm
+RUN wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | \
+    gpg --dearmor -o /usr/share/keyrings/llvm-snapshot.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] \
+      http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-$CLANG_VERSION main" \
+      > /etc/apt/sources.list.d/llvm-apt.list && \
     apt-get update && apt-get install -y \
-    libspdlog-dev libsuitesparse-dev \
-    qtbase5-dev qtdeclarative5-dev qt5-qmake qtchooser \
-    libqglviewer-dev-qt5 && \
-    git clone https://github.com/RainerKuemmerle/g2o.git /tmp/g2o && \
-    cd /tmp/g2o && \
-    cmake -S . -B build && \
-    cmake --build build -j$(nproc) && \
-    cmake --install build && \
-    rm -rf /tmp/g2o && rm -rf /var/lib/apt/lists/*
-
-# OpenVINO runtime
-RUN wget -qO - https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
-    | gpg --dearmor -o /usr/share/keyrings/intel-openvino.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/intel-openvino.gpg] https://apt.repos.intel.com/openvino/2024 ubuntu22 main" \
-    > /etc/apt/sources.list.d/intel-openvino-2024.list && \
-    apt-get update && apt-get install -y openvino-2024.6.0 && \
-    rm -rf /var/lib/apt/lists/*
-
-# ---------- 开发工具链 ----------
-RUN apt-get update && apt-get install -y \
-    libc6-dev gcc-12 g++-12 cmake make ninja-build \
-    openssh-client lsb-release software-properties-common gnupg sudo \
-    python3-colorama python3-dpkt && \
-    wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key \
-    | gpg --dearmor -o /usr/share/keyrings/llvm-snapshot.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy main" \
-    > /etc/apt/sources.list.d/llvm-apt.list && \
-    apt-get update && \
-    version=$(apt-cache search clangd- | grep clangd- | awk '{print $1}' | sort -V | tail -1 | cut -d- -f2) && \
-    apt-get install -y \
-      clangd-$version \
-      clang-format-$version \
-      clang-tidy-$version && \
+      clang-$CLANG_VERSION \
+      clangd-$CLANG_VERSION \
+      clang-format-$CLANG_VERSION \
+      clang-tidy-$CLANG_VERSION \
+      gcc-12 g++-12 ninja-build && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 50 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 50 && \
-    update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-$version 50 && \
-    update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$version 50 && \
-    update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$version 50 && \
+    update-alternatives --install /usr/bin/clang clang /usr/bin/clang-$CLANG_VERSION 50 && \
+    update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-$CLANG_VERSION 50 && \
+    update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$CLANG_VERSION 50 && \
+    update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$CLANG_VERSION 50 && \
     rm -rf /var/lib/apt/lists/*
-# ---------- 用户 ----------
-RUN useradd -m developer --shell /bin/bash && \
-    echo "developer:developer" | chpasswd && adduser developer sudo && \
-    echo "developer ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    gpasswd --add developer dialout
-USER developer
-WORKDIR /home/ws
 
-ENV USER=developer \
-    WORKDIR=/home/ws
+# ---------- 用户与权限配置 ----------
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# 确保环境齐全
+# RUN apt-get update && apt-get install -y zsh sudo wget git openssl && rm -rf /var/lib/apt/lists/*
+
+# 创建用户并保持 UID/GID 对齐宿主机（防止 Volume 挂载卷权限异常)
+RUN if getent passwd $USER_UID >/dev/null; then \
+      # 已存在 UID=1000 用户（例如 ubuntu），则直接复用并改名为 developer
+      OLDUSER=$(getent passwd $USER_UID | cut -d: -f1) && \
+      usermod -l $USERNAME -d /home/$USERNAME -m $OLDUSER && \
+      groupmod -n $USERNAME $(getent group $USER_GID | cut -d: -f1) || true; \
+    else \
+      # 否则新建用户
+      groupadd -g $USER_GID $USERNAME && \
+      useradd -m -u $USER_UID -g $USER_GID -s /bin/bash $USERNAME; \
+    fi && \
+    echo "$USERNAME ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    gpasswd --add $USERNAME dialout && \
+    chsh -s /bin/bash $USERNAME
+
+USER $USERNAME
+WORKDIR /home/$USERNAME
+
+COPY --chown=root:root --chmod=755 script/atvision/build-atv /usr/local/bin/build-atv
+COPY --chown=root:root --chmod=755 script/atvision/entrypoint /usr/local/bin/entrypoint
+COPY --chown=root:root --chmod=755 script/atvision/setupenv /usr/local/bin/setupenv
+
+ENV IN_DOCKER=true
+
 
 ENTRYPOINT ["tini", "--"]
-CMD [ "/entrypoint" ]
+CMD ["entrypoint"]

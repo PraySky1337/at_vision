@@ -34,17 +34,17 @@ struct SymmetryAxis {
 // and then along the symmetry axis to find the corner points of the light bar based on the gradient of brightness.
 class LightCornerCorrector {
 public:
-  explicit LightCornerCorrector() noexcept {}
+  explicit LightCornerCorrector() noexcept = default;
 
   // Correct the corners of the armor's lights
-  void correctCorners(Armor &armor, const cv::Mat &gray_img);
+  static void correctCorners(Armor &armor, const cv::Mat &gray_img);
 
 private:
   // Find the symmetry axis of the light
-  SymmetryAxis findSymmetryAxis(const cv::Mat &gray_img, const Light &light);
+  static SymmetryAxis findSymmetryAxis(const cv::Mat &gray_img, const Light &light);
 
   // Find the corner of the light
-  cv::Point2f findCorner(const cv::Mat &gray_img,
+  static cv::Point2f findCorner(const cv::Mat &gray_img,
                          const Light &light,
                          const SymmetryAxis &axis,
                          std::string order);

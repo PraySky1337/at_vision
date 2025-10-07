@@ -42,6 +42,7 @@ Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
     , max_match_yaw_diff_(max_match_yaw_diff)
     , detect_count_(0)
     , lost_count_(0)
+    , update_count(0)
     , last_yaw_(0) {}
 
 void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
@@ -128,6 +129,7 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
             measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
             target_state        = ekf->update(measurement);
+            update_count++;
         } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
             // Matched armor not found, but there is only one armor with the same id
             // and yaw has jumped, take this case as the target is spinning and armor
@@ -140,20 +142,18 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     }
 
     // Prevent radius from spreading
-    if (target_state(8) < 0.12) {
-        target_state(8) = 0.12;
-        ekf->setState(target_state);
-    } else if (target_state(8) > 0.4) {
-        target_state(8) = 0.4;
-        ekf->setState(target_state);
-    }
-
+    // 详见机器人制作规范手册
+    // https://www.robomaster.com/zh-CN/resource/announcement/competition
+    target_state(S_RADIUS) = std::clamp(target_state(S_RADIUS), 0.12, 0.4);
+    target_state(S_DZC)    = std::clamp(target_state(S_DZC), -0.1, 0.1);
+    ekf->setState(target_state);
     // Tracking state machine
     if (tracker_state == DETECTING) {
         if (matched) {
             detect_count_++;
             if (detect_count_ > tracking_thres) {
                 detect_count_ = 0;
+                update_count = 0;
                 tracker_state = TRACKING;
                 FYT_DEBUG("armor_solver", "Tracker state: TRACKING {}", tracked_id);
             }
@@ -163,6 +163,10 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             FYT_DEBUG("armor_solver", "Tracker state: LOST {}", tracked_id);
         }
     } else if (tracker_state == TRACKING) {
+        if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
+            target_state[S_VYAW]   = target_state[S_VYAW] > 0 ? 2.51 : -2.51;
+            target_state[S_RADIUS] = 0.55 / 2.;
+        }
         if (!matched) {
             tracker_state = TEMP_LOST;
             lost_count_++;

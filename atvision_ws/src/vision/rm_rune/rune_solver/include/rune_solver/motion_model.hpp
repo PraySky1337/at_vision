@@ -41,7 +41,7 @@ struct Measure {
   }
 };
 
-using RuneCenterEKF = ExtendedKalmanFilter<X_N, Z_N, Predict, Measure>;
+using RuneCenterEKF = at::ExtendedKalmanFilter<X_N, Z_N, Predict, Measure>;
 
 }  // namespace fyt::rune
 #endif

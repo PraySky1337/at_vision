@@ -15,8 +15,6 @@
 // limitations under the License.
 
 #include "armor_detector/ba_solver.hpp"
-// std
-#include <memory>
 // g2o
 #include <g2o/core/robust_kernel.h>
 #include <g2o/core/robust_kernel_factory.h>
@@ -31,7 +29,6 @@
 #include "armor_detector/graph_optimizer.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_utils/logger/log.hpp"
-#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
 G2O_USE_OPTIMIZATION_LIBRARY(dense)
@@ -86,7 +83,7 @@ Eigen::Matrix3d BaSolver::solveBa(
         Armor::buildObjectPoints<Eigen::Vector3d>(armor_size(0), armor_size(1));
 
     // Fill the optimizer
-    size_t id_counter = 0;
+    int id_counter = 0;
 
     VertexYaw* v_yaw = new VertexYaw();
     v_yaw->setId(id_counter++);

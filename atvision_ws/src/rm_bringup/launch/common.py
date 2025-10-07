@@ -11,7 +11,7 @@ from launch_ros.descriptions import ComposableNode
 
 
 node_params = os.path.join(
-    get_package_share_directory('rm_auto_aim'), 'config', 'config.yaml')
+    get_package_share_directory('rm_bringup'), 'config', 'config.yaml')
 
 xacro_file = os.path.join(
     get_package_share_directory('rm_gimbal_description'), 'urdf', 'rm_gimbal.urdf.xacro')

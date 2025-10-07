@@ -46,7 +46,6 @@
 #include "armor_detector/number_classifier.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
-#include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
 
@@ -57,12 +56,10 @@ namespace fyt::auto_aim {
 // the detected armors
 class ArmorDetectorNode : public rclcpp::Node {
 public:
-    ArmorDetectorNode(const rclcpp::NodeOptions& options);
+    explicit ArmorDetectorNode(const rclcpp::NodeOptions& options);
 
 private:
-    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
-    // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
-    // target_msg);
+    void imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg);
 
     std::unique_ptr<Detector> initDetector();
 
@@ -72,10 +69,6 @@ private:
     void destroyDebugPublishers() noexcept;
 
     void publishMarkers() noexcept;
-
-    void setModeCallback(
-        const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
 
     // Dynamic Parameter
     rcl_interfaces::msg::SetParametersResult
@@ -111,19 +104,11 @@ private:
     // Image subscription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
 
-    // Target subscription
-    // rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
-    // rm_interfaces::msg::Target::SharedPtr tracked_target_;
-    std::deque<Armor> tracked_armors_;
-
     // ReceiveData subscripiton
     std::string odom_frame_;
     Eigen::Matrix3d imu_to_camera_;
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
-
-    // Enable/Disable Armor Detector
-    rclcpp::Service<rm_interfaces::srv::SetMode>::SharedPtr set_mode_srv_;
 
     // Debug information
     bool debug_;

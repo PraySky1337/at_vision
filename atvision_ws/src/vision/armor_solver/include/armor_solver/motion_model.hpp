@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ARMOR_SOLVER_MOTION_MODEL_HPP_
-#define ARMOR_SOLVER_MOTION_MODEL_HPP_
+#pragma once
 
 // ceres
 #include <ceres/ceres.h>
 // project
 #include "rm_utils/math/extended_kalman_filter.hpp"
+#include "rm_utils/math/unscented_kalman_filter.hpp"
 
 namespace fyt::auto_aim {
 
@@ -79,7 +79,7 @@ struct Measure {
     }
 };
 
-using RobotStateEKF = ExtendedKalmanFilter<X_N, Z_N, Predict, Measure>;
+using RobotStateEKF = at::ExtendedKalmanFilter<X_N, Z_N, Predict, Measure>;
+using RobotStateUKF = at::UnscentedKalmanFilter<X_N, Z_N, Predict, Measure>;
 
 } // namespace fyt::auto_aim
-#endif

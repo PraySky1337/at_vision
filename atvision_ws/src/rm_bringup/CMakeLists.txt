@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(rm_auto_aim)
+project(rm_bringup)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

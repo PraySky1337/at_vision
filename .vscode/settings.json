@@ -1,0 +1,16 @@
+{
+    "clangd.path": "clangd",
+    "clangd.arguments":[
+        "--header-insertion=never"
+    ],
+    "cmake.ignoreCMakeListsMissing": true,
+
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+    "[c]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+
+    "editor.formatOnSave": true
+}

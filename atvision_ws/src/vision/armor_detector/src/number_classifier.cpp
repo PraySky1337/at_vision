@@ -3,6 +3,7 @@
 #include <opencv2/highgui.hpp>
 #include <fstream>
 #include <algorithm>
+#include <utility>
 #include <fmt/format.h>
 
 namespace fyt::auto_aim {
@@ -16,7 +17,7 @@ NumberClassifier::NumberClassifier(
     bool use_softmax)
     : threshold(threshold),
       ignore_classes_(ignore_classes),
-      input_size_(input_size),
+      input_size_(std::move(input_size)),
       use_softmax_(use_softmax) {
     net_ = cv::dnn::readNetFromONNX(model_path);
 
@@ -67,7 +68,7 @@ cv::Mat NumberClassifier::extractNumber(const cv::Mat& src, const Armor& armor) 
     cv::cvtColor(number_image, number_image, cv::COLOR_RGB2GRAY);
     cv::threshold(number_image, number_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
-    // ⭐ 如果当前尺寸和 input_size_ 不符，则 resize
+    // 如果当前尺寸和 input_size_ 不符，则 resize
     if (number_image.size() != input_size_) {
         cv::resize(number_image, number_image, input_size_);
     }
@@ -107,7 +108,7 @@ void NumberClassifier::classify(const cv::Mat& src, Armor& armor) noexcept {
         label_id = class_id_point.x;
     }
 
-    armor.confidence = confidence;
+    armor.confidence = static_cast<float>(confidence);
     armor.number     = class_names_[label_id];
     armor.classfication_result = fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
 }

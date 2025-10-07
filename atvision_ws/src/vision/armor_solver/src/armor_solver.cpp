@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
+#include <utility>
 // project
 #include "armor_solver/armor_solver_node.hpp"
 #include "rm_utils/logger/log.hpp"
@@ -26,7 +27,7 @@
 
 namespace fyt::auto_aim {
 Solver::Solver(std::weak_ptr<rclcpp::Node> n)
-    : node_(n) {
+    : node_(std::move(n)) {
     auto node = node_.lock();
 
     shooting_range_w_    = node->declare_parameter("solver.shooting_range_width", 0.135);
@@ -77,7 +78,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     // Get current roll, yaw and pitch of gimbal
     try {
         auto gimbal_tf =
-            tf2_buffer_->lookupTransform(target.header.frame_id, "gimbal_link", tf2::TimePointZero);
+            tf2_buffer_->lookupTransform(target.header.frame_id, "muzzle_link", tf2::TimePointZero);
         auto msg_q = gimbal_tf.transform.rotation;
 
         tf2::Quaternion tf_q;

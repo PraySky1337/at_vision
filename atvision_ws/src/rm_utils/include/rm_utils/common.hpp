@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RM_UTILS_COMMON_HPP_
-#define RM_UTILS_COMMON_HPP_
+#pragma once
 
 #include <string>
 
@@ -32,6 +31,16 @@ inline std::string enemyColorToString(EnemyColor color) {
     case EnemyColor::BLUE: return "BLUE";
     case EnemyColor::WHITE: return "WHITE";
     default: return "UNKNOWN";
+    }
+}
+
+inline EnemyColor strToEnemyColor(const std::string& str) {
+    if (str == "RED") {
+        return EnemyColor::RED;
+    } else if (str == "BLUE") {
+        return EnemyColor::BLUE;
+    } else {
+        return EnemyColor::WHITE;
     }
 }
 
@@ -57,4 +66,3 @@ inline std::string visionModeToString(VisionMode mode) {
 }
 
 } // namespace fyt
-#endif

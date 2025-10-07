@@ -38,6 +38,19 @@ namespace fyt::auto_aim {
 
 enum class ArmorsNum { NORMAL_4 = 4, BALANCE_2 = 2, OUTPOST_3 = 3 };
 
+enum Statement {
+    S_XC     = 0, // 车中心odom坐标与速度 0 - 5
+    S_VX     = 1,
+    S_YC     = 2,
+    S_VY     = 3,
+    S_ZC     = 4,
+    S_VZ     = 5,
+    S_YAW    = 6, // 连续角 (-inf-inf) 车体角度
+    S_VYAW   = 7, // 转速
+    S_RADIUS = 8, // 车体半径 r1
+    S_DZC    = 9  // 装甲板高度差
+};
+
 class Tracker {
 public:
     Tracker(double max_match_distance, double max_match_yaw);
@@ -56,6 +69,7 @@ public:
         TEMP_LOST,
     } tracker_state;
 
+    // 只存在其中一个实例
     std::unique_ptr<RobotStateEKF> ekf;
 
     int tracking_thres; // frame
@@ -87,6 +101,7 @@ private:
 
     int detect_count_;
     int lost_count_;
+    size_t update_count;
 
     double last_yaw_;
 };

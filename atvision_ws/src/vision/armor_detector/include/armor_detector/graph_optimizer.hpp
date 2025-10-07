@@ -43,11 +43,11 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
   VertexYaw() = default;
-  virtual void setToOriginImpl() override { _estimate = 0; }
-  virtual void oplusImpl(const double *update) override;
+  void setToOriginImpl() override { _estimate = 0; }
+  void oplusImpl(const double *update) override;
 
-  virtual bool read(std::istream &in) override { return true; }
-  virtual bool write(std::ostream &out) const override { return true; }
+  bool read(std::istream &in) override { return true; }
+  bool write(std::ostream &out) const override { return true; }
 };
 
 // Edge of graph optimization algorithm for reporjection error calculation using
@@ -60,10 +60,10 @@ public:
 
   EdgeProjection(const Sophus::SO3d &R_camera_imu, const Sophus::SO3d &R_pitch,
                  const Eigen::Vector3d &t, const Eigen::Matrix3d &K);
-  virtual void computeError() override;
+  void computeError() override;
 
-  virtual bool read(std::istream &in) override { return true; }
-  virtual bool write(std::ostream &out) const override { return true; }
+  bool read(std::istream &in) override { return true; }
+  bool write(std::ostream &out) const override { return true; }
 
 private:
   Sophus::SO3d R_camera_imu_;

@@ -27,120 +27,106 @@
 // ceres
 #include <ceres/jet.h>
 
-namespace fyt {
+#include "kalman_filter_base.hpp"
 
-// Extended Kalman Filter with auto differentiation
-// N_X: state vector dimension
-// N_Z: measurement vector dimension
-// PredicFunc: process nonlinear vector function
-// MeasureFunc: observation nonlinear vector function
-template <int N_X, int N_Z, class PredicFunc, class MeasureFunc>
-class ExtendedKalmanFilter {
+namespace at {
+
+template <int N_X, int N_Z, class PredictFunc, class MeasureFunc>
+class ExtendedKalmanFilter : public KalmanFilterBase<N_X, N_Z> {
 public:
-    ExtendedKalmanFilter() = default;
-
-    using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
-    using MatrixZX = Eigen::Matrix<double, N_Z, N_X>;
-    using MatrixXZ = Eigen::Matrix<double, N_X, N_Z>;
-    using MatrixZZ = Eigen::Matrix<double, N_Z, N_Z>;
-    using MatrixX1 = Eigen::Matrix<double, N_X, 1>;
-    using MatrixZ1 = Eigen::Matrix<double, N_Z, 1>;
-
-    using UpdateQFunc = std::function<MatrixXX()>;
-    using UpdateRFunc = std::function<MatrixZZ(const MatrixZ1& z)>;
+    using Base = KalmanFilterBase<N_X, N_Z>;
+    using typename Base::MatrixXX;
+    using typename Base::MatrixXZ;
+    using typename Base::MatrixZX;
+    using typename Base::MatrixZZ;
+    using typename Base::MatrixX1;
+    using typename Base::MatrixZ1;
+    using typename Base::UpdateQFunc;
+    using typename Base::UpdateRFunc;
 
     explicit ExtendedKalmanFilter(
-        const PredicFunc& f, const MeasureFunc& h, const UpdateQFunc& u_q, const UpdateRFunc& u_r,
+        const PredictFunc& f,
+        const MeasureFunc& h,
+        const UpdateQFunc& u_q,
+        const UpdateRFunc& u_r,
         const MatrixXX& P0) noexcept
-        : f(f)
-        , h(h)
-        , update_Q(u_q)
-        , update_R(u_r)
-        , P_post(P0) {
-        F = MatrixXX::Zero();
-        H = MatrixZX::Zero();
+        : f_(f), h_(h) {
+        this->update_Q_ = u_q;
+        this->update_R_ = u_r;
+        P_post_ = P0;
+        F_.setZero();
+        H_.setZero();
     }
 
-    // Set the initial state
-    void setState(const MatrixX1& x0) noexcept { x_post = x0; }
+    void setState(const MatrixX1& x0) noexcept override { x_post_ = x0; }
 
-    void setPredictFunc(const PredicFunc& f) noexcept { this->f = f; }
-
-    void setMeasureFunc(const MeasureFunc& h) noexcept { this->h = h; }
-
-    // Compute a predicted state
-    MatrixX1 predict() noexcept {
-        ceres::Jet<double, N_X> x_e_jet[N_X];
+    MatrixX1 predict() noexcept override {
+        ceres::Jet<double, N_X> x_jet[N_X];
         for (int i = 0; i < N_X; ++i) {
-            x_e_jet[i].a    = x_post[i];
-            x_e_jet[i].v[i] = 1.;
-            // a 对自己的偏导数为 1.
-        }
-        ceres::Jet<double, N_X> x_p_jet[N_X];
-        f(x_e_jet, x_p_jet);
-
-        for (int i = 0; i < N_X; ++i) {
-            x_pri[i]              = x_p_jet[i].a;
-            F.block(i, 0, 1, N_X) = x_p_jet[i].v.transpose();
+            x_jet[i].a = x_post_[i];
+            x_jet[i].v.setZero();
+            x_jet[i].v[i] = 1.0;
         }
 
-        Q      = update_Q();
-        P_pri  = F * P_post * F.transpose() + Q;
-        x_post = x_pri;
+        ceres::Jet<double, N_X> x_next[N_X];
+        f_(x_jet, x_next);
 
-        return x_pri;
+        for (int i = 0; i < N_X; ++i) {
+            x_pri_[i] = x_next[i].a;
+            F_.block(i, 0, 1, N_X) = x_next[i].v.transpose();
+        }
+
+        Q_ = this->update_Q_();
+        P_pri_ = F_ * P_post_ * F_.transpose() + Q_;
+        x_post_ = x_pri_;
+        P_post_ = P_pri_;
+        return x_pri_;
     }
 
-    // Update the estimated state based on measurement
-    MatrixX1 update(const MatrixZ1& z) noexcept {
-        ceres::Jet<double, N_X> x_p_jet[N_X];
-        for (int i = 0; i < N_X; i++) {
-            x_p_jet[i].a    = x_pri[i];
-            x_p_jet[i].v[i] = 1;
+    MatrixX1 update(const MatrixZ1& z) noexcept override {
+        ceres::Jet<double, N_X> x_jet[N_X];
+        for (int i = 0; i < N_X; ++i) {
+            x_jet[i].a = x_pri_[i];
+            x_jet[i].v.setZero();
+            x_jet[i].v[i] = 1.0;
         }
-        ceres::Jet<double, N_X> z_p_jet[N_Z];
-        h(x_p_jet, z_p_jet);
+
+        ceres::Jet<double, N_X> z_jet[N_Z];
+        h_(x_jet, z_jet);
 
         MatrixZ1 z_pri;
-        for (int i = 0; i < N_Z; i++) {
-            z_pri[i]              = z_p_jet[i].a;
-            H.block(i, 0, 1, N_X) = z_p_jet[i].v.transpose();
+        for (int i = 0; i < N_Z; ++i) {
+            z_pri[i] = z_jet[i].a;
+            H_.block(i, 0, 1, N_X) = z_jet[i].v.transpose();
         }
 
-        R      = update_R(z);
-        K      = P_pri * H.transpose() * (H * P_pri * H.transpose() + R).inverse();
-        x_post = x_post + K * (z - z_pri);
-        P_post = (MatrixXX::Identity() - K * H) * P_pri;
-        return x_post;
+        R_ = this->update_R_(z);
+        K_ = P_pri_ * H_.transpose() * (H_ * P_pri_ * H_.transpose() + R_).inverse();
+        x_post_ = x_post_ + K_ * (z - z_pri);
+        P_post_ = (MatrixXX::Identity() - K_ * H_) * P_pri_;
+        return x_post_;
     }
+    void setPredictFunc(const PredictFunc& f) noexcept { f_ = f; }
+    void setMeasureFunc(const MeasureFunc& h) noexcept { h_ = h; }
+
+    const MatrixX1& state() const noexcept override { return x_post_; }
+    const MatrixXX& covariance() const noexcept override { return P_post_; }
 
 private:
-    // Process nonlinear vector function
-    PredicFunc f;
-    MatrixXX F;
-    // Observation nonlinear vector function
-    MeasureFunc h;
-    MatrixZX H;
-    // Process noise covariance matrix
-    UpdateQFunc update_Q;
-    MatrixXX Q;
-    // Measurement noise covariance matrix
-    UpdateRFunc update_R;
-    MatrixZZ R;
+    PredictFunc f_;
+    MeasureFunc h_;
 
-    // Priori error estimate covariance matrix
-    MatrixXX P_pri;
-    // Posteriori error estimate covariance matrix
-    MatrixXX P_post;
-
-    // Kalman gain
-    MatrixXZ K;
-
-    // Priori state
-    MatrixX1 x_pri;
-    // Posteriori state
-    MatrixX1 x_post;
+    MatrixXX F_{MatrixXX::Zero()};
+    MatrixZX H_{MatrixZX::Zero()};
+    MatrixXX Q_{MatrixXX::Zero()};
+    MatrixZZ R_{MatrixZZ::Zero()};
+    MatrixXZ K_{MatrixXZ::Zero()};
+    MatrixXX P_pri_{MatrixXX::Identity()};
+    MatrixXX P_post_{MatrixXX::Identity()};
+    MatrixX1 x_pri_{MatrixX1::Zero()};
+    MatrixX1 x_post_{MatrixX1::Zero()};
 };
+
 
 } // namespace fyt
 

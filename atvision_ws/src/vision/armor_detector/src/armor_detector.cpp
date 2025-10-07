@@ -107,7 +107,7 @@ cv::Mat Detector::preprocessImage(const cv::Mat& rgb_img) noexcept {
 }
 
 std::vector<Light>
-    Detector::findLights(const cv::Mat& rgb_img, const cv::Mat& binary_img) noexcept {
+    Detector::findLights(const cv::Mat& rgb_img, const cv::Mat& bin_img) noexcept {
     using std::vector;
     vector<vector<cv::Point>> contours;
     vector<cv::Vec4i> hierarchy;
@@ -143,7 +143,7 @@ std::vector<Light>
 
 bool Detector::isLight(const Light& light) noexcept {
     // The ratio of light (short side / long side)
-    float ratio   = light.width / light.length;
+    float ratio   = static_cast<float>(light.width) / static_cast<float>(light.length);
     bool ratio_ok = light_params.min_ratio < ratio && ratio < light_params.max_ratio;
 
     bool angle_ok = light.tilt_angle < light_params.max_angle;
@@ -152,7 +152,7 @@ bool Detector::isLight(const Light& light) noexcept {
 
     // Fill in debug information
     rm_interfaces::msg::DebugLight light_data;
-    light_data.center_x = light.center.x;
+    light_data.center_x = static_cast<int>(light.center.x);
     light_data.ratio    = ratio;
     light_data.angle    = light.tilt_angle;
     light_data.is_light = is_light;
@@ -173,7 +173,9 @@ std::vector<Armor> Detector::matchLights(const std::vector<Light>& lights) noexc
         for (auto light_2 = light_1 + 1; light_2 != lights.end(); light_2++) {
             if (light_2->color != detect_color)
                 continue;
-            if (containLight(light_1 - lights.begin(), light_2 - lights.begin(), lights)) {
+            if (containLight(
+                    static_cast<int>(light_1 - lights.begin()),
+                    static_cast<int>(light_2 - lights.begin()), lights)) {
                 continue;
             }
             if (light_2->center.x - light_1->center.x > max_iter_width)
@@ -193,7 +195,7 @@ std::vector<Armor> Detector::matchLights(const std::vector<Light>& lights) noexc
 
 // Check if there is another light in the boundingRect formed by the 2 lights
 bool Detector::containLight(const int i, const int j, const std::vector<Light>& lights) noexcept {
-    const Light &light_1 = lights.at(i), light_2 = lights.at(j);
+    const Light &light_1 = lights.at(i), &light_2 = lights.at(j);
     auto points =
         std::vector<cv::Point2f>{light_1.top, light_1.bottom, light_2.top, light_2.bottom};
     auto bounding_rect = cv::boundingRect(points);
@@ -222,13 +224,15 @@ bool Detector::containLight(const int i, const int j, const std::vector<Light>& 
 
 ArmorType Detector::isArmor(const Light& light_1, const Light& light_2) noexcept {
     // Ratio of the length of 2 lights (short side / long side)
-    float light_length_ratio = light_1.length < light_2.length ? light_1.length / light_2.length
-                                                               : light_2.length / light_1.length;
+    float light_length_ratio = light_1.length < light_2.length
+                                 ? static_cast<float>(light_1.length / light_2.length)
+                                 : static_cast<float>(light_2.length / light_1.length);
     bool light_ratio_ok      = light_length_ratio > armor_params.min_light_ratio;
 
     // Distance between the center of 2 lights (unit : light length)
-    float avg_light_length  = (light_1.length + light_2.length) / 2;
-    float center_distance   = cv::norm(light_1.center - light_2.center) / avg_light_length;
+    float avg_light_length = static_cast<float>((light_1.length + light_2.length) / 2);
+    float center_distance =
+        static_cast<float>(cv::norm(light_1.center - light_2.center) / avg_light_length);
     bool center_distance_ok = (armor_params.min_small_center_distance <= center_distance
                                && center_distance < armor_params.max_small_center_distance)
                            || (armor_params.min_large_center_distance <= center_distance
@@ -236,7 +240,7 @@ ArmorType Detector::isArmor(const Light& light_1, const Light& light_2) noexcept
 
     // Angle of light center connection
     cv::Point2f diff = light_1.center - light_2.center;
-    float angle      = std::abs(std::atan(diff.y / diff.x)) / CV_PI * 180;
+    float angle      = static_cast<float>(std::abs(std::atan(diff.y / diff.x)) / CV_PI * 180);
     bool angle_ok    = angle < armor_params.max_angle;
 
     bool is_armor = light_ratio_ok && center_distance_ok && angle_ok;
@@ -253,7 +257,7 @@ ArmorType Detector::isArmor(const Light& light_1, const Light& light_2) noexcept
     // Fill in debug information
     rm_interfaces::msg::DebugArmor armor_data;
     armor_data.type            = armorTypeToString(type);
-    armor_data.center_x        = (light_1.center.x + light_2.center.x) / 2;
+    armor_data.center_x        = static_cast<int>((light_1.center.x + light_2.center.x) / 2);
     armor_data.light_ratio     = light_length_ratio;
     armor_data.center_distance = center_distance;
     armor_data.angle           = angle;

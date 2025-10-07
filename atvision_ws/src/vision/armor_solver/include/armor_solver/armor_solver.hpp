@@ -54,22 +54,21 @@ public:
 private:
     // Get the armor positions from the target robot
     std::vector<Eigen::Vector3d> getArmorPositions(
-        const Eigen::Vector3d& target_center, const double yaw, const double r1, const double r2,
-        const double d_zc, const double d_za, const size_t armors_num) const noexcept;
+        const Eigen::Vector3d& target_center, double yaw, double r1, double r2, double d_zc,
+        double d_za, size_t armors_num) const noexcept;
 
     // Select the best armor to shoot
     // Return: selected idx in {0, 1, ..., armors_num - 1}
     int selectBestArmor(
         const std::vector<Eigen::Vector3d>& armor_positions, const Eigen::Vector3d& target_center,
-        const double target_yaw, const double target_v_yaw, const size_t armors_num) const noexcept;
+        double target_yaw, double target_v_yaw, size_t armors_num) const noexcept;
 
     void calcYawAndPitch(
-        const Eigen::Vector3d& p, const std::array<double, 3> rpy, double& yaw,
-        double& pitch) const noexcept;
+        const Eigen::Vector3d& p, std::array<double, 3> rpy, double& yaw, double& pitch) const noexcept;
 
     bool isOnTarget(
-        const double cur_yaw, const double cur_pitch, const double target_yaw,
-        const double target_pitch, const double distance) const noexcept;
+        double cur_yaw, double cur_pitch, double target_yaw, double target_pitch,
+        double distance) const noexcept;
 
     std::unique_ptr<TrajectoryCompensator> trajectory_compensator_;
     std::unique_ptr<ManualCompensator> manual_compensator_;

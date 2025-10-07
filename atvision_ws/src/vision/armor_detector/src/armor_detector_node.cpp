@@ -114,9 +114,10 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
 
     cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
         "camera_info", rclcpp::SensorDataQoS(),
-        [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info) {
-            cam_center_ = cv::Point2f(camera_info->k[2], camera_info->k[5]);
-            cam_info_   = std::make_shared<sensor_msgs::msg::CameraInfo>(*camera_info);
+        [this](const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info) {
+            cam_center_ = cv::Point2f(
+                static_cast<float>(camera_info->k[2]), static_cast<float>(camera_info->k[5]));
+            cam_info_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*camera_info);
             // Setup armor pose solver
             armor_pose_estimator_ = std::make_unique<ArmorPoseEstimator>(cam_info_);
             armor_pose_estimator_->enableBA(use_ba_);
@@ -132,11 +133,6 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
         this->get_node_base_interface(), this->get_node_timers_interface());
     tf2_buffer_->setCreateTimerInterface(timer_interface);
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
-
-    set_mode_srv_ = this->create_service<rm_interfaces::srv::SetMode>(
-        "armor_detector/set_mode", std::bind(
-                                       &ArmorDetectorNode::setModeCallback, this,
-                                       std::placeholders::_1, std::placeholders::_2));
 
     heartbeat_ = HeartBeatPublisher::create(this);
 }
@@ -209,8 +205,9 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     param_desc.integer_range[0].step       = 1;
     param_desc.integer_range[0].from_value = 0;
     param_desc.integer_range[0].to_value   = 255;
-    int binary_thres                       = declare_parameter("binary_thres", 160, param_desc);
-    use_nn_                                = declare_parameter("use_nn", true);
+    int binary_thres             = (int)declare_parameter("binary_thres", 160, param_desc);
+    std::string detect_color_str = declare_parameter("detect_color", "BLUE");
+    use_nn_                      = declare_parameter("use_nn", true);
 
     Detector::LightParams l_params = {
         .min_ratio         = declare_parameter("light.min_ratio", 0.08),
@@ -226,7 +223,9 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         .max_large_center_distance = declare_parameter("armor.max_large_center_distance", 5.0),
         .max_angle                 = declare_parameter("armor.max_angle", 35.0)};
 
-    auto detector = std::make_unique<Detector>(binary_thres, EnemyColor::BLUE, l_params, a_params);
+    auto detect_color = strToEnemyColor(detect_color_str);
+
+    auto detector = std::make_unique<Detector>(binary_thres, detect_color, l_params, a_params);
 
     // Init classifier
     namespace fs               = std::filesystem;
@@ -244,13 +243,13 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         fs::exists(lenet_model_path) && fs::exists(label_path),
         lenet_model_path.string() + " Not Found!");
 
-    double threshold = this->declare_parameter("classifier_threshold", 0.7);
+    double threshold   = this->declare_parameter("classifier_threshold", 0.7);
     std::string device = this->declare_parameter("device", "CPU");
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
     if (debug_) {
         detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
-        detector->classifier = std::make_unique<NumberClassifier>(
+        detector->classifier         = std::make_unique<NumberClassifier>(
             lenet_model_path, label_path, threshold, ignore_classes);
     } else if (use_nn_) {
         detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
@@ -326,7 +325,7 @@ rcl_interfaces::msg::SetParametersResult
     result.successful = true;
     for (const auto& param : parameters) {
         if (param.get_name() == "binary_thres") {
-            detector_->binary_thres = param.as_int();
+            detector_->binary_thres = static_cast<int>(param.as_int());
         } else if (param.get_name() == "classifier_threshold") {
             detector_->classifier->threshold = param.as_double();
         } else if (param.get_name() == "light.min_ratio") {
@@ -336,7 +335,7 @@ rcl_interfaces::msg::SetParametersResult
         } else if (param.get_name() == "light.max_angle") {
             detector_->light_params.max_angle = param.as_double();
         } else if (param.get_name() == "light.color_diff_thresh") {
-            detector_->light_params.color_diff_thresh = param.as_int();
+            detector_->light_params.color_diff_thresh = static_cast<int>(param.as_int());
         } else if (param.get_name() == "armor.min_light_ratio") {
             detector_->armor_params.min_light_ratio = param.as_double();
         } else if (param.get_name() == "armor.min_small_center_distance") {
@@ -351,22 +350,13 @@ rcl_interfaces::msg::SetParametersResult
             detector_->armor_params.max_angle = param.as_double();
         } else if (param.get_name() == "use_nn") {
             use_nn_ = param.as_bool();
+        } else if (param.get_name() == "detect_color") {
+            detector_->detect_color = strToEnemyColor(param.as_string());
+            RCLCPP_INFO(get_logger(), "Detect color change to %s", param.as_string().c_str());
         }
     }
     return result;
 }
-
-// void ArmorDetectorNode::targetCallback(const
-// rm_interfaces::msg::Target::SharedPtr target_msg) {
-//   if (target_msg->tracking) {
-//     tracked_target_ = target_msg;
-//   } else {
-//     tracked_target_ = nullptr;
-//     if (!tracked_armors_.empty()) {
-//       tracked_armors_.clear();
-//     }
-//   }
-// }
 
 void ArmorDetectorNode::createDebugPublishers() noexcept {
     lights_data_pub_ =
@@ -394,46 +384,6 @@ void ArmorDetectorNode::publishMarkers() noexcept {
     armor_marker_.action = armors_msg_.armors.empty() ? Marker::DELETEALL : Marker::ADD;
     marker_array_.markers.emplace_back(armor_marker_);
     marker_pub_->publish(marker_array_);
-}
-
-void ArmorDetectorNode::setModeCallback(
-    const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-    std::shared_ptr<rm_interfaces::srv::SetMode::Response> response) {
-    response->success = true;
-    response->message = "0";
-
-    VisionMode mode       = static_cast<VisionMode>(request->mode);
-    std::string mode_name = visionModeToString(mode);
-    if (mode_name == "UNKNOWN") {
-        FYT_ERROR("armor_detector", "Invalid mode: {}", request->mode);
-        return;
-    }
-
-    auto createImageSub = [this]() {
-        if (img_sub_ == nullptr) {
-            img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-                "image_raw", rclcpp::SensorDataQoS(),
-                std::bind(&ArmorDetectorNode::imageCallback, this, std::placeholders::_1));
-        }
-    };
-
-    switch (mode) {
-    case VisionMode::AUTO_AIM_RED: {
-        detector_->detect_color = EnemyColor::RED;
-        createImageSub();
-        break;
-    }
-    case VisionMode::AUTO_AIM_BLUE: {
-        detector_->detect_color = EnemyColor::BLUE;
-        createImageSub();
-        break;
-    }
-    default: {
-        img_sub_.reset();
-    }
-    }
-
-    FYT_WARN("armor_detector", "Set mode to {}", mode_name);
 }
 
 } // namespace fyt::auto_aim

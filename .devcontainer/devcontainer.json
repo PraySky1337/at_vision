@@ -2,8 +2,8 @@
   "name": "ATVISION Dev",
   "image": "atvision", 
   "privileged": true,
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/home/developer/ws",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/developer/ws,type=bind",
   "runArgs": [
 	"--network",
 	"host"

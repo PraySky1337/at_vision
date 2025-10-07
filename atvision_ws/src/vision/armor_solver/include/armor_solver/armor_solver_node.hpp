@@ -39,7 +39,6 @@
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/measurement.hpp"
 #include "rm_interfaces/msg/target.hpp"
-#include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
 
@@ -50,7 +49,9 @@ public:
     explicit ArmorSolverNode(const rclcpp::NodeOptions& options);
 
 private:
-    void armorsCallback(const rm_interfaces::msg::Armors::SharedPtr armors_ptr);
+    void initUkf();
+    void initEkf();
+    void armorsCallback(rm_interfaces::msg::Armors::SharedPtr armors_ptr);
 
     void initMarkers() noexcept;
 
@@ -58,12 +59,9 @@ private:
         const rm_interfaces::msg::Target& target_msg,
         const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
 
-    void setModeCallback(
-        const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
-
+private:
     bool debug_mode_;
-
+    bool use_ukf_;
     // Heartbeat
     HeartBeatPublisher::SharedPtr heartbeat_;
 
@@ -96,10 +94,6 @@ private:
     rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_pub_;
     rclcpp::TimerBase::SharedPtr pub_timer_;
     void timerCallback();
-
-    // Enable/Disable Armor Solver
-    bool enable_;
-    rclcpp::Service<rm_interfaces::srv::SetMode>::SharedPtr set_mode_srv_;
 
     // Visualization marker publisher
     visualization_msgs::msg::Marker position_marker_;

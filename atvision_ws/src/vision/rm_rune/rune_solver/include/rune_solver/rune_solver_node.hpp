@@ -49,12 +49,12 @@
 namespace fyt::rune {
 class RuneSolverNode : public rclcpp::Node {
 public:
-  RuneSolverNode(const rclcpp::NodeOptions &options);
+  explicit RuneSolverNode(const rclcpp::NodeOptions &options);
 
 private:
-  void runeTargetCallback(const rm_interfaces::msg::RuneTarget::SharedPtr rune_target_msg);
+  void runeTargetCallback(rm_interfaces::msg::RuneTarget::SharedPtr rune_target_msg);
 
-  void setModeCallback(const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
+  void setModeCallback(std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
                        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
 
   // Heartbeat

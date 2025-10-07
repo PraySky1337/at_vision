@@ -22,7 +22,6 @@
 // std
 #include <cmath>
 #include <rm_utils/common.hpp>
-#include <string>
 #include <vector>
 // third party
 #include <opencv2/core.hpp>
@@ -92,7 +91,7 @@ public:
 
 private:
     bool isLight(const Light& possible_light) noexcept;
-    bool containLight(const int i, const int j, const std::vector<Light>& lights) noexcept;
+    static bool containLight(int i, int j, const std::vector<Light>& lights) noexcept;
     ArmorType isArmor(const Light& light_1, const Light& light_2) noexcept;
 
     cv::Mat gray_img_;

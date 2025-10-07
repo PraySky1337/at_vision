@@ -3,9 +3,13 @@
 <robot name="rm_gimbal"
   xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:arg name="camera_xyz" default="0.04444 0.0 0.04" />
-  <xacro:arg name="camera_rpy" default="0 0 0" />
+  <!-- 参数 -->
+  <xacro:arg name="camera_xyz"  default="0.04444 0.0 0.0363" />
+  <xacro:arg name="camera_rpy"  default="0 0 0" />
+  <xacro:arg name="muzzle_xyz"  default="0.0874 0.0 0.0874" /> 
+  <xacro:arg name="muzzle_rpy"  default="0 0 0" />
 
+  <!-- 主体 -->
   <link name="odom" />
   <link name="gimbal_link" />
 
@@ -14,8 +18,8 @@
     <child link="gimbal_link" />
   </joint>
 
+  <!-- 相机 -->
   <link name="camera_link" />
-
   <joint name="camera_joint" type="fixed">
     <origin xyz="$(arg camera_xyz)" rpy="$(arg camera_rpy)" />
     <parent link="gimbal_link" />
@@ -24,10 +28,18 @@
   </joint>
 
   <link name="camera_optical_frame" />
-
   <joint name="camera_optical_joint" type="fixed">
     <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}" />
     <parent link="camera_link" />
     <child link="camera_optical_frame" />
   </joint>
+
+  <!-- ✅ 新增枪口系 -->
+  <link name="muzzle_link" />
+  <joint name="muzzle_joint" type="fixed">
+    <origin xyz="$(arg muzzle_xyz)" rpy="$(arg muzzle_rpy)" />
+    <parent link="gimbal_link" />
+    <child link="muzzle_link" />
+  </joint>
+
 </robot>
