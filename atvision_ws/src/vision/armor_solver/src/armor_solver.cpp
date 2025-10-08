@@ -21,9 +21,7 @@
 #include <stdexcept>
 #include <utility>
 // project
-#include "armor_solver/armor_solver_node.hpp"
 #include "rm_utils/logger/log.hpp"
-#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
 Solver::Solver(std::weak_ptr<rclcpp::Node> n)
@@ -46,12 +44,6 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
     trajectory_compensator_->gravity    = node->declare_parameter("solver.gravity", 9.8);
     trajectory_compensator_->resistance = node->declare_parameter("solver.resistance", 0.001);
 
-    manual_compensator_ = std::make_unique<ManualCompensator>();
-    auto angle_offset = node->declare_parameter("solver.angle_offset", std::vector<std::string>{});
-    if (!manual_compensator_->updateMapFlow(angle_offset)) {
-        FYT_WARN("armor_solver", "Manual compensator update failed!");
-    }
-
     state            = State::TRACKING_ARMOR;
     overflow_count_  = 0;
     transfer_thresh_ = 5;
@@ -61,7 +53,7 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
 
 rm_interfaces::msg::GimbalCmd Solver::solve(
     const rm_interfaces::msg::Target& target, const rclcpp::Time& current_time,
-    std::shared_ptr<tf2_ros::Buffer> tf2_buffer_) {
+    const std::shared_ptr<tf2_ros::Buffer>& tf2_buffer_) {
     // Get newest parameters
     try {
         auto node            = node_.lock();
@@ -83,8 +75,14 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
 
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
-        tf2::Matrix3x3(tf_q).getRPY(rpy_[0], rpy_[1], rpy_[2]);
-        rpy_[1] = -rpy_[1];
+        tf2::Matrix3x3(tf_q).getRPY(rpy_.x(), rpy_.y(), rpy_.z());
+        auto translation = gimbal_tf.transform.translation;
+
+        xyz_.x() = translation.x;
+        xyz_.y() = translation.y;
+        xyz_.z() = translation.z;
+
+        rpy_[1] = -rpy_[1]; // 谁TM这么写的弹道解算，真狗屎
     } catch (tf2::TransformException& ex) {
         FYT_ERROR("armor_solver", "{}", ex.what());
         throw ex;
@@ -108,14 +106,15 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     int idx = selectBestArmor(
         armor_positions, target_position, target_yaw, target.v_yaw, target.armors_num);
     auto chosen_armor_position = armor_positions.at(idx);
+    chosen_armor_position -= xyz_;
+    double distance = chosen_armor_position.norm();
     if (chosen_armor_position.norm() < 0.1) {
         throw std::runtime_error("No valid armor to shoot");
     }
 
     // Calculate yaw, pitch, distance
     double yaw, pitch;
-    calcYawAndPitch(chosen_armor_position, rpy_, yaw, pitch);
-    double distance = chosen_armor_position.norm();
+    calcYawAndPitch(chosen_armor_position, yaw, pitch);
 
     // Initialize gimbal_cmd
     rm_interfaces::msg::GimbalCmd gimbal_cmd;
@@ -144,12 +143,12 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             armor_positions = getArmorPositions(
                 target_position, target_yaw, target.radius_1, target.radius_2, target.d_zc,
                 target.d_za, target.armors_num);
-            chosen_armor_position = armor_positions.at(idx);
+            chosen_armor_position = armor_positions.at(idx) - xyz_;
             gimbal_cmd.distance   = chosen_armor_position.norm();
             if (chosen_armor_position.norm() < 0.1) {
                 throw std::runtime_error("No valid armor to shoot");
             }
-            calcYawAndPitch(chosen_armor_position, rpy_, yaw, pitch);
+            calcYawAndPitch(chosen_armor_position, yaw, pitch);
         }
         break;
     }
@@ -165,18 +164,14 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             overflow_count_ = 0;
         }
         gimbal_cmd.fire_advice = true;
-        calcYawAndPitch(target_position, rpy_, yaw, pitch);
+        calcYawAndPitch(target_position, yaw, pitch);
         break;
     }
     }
 
     // Compensate angle by angle_offset_map
-    auto angle_offset =
-        manual_compensator_->angleHardCorrect(target_position.head(2).norm(), target_position.z());
-    double pitch_offset = angle_offset[0] * M_PI / 180;
-    double yaw_offset   = angle_offset[1] * M_PI / 180;
-    double cmd_pitch    = pitch + pitch_offset;
-    double cmd_yaw      = angles::normalize_angle(yaw + yaw_offset);
+    double cmd_pitch = pitch;
+    double cmd_yaw   = angles::normalize_angle(yaw);
 
     gimbal_cmd.yaw        = cmd_yaw * 180 / M_PI;
     gimbal_cmd.pitch      = cmd_pitch * 180 / M_PI;
@@ -259,19 +254,17 @@ int Solver::selectBestArmor(
         theta = 0;
     }
 
-    double temp_angle = decision_angle + M_PI / armors_num - theta;
+    double temp_angle = decision_angle + M_PI / static_cast<int>(armors_num) - theta;
 
     if (temp_angle < 0) {
         temp_angle += 2 * M_PI;
     }
 
-    int selected_id = static_cast<int>(temp_angle / (2 * M_PI / armors_num));
+    int selected_id = static_cast<int>(temp_angle / (2 * M_PI / static_cast<int>(armors_num)));
     return selected_id;
 }
 
-void Solver::calcYawAndPitch(
-    const Eigen::Vector3d& p, const std::array<double, 3> rpy, double& yaw,
-    double& pitch) const noexcept {
+void Solver::calcYawAndPitch(const Eigen::Vector3d& p, double& yaw, double& pitch) const noexcept {
     // Calculate yaw and pitch
     yaw   = atan2(p.y(), p.x());
     pitch = atan2(p.z(), p.head(2).norm());
@@ -292,5 +285,4 @@ std::vector<std::pair<double, double>> Solver::getTrajectory() const noexcept {
     }
     return trajectory;
 }
-
 } // namespace fyt::auto_aim

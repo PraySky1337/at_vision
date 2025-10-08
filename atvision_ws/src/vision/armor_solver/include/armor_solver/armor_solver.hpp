@@ -45,7 +45,7 @@ public:
     // Throw: tf2::TransformException if the transform from "odom" to "gimbal_link" is not available
     rm_interfaces::msg::GimbalCmd solve(
         const rm_interfaces::msg::Target& target_msg, const rclcpp::Time& current_time,
-        std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
+        const std::shared_ptr<tf2_ros::Buffer>& tf2_buffer_);
 
     enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state;
 
@@ -63,17 +63,17 @@ private:
         const std::vector<Eigen::Vector3d>& armor_positions, const Eigen::Vector3d& target_center,
         double target_yaw, double target_v_yaw, size_t armors_num) const noexcept;
 
-    void calcYawAndPitch(
-        const Eigen::Vector3d& p, std::array<double, 3> rpy, double& yaw, double& pitch) const noexcept;
+    void calcYawAndPitch(const Eigen::Vector3d& p, double& yaw, double& pitch) const noexcept;
 
     bool isOnTarget(
         double cur_yaw, double cur_pitch, double target_yaw, double target_pitch,
         double distance) const noexcept;
 
     std::unique_ptr<TrajectoryCompensator> trajectory_compensator_;
-    std::unique_ptr<ManualCompensator> manual_compensator_;
 
-    std::array<double, 3> rpy_;
+    // R & T
+    Eigen::Vector3d rpy_;
+    Eigen::Vector3d xyz_;
 
     double prediction_delay_;
     double controller_delay_;
