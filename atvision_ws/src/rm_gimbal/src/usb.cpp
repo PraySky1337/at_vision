@@ -1,5 +1,6 @@
 #include "rm_gimbal/usb.hpp"
 
+// STL
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -7,10 +8,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <libusb-1.0/libusb.h>
 #include <stdexcept>
-#include <sys/types.h>
 #include <thread>
+
+// libusb
+#include <libusb-1.0/libusb.h>
+// sys
+#include <sys/types.h>
+// logger
+#include <rclcpp/logging.hpp>
 
 /* ------------------- error ------------------- */
 namespace rm_gimbal {
@@ -69,7 +75,7 @@ private:
     void on_hotplug(libusb_hotplug_event ev);
     void alloc_transfer();
     void submit_transfer() const;
-    void cleanup(); // 关闭/释放资源
+    void cleanup();      // 关闭/释放资源
     bool try_reopen();
 
 private:
@@ -125,7 +131,9 @@ bool Device::Impl::open(uint16_t vid, uint16_t pid) {
             },
             this, &hp_handle_);
         if (rc != LIBUSB_SUCCESS)
-            ATLOG_WARN("Hot‑plug callback reg failed: {}", libusb_error_name(rc));
+            RCLCPP_WARN(
+                rclcpp::get_logger("gimbal_node"), "Hot-plug callback register failed: %s",
+                libusb_error_name(rc));
     }
 
     submit_transfer(); // 启动异步接收
@@ -239,7 +247,7 @@ bool Device::Impl::try_reopen() {
         try {
             if (open(VID)) {
                 disconnected_ = false;
-                ATLOG_INFO("USB re‑connected");
+
                 return true;
             }
         } catch (...) {}

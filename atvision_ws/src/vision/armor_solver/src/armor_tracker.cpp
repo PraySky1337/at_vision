@@ -33,7 +33,7 @@
 #include "rm_utils/logger/log.hpp"
 
 namespace fyt::auto_aim {
-Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
+Tracker::Tracker(double max_match_distance, double max_match_yaw_diff, KFType kf_filter)
     : tracker_state(LOST)
     , tracked_id(std::string(""))
     , measurement(Eigen::VectorXd::Zero(4))
@@ -60,7 +60,7 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
         }
     }
 
-    initEKF(tracked_armor);
+    initKF(tracked_armor);
     FYT_INFO("armor_solver", "Init EKF!");
 
     tracked_id    = tracked_armor.number;
@@ -78,7 +78,7 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
 
 void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     // KF predict
-    Eigen::VectorXd ekf_prediction = ekf->predict();
+    Eigen::VectorXd ekf_prediction = kf->predict();
 
     bool matched = false;
     // Use KF prediction as default target state if no matched armor is found
@@ -128,7 +128,7 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             // Update EKF
             double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
             measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-            target_state        = ekf->update(measurement);
+            target_state        = kf->update(measurement);
             update_count++;
         } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
             // Matched armor not found, but there is only one armor with the same id
@@ -146,14 +146,14 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     // https://www.robomaster.com/zh-CN/resource/announcement/competition
     target_state(S_RADIUS) = std::clamp(target_state(S_RADIUS), 0.12, 0.4);
     target_state(S_DZC)    = std::clamp(target_state(S_DZC), -0.1, 0.1);
-    ekf->setState(target_state);
+    kf->setState(target_state);
     // Tracking state machine
     if (tracker_state == DETECTING) {
         if (matched) {
             detect_count_++;
             if (detect_count_ > tracking_thres) {
                 detect_count_ = 0;
-                update_count = 0;
+                update_count  = 0;
                 tracker_state = TRACKING;
                 FYT_DEBUG("armor_solver", "Tracker state: TRACKING {}", tracked_id);
             }
@@ -188,7 +188,7 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     }
 }
 
-void Tracker::initEKF(const Armor& a) noexcept {
+void Tracker::initKF(const Armor& a) noexcept {
     double xa  = a.pose.position.x;
     double ya  = a.pose.position.y;
     double za  = a.pose.position.z;
@@ -204,7 +204,7 @@ void Tracker::initEKF(const Armor& a) noexcept {
     d_za = 0, d_zc = 0, another_r = r;
     target_state << xc, 0, yc, 0, zc, 0, yaw, 0, r, d_zc;
 
-    ekf->setState(target_state);
+    kf->setState(target_state);
 }
 
 void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
@@ -244,7 +244,7 @@ void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
         FYT_WARN("armor_solver", "State wrong!");
     }
 
-    ekf->setState(target_state);
+    kf->setState(target_state);
 }
 
 double Tracker::orientationToYaw(const geometry_msgs::msg::Quaternion& q) noexcept {

@@ -27,7 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/JudgeSystemData.msg"
   "msg/OperatorCommand.msg"
   "msg/SerialReceiveData.msg"
-  "msg/PlanControlCmd.msg"
+  "msg/PlanGimbalCmd.msg"
   "srv/SetMode.srv"
   "srv/RunHandEyeCalibration.srv"
   DEPENDENCIES

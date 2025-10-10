@@ -43,7 +43,7 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         static_cast<int>(this->declare_parameter("tracker.tracking_thres", 5));
     lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
 
-    initEkf();
+    initKF();
 
     // TF2
     tf2_buffer_          = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -79,22 +79,36 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     heartbeat_ = HeartBeatPublisher::create(this);
 }
 
-void ArmorSolverNode::initEkf() {
+void ArmorSolverNode::initKF() {
     // 状态维度说明：
     // state: xc, v_xc, yc, v_yc, zc, v_zc, yaw, v_yaw, r, d_zc
     // measurement: p, y, d, yaw
 
     // 定义非线性函数
-    auto f = Predict(0.005);
-    auto h = Measure();
+    auto f                  = Predict(0.005);
+    auto h                  = Measure();
+    std::string kf_type_str = this->declare_parameter("kalman_filter_type", "EKF");
+    std::transform(kf_type_str.begin(), kf_type_str.end(), kf_type_str.begin(), tolower);
+    KFType kf_type;
+    if (kf_type_str == "ekf") {
+        kf_type = KFType::EKF;
+    } else if (kf_type_str == "ukf") {
+        kf_type = KFType::UKF;
+    } else {
+        RCLCPP_ERROR(
+            get_logger(), "Kalman Filter type invalid: %s, use default ekf", kf_type_str.c_str());
+        kf_type_str = "ekf";
+        kf_type     = KFType::EKF;
+    }
+    const auto& p = kf_type_str;
 
     // ---------- Q ----------
-    s2qx_    = declare_parameter("ekf.sigma2_q_x", 20.0);
-    s2qy_    = declare_parameter("ekf.sigma2_q_y", 20.0);
-    s2qz_    = declare_parameter("ekf.sigma2_q_z", 20.0);
-    s2qyaw_  = declare_parameter("ekf.sigma2_q_yaw", 100.0);
-    s2qr_    = declare_parameter("ekf.sigma2_q_r", 800.0);
-    s2qd_zc_ = declare_parameter("ekf.sigma2_q_d_zc", 800.0);
+    s2qx_    = declare_parameter(p + ".sigma2_q_x", 20.0);
+    s2qy_    = declare_parameter(p + ".sigma2_q_y", 20.0);
+    s2qz_    = declare_parameter(p + ".sigma2_q_z", 20.0);
+    s2qyaw_  = declare_parameter(p + ".sigma2_q_yaw", 100.0);
+    s2qr_    = declare_parameter(p + ".sigma2_q_r", 800.0);
+    s2qd_zc_ = declare_parameter(p + ".sigma2_q_d_zc", 800.0);
 
     auto u_q = [this]() {
         Eigen::Matrix<double, X_N, X_N> q;
@@ -124,10 +138,10 @@ void ArmorSolverNode::initEkf() {
     };
 
     // ---------- R ----------
-    r_x_   = declare_parameter("ekf.r_x", 0.05);
-    r_y_   = declare_parameter("ekf.r_y", 0.05);
-    r_z_   = declare_parameter("ekf.r_z", 0.05);
-    r_yaw_ = declare_parameter("ekf.r_yaw", 0.02);
+    r_x_   = declare_parameter(p + ".r_x", 0.05);
+    r_y_   = declare_parameter(p + ".r_y", 0.05);
+    r_z_   = declare_parameter(p + ".r_z", 0.05);
+    r_yaw_ = declare_parameter(p + ".r_yaw", 0.02);
 
     auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
         Eigen::Matrix<double, Z_N, Z_N> r;
@@ -145,18 +159,20 @@ void ArmorSolverNode::initEkf() {
     p0.setIdentity();
 
     // ---------- 创建 EKF 或 UKF ----------
-    tracker_->ekf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, p0);
+    // tracker_->ekf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, p0);
     // 若想切换 UKF，只需改成：
-    // tracker_->ekf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, p0);
+    if (kf_type == KFType::EKF) {
+        tracker_->kf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, p0);
+    } else {
+        auto alpha   = declare_parameter(p + ".alpha", 1e-2);
+        auto beta    = declare_parameter(p + ".beta", 2.0);
+        auto kappa   = declare_parameter(p + ".kappa", 0.0);
+        tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, p0, alpha, beta, kappa);
+    }
 }
-
-void ArmorSolverNode::initUkf() {
-
-}
-
 
 void ArmorSolverNode::timerCallback() {
-    if (solver_ == nullptr) {
+    if (solver_ == nullptr) [[unlikely]] {
         return;
     }
 
@@ -229,10 +245,11 @@ void ArmorSolverNode::initMarkers() noexcept {
     armors_marker_.color.g    = 1.0;
     selection_marker_.ns      = "selection";
     selection_marker_.type    = visualization_msgs::msg::Marker::SPHERE;
-    selection_marker_.scale.x = selection_marker_.scale.y = selection_marker_.scale.z = 0.1;
-    selection_marker_.color.a                                                         = 0.3;
-    selection_marker_.color.g                                                         = 1.0;
-    selection_marker_.color.r                                                         = 1.0;
+    selection_marker_.scale.x = selection_marker_.scale.y = selection_marker_.scale.z = 0.05;
+
+    selection_marker_.color.a  = 0.2;
+    selection_marker_.color.g  = 1.0;
+    selection_marker_.color.r  = 1.0;
     trajectory_marker_.ns      = "trajectory";
     trajectory_marker_.type    = visualization_msgs::msg::Marker::POINTS;
     trajectory_marker_.scale.x = 0.01;
@@ -288,9 +305,9 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         dt_                  = (time - last_time_).seconds();
         tracker_->lost_thres = std::abs(static_cast<int>(lost_time_thres_ / dt_));
         if (tracker_->tracked_id == "outpost") {
-            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
+            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
         } else {
-            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
+            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
         }
         tracker_->update(armors_msg);
         // Publish measurement

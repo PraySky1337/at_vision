@@ -152,7 +152,8 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
             tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1], tf2_matrix.getRow(1)[2],
             tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1], tf2_matrix.getRow(2)[2];
     } catch (...) {
-        FYT_ERROR("armor_detector", "Something Wrong when lookUpTransform");
+        if (debug_ == false)
+            RCLCPP_WARN(get_logger(), "Something went wrong when lookup transform");
         return;
     }
 

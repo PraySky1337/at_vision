@@ -45,7 +45,7 @@ public:
         Eigen::Matrix<double, N_X, 2 * N_X + 1> X;
         sigmaPoints(x_post_, P_post_, c, X);
 
-        for (int i = 0; i < 2 * N_X + 1; ++i) Xf_.col(i) = f_(X.col(i));
+        for (int i = 0; i < 2 * N_X + 1; ++i) f_(X.col(i).data(), Xf_.col(i).data());
 
         x_pri_.setZero();
         for (int i = 0; i < 2 * N_X + 1; ++i) x_pri_ += Wm_(i) * Xf_.col(i);
@@ -64,7 +64,7 @@ public:
 
     MatrixX1 update(const MatrixZ1& z) noexcept override {
         Eigen::Matrix<double, N_Z, 2 * N_X + 1> Zsig;
-        for (int i = 0; i < 2 * N_X + 1; ++i) Zsig.col(i) = h_(Xf_.col(i));
+        for (int i = 0; i < 2 * N_X + 1; ++i) h_(Xf_.col(i).data(), Zsig.col(i).data());
 
         MatrixZ1 z_pri = MatrixZ1::Zero();
         for (int i = 0; i < 2 * N_X + 1; ++i) z_pri += Wm_(i) * Zsig.col(i);

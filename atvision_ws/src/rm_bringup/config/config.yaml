@@ -33,17 +33,37 @@
     target_frame: odom
     max_armor_distance: 10.0
 
+    kalman_filter_type: "ukf"
+
     ekf:
       sigma2_q_x: 0.05
       sigma2_q_y: 0.05
       sigma2_q_z: 0.05
       sigma2_q_yaw: 1.0
       sigma2_q_r: 80.0
+      sigma2_q_d_zc: 800.0
 
       r_x: 0.0004
       r_y: 0.0004
       r_z: 0.0009
       r_yaw: 0.005
+
+    ukf:
+      sigma2_q_x: 0.05
+      sigma2_q_y: 0.05
+      sigma2_q_z: 0.05
+      sigma2_q_yaw: 1.0
+      sigma2_q_r: 80.0
+      sigma2_q_d_zc: 400.0
+
+      r_x: 0.0004
+      r_y: 0.0004
+      r_z: 0.0009
+      r_yaw: 0.005
+
+      alpha : 0.1
+      beta: 2.
+      kappa: 0.
 
     tracker:
       max_match_distance: 0.5
@@ -59,21 +79,22 @@
       side_angle: 15.0 
       bullet_speed: 21.0
       compenstator_type: "ideal"
-      gravity: 9.83
+      gravity: 9.7997 
+      # Grativity: 石家庄 9.7997
       resistance: 0.092
       iteration_times: 20 # 补偿的迭代次数
       # ["距离下限, 距离上限, 高度下限, 高度下限, pitch轴补偿值"]
-      pitch_offset: [
-        "5.0 6.0 -1.0 0.4 0.0",
-        "5.0 6.0  0.4 0.8 0.0",
-        "5.0 6.0  0.8 1.2 0.0",
-        "6.0 7.0 -1.0 0.4 0.0",
-        "6.0 7.0  0.4 0.8 0.0",
-        "6.0 7.0  0.8 1.2 0.0",
-        "7.0 8.0 -1.0 0.4 0.0",
-        "7.0 8.0  0.4 0.8 0.0",
-        "7.0 8.0  0.8 1.2 0.0",
-      ]
+      # pitch_offset: [
+      #   "5.0 6.0 -1.0 0.4 0.0",
+      #   "5.0 6.0  0.4 0.8 0.0",
+      #   "5.0 6.0  0.8 1.2 0.0",
+      #   "6.0 7.0 -1.0 0.4 0.0",
+      #   "6.0 7.0  0.4 0.8 0.0",
+      #   "6.0 7.0  0.8 1.2 0.0",
+      #   "7.0 8.0 -1.0 0.4 0.0",
+      #   "7.0 8.0  0.4 0.8 0.0",
+      #   "7.0 8.0  0.8 1.2 0.0",
+      # ]
 
 /camera_node:
   ros__parameters:
@@ -102,3 +123,38 @@
     reconnect_max_attempts: -1
     use_sensor_data_qos: true
     use_sim_time: false
+
+
+/rm_gimbal:
+  ros__parameters:
+    debug: true
+    planner:
+      N: 20
+      T: 0.01
+      amax: 50.0
+      dt_ema_alpha: 0.2
+      dt_max: 0.03
+      dt_min: 0.002
+      q_pitch_pos: 9000000.0
+      q_pitch_vel: 0.0
+      q_yaw_pos: 9000000.0
+      q_yaw_vel: 0.0
+      r_pitch_acc: 1.0
+      r_yaw_acc: 1.0
+    timestamp_offset: 0.006
+    use_planner: true
+    use_roll: false
+    use_sim_time: false
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+      /tf:
+        publisher:
+          depth: 100
+          durability: volatile
+          history: keep_last
+          reliability: reliable

@@ -36,6 +36,10 @@ struct SendVisionData {
         uint8_t fire_advice;
         float target_yaw;
         float target_pitch;
+        float ref_yaw_v;
+        float ref_pitch_v;
+        float ref_yaw_a;
+        float ref_pitch_a;
         float distance;
     } data;
     uint8_t eof;

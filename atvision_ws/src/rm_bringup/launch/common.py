@@ -14,7 +14,7 @@ node_params = os.path.join(
     get_package_share_directory('rm_bringup'), 'config', 'config.yaml')
 
 xacro_file = os.path.join(
-    get_package_share_directory('rm_gimbal_description'), 'urdf', 'rm_gimbal.urdf.xacro')
+    get_package_share_directory('rm_gimbal'), 'urdf', 'rm_gimbal.urdf.xacro')
 
 robot_description = Command([
     'xacro ' + xacro_file

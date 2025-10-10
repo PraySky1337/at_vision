@@ -49,8 +49,7 @@ public:
     explicit ArmorSolverNode(const rclcpp::NodeOptions& options);
 
 private:
-    void initUkf();
-    void initEkf();
+    void initKF();
     void armorsCallback(rm_interfaces::msg::Armors::SharedPtr armors_ptr);
 
     void initMarkers() noexcept;
