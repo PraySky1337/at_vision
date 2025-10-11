@@ -42,7 +42,7 @@ public:
 
 protected:
     // Calculate the trajectory of the bullet, return the vertical impact point
-    virtual double calculateTrajectory(const double x, const double angle) const noexcept = 0;
+    virtual double calculateTrajectory(double x, double angle) const noexcept = 0;
 };
 
 // IdealCompensator does not consider the air resistance
@@ -51,7 +51,7 @@ public:
     double getFlyingTime(const Eigen::Vector3d& target_position) const noexcept override;
 
 protected:
-    double calculateTrajectory(const double x, const double angle) const noexcept override;
+    double calculateTrajectory(double x, double angle) const noexcept override;
 };
 
 // ResistanceCompensator considers the air resistance
@@ -60,12 +60,13 @@ public:
     double getFlyingTime(const Eigen::Vector3d& target_position) const noexcept override;
 
 protected:
-    double calculateTrajectory(const double x, const double angle) const noexcept override;
+    double calculateTrajectory(double x, double angle) const noexcept override;
 };
 
 // Factory class for trajectory compensator
 class CompensatorFactory {
 public:
+    CompensatorFactory() = delete;
     static std::unique_ptr<TrajectoryCompensator> createCompensator(const std::string& type) {
         if (type == "ideal") {
             return std::make_unique<IdealCompensator>();
@@ -77,7 +78,6 @@ public:
     }
 
 private:
-    CompensatorFactory()  = delete;
     ~CompensatorFactory() = delete;
 };
 

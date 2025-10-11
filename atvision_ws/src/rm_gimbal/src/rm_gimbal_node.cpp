@@ -19,8 +19,15 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
     reset_tracker_srv = create_client<std_srvs::srv::Trigger>("reset_tracker");
     this->init_parser();
-    if (device_.open(0x0483)) {
-        RCLCPP_INFO(get_logger(), "Gimbal Node already");
+    try {
+        if (device_.open(0x0483)) {
+            RCLCPP_INFO(get_logger(), "Gimbal Node already");
+        } else {
+            RCLCPP_FATAL(get_logger(), "Failed to open gimbal device");
+        }
+    } catch (...) {
+        RCLCPP_FATAL(get_logger(), "Failed to open gimbal device");
+        device_.open(0x0483); // 再尝试一次 如果未成功则再次触发异常
     }
 
     use_roll_    = declare_parameter("use_roll", false);
@@ -29,10 +36,6 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     rcl_interfaces::msg::ParameterDescriptor param_desc;
     param_desc.description = "unit: ms";
     timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 0.1, param_desc); // s
-
-    if (debug_)
-        plan_gimbal_cmd_pub_ =
-            create_publisher<rm_interfaces::msg::PlanGimbalCmd>("gimbal/plan_control_cmd", 10);
 
     control_cmd_sub_ = create_subscription<rm_interfaces::msg::GimbalCmd>(
         "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS(),
@@ -124,37 +127,20 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
 }
 
 void GimbalNode::control_cmd_callback(
-    const rm_interfaces::msg::GimbalCmd::ConstSharedPtr control_cmd_msg) {
-    rm_interfaces::msg::PlanGimbalCmd plan_gimbal_cmd;
-    if (!planner) {
-        planner = std::make_unique<Planner>(weak_from_this());
-    }
-    plan_gimbal_cmd = planner->process(*control_cmd_msg);
-    if (plan_gimbal_cmd_pub_) {
-        plan_gimbal_cmd_pub_->publish(plan_gimbal_cmd);
-    }
+    rm_interfaces::msg::GimbalCmd::ConstSharedPtr control_cmd_msg) {
     SendVisionData vision_data;
-    vision_data.header.id        = 0x02;
-    vision_data.header.len       = sizeof(decltype(vision_data.data));
-    vision_data.header.sof       = HeaderFrame::SoF();
-    vision_data.eof              = HeaderFrame::EoF();
-    vision_data.data.fire_advice = control_cmd_msg->fire_advice;
-    vision_data.data.distance    = static_cast<float>(control_cmd_msg->distance);
-    if (use_planner_) {
-        vision_data.data.target_pitch = -plan_gimbal_cmd.ref_pitch;
-        vision_data.data.target_yaw   = plan_gimbal_cmd.ref_yaw;
-        vision_data.data.ref_yaw_v    = plan_gimbal_cmd.ref_yaw_vel;
-        vision_data.data.ref_pitch_v  = -plan_gimbal_cmd.ref_pitch_vel;
-        vision_data.data.ref_yaw_a    = plan_gimbal_cmd.ref_yaw_acc;
-        vision_data.data.ref_pitch_a  = -plan_gimbal_cmd.ref_pitch_acc;
-    } else {
-        vision_data.data.target_pitch = -static_cast<float>(control_cmd_msg->pitch);
-        vision_data.data.target_yaw   = static_cast<float>(control_cmd_msg->yaw);
-        vision_data.data.ref_yaw_v    = 0.;
-        vision_data.data.ref_pitch_v  = 0.;
-        vision_data.data.ref_yaw_a    = 0.;
-        vision_data.data.ref_pitch_a  = 0.;
-    }
+    vision_data.header.id         = 0x02;
+    vision_data.header.len        = sizeof(decltype(vision_data.data));
+    vision_data.header.sof        = HeaderFrame::SoF();
+    vision_data.eof               = HeaderFrame::EoF();
+    vision_data.data.fire_advice  = control_cmd_msg->fire_advice;
+    vision_data.data.distance     = static_cast<float>(control_cmd_msg->distance);
+    vision_data.data.target_pitch = -static_cast<float>(control_cmd_msg->pitch);
+    vision_data.data.target_yaw   = static_cast<float>(control_cmd_msg->yaw);
+    vision_data.data.ref_yaw_v    = 0.;
+    vision_data.data.ref_pitch_v  = 0.;
+    vision_data.data.ref_yaw_a    = 0.;
+    vision_data.data.ref_pitch_a  = 0.;
 
     std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
     if (!device_.send_data(buffer_, sizeof(SendVisionData))) {

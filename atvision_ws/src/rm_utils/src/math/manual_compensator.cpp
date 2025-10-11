@@ -14,6 +14,8 @@
 
 #include "rm_utils/math/manual_compensator.hpp"
 
+#include <sstream>
+
 namespace fyt {
 bool ManualCompensator::updateMap(const LineRegion& d_region,
                                   const LineRegion& h_region,

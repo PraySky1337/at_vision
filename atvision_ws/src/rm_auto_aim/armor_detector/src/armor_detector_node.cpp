@@ -364,8 +364,6 @@ void ArmorDetectorNode::createDebugPublishers() noexcept {
         this->create_publisher<rm_interfaces::msg::DebugLights>("armor_detector/debug_lights", 10);
     armors_data_pub_ =
         this->create_publisher<rm_interfaces::msg::DebugArmors>("armor_detector/debug_armors", 10);
-    this->declare_parameter("armor_detector.result_img.jpeg_quality", 50);
-    this->declare_parameter("armor_detector.binary_img.jpeg_quality", 50);
     binary_img_pub_ = image_transport::create_publisher(this, "armor_detector/binary_img");
     number_img_pub_ = image_transport::create_publisher(this, "armor_detector/number_img");
     result_img_pub_ = image_transport::create_publisher(this, "armor_detector/result_img");

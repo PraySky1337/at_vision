@@ -74,9 +74,6 @@ ARG USERNAME=developer
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
-# 确保环境齐全
-# RUN apt-get update && apt-get install -y zsh sudo wget git openssl && rm -rf /var/lib/apt/lists/*
-
 # 创建用户并保持 UID/GID 对齐宿主机（防止 Volume 挂载卷权限异常)
 RUN if getent passwd $USER_UID >/dev/null; then \
       # 已存在 UID=1000 用户（例如 ubuntu），则直接复用并改名为 developer
@@ -100,6 +97,7 @@ COPY --chown=root:root --chmod=755 script/atvision/entrypoint /usr/local/bin/ent
 COPY --chown=root:root --chmod=755 script/atvision/setupenv /usr/local/bin/setupenv
 
 ENV IN_DOCKER=true
+ENV UDEV=1
 
 
 ENTRYPOINT ["tini", "--"]

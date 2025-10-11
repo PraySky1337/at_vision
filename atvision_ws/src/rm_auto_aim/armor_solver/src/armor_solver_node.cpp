@@ -138,10 +138,10 @@ void ArmorSolverNode::initKF() {
     };
 
     // ---------- R ----------
-    r_x_   = declare_parameter(p + ".r_x", 0.05);
-    r_y_   = declare_parameter(p + ".r_y", 0.05);
-    r_z_   = declare_parameter(p + ".r_z", 0.05);
-    r_yaw_ = declare_parameter(p + ".r_yaw", 0.02);
+    r_x_   = declare_parameter(p + ".r_pitch", 0.0001);
+    r_y_   = declare_parameter(p + ".r_yaw", 0.0001);
+    r_z_   = declare_parameter(p + ".r_distance", 0.0025);
+    r_yaw_ = declare_parameter(p + ".r_armor_yaw", 0.02);
 
     auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
         Eigen::Matrix<double, Z_N, Z_N> r;
@@ -311,10 +311,10 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         }
         tracker_->update(armors_msg);
         // Publish measurement
-        measure_msg.x   = tracker_->measurement(0);
-        measure_msg.y   = tracker_->measurement(1);
-        measure_msg.z   = tracker_->measurement(2);
-        measure_msg.yaw = tracker_->measurement(3);
+        measure_msg.pitch     = tracker_->measurement(0);
+        measure_msg.yaw       = tracker_->measurement(1);
+        measure_msg.distance  = tracker_->measurement(2);
+        measure_msg.armor_yaw = tracker_->measurement(3);
         measure_pub_->publish(measure_msg);
 
         if (tracker_->tracker_state == Tracker::DETECTING) {

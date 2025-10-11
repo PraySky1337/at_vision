@@ -20,8 +20,6 @@
 #ifndef RM_UTILS_KALMAN_FILTER_HPP_
 #define RM_UTILS_KALMAN_FILTER_HPP_
 
-// std
-#include <functional>
 // Eigen
 #include <Eigen/Dense>
 // ceres

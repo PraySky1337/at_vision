@@ -31,9 +31,10 @@
 #include <angles/angles.h>
 // project
 #include "rm_utils/logger/log.hpp"
+#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
-Tracker::Tracker(double max_match_distance, double max_match_yaw_diff, KFType kf_filter)
+Tracker::Tracker(double max_match_distance, double max_match_yaw_diff, KFType kf_type)
     : tracker_state(LOST)
     , tracked_id(std::string(""))
     , measurement(Eigen::VectorXd::Zero(4))
@@ -125,10 +126,14 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             // Matched armor found
             matched = true;
             auto p  = tracked_armor.pose.position;
-            // Update EKF
-            double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
-            measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-            target_state        = kf->update(measurement);
+            // Update Kalman filter
+            Eigen::Vector3d position_vec(p.x, p.y, p.z);
+            auto pyd = utils::xyz2pyd(position_vec);
+            measurement[0] = pyd[0];
+            measurement[1] = pyd[1];
+            measurement[2] = pyd[2];
+            measurement[3] = orientationToYaw(tracked_armor.pose.orientation);;
+            target_state = kf->update(measurement);
             update_count++;
         } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
             // Matched armor not found, but there is only one armor with the same id
@@ -148,7 +153,8 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     target_state(S_DZC)    = std::clamp(target_state(S_DZC), -0.1, 0.1);
     kf->setState(target_state);
     // Tracking state machine
-    if (tracker_state == DETECTING) {
+    switch (tracker_state) {
+    case DETECTING:
         if (matched) {
             detect_count_++;
             if (detect_count_ > tracking_thres) {
@@ -162,17 +168,17 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             tracker_state = LOST;
             FYT_DEBUG("armor_solver", "Tracker state: LOST {}", tracked_id);
         }
-    } else if (tracker_state == TRACKING) {
-        if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
-            target_state[S_VYAW]   = target_state[S_VYAW] > 0 ? 2.51 : -2.51;
-            target_state[S_RADIUS] = 0.55 / 2.;
-        }
+        break;
+
+    case TRACKING:
         if (!matched) {
             tracker_state = TEMP_LOST;
             lost_count_++;
             FYT_DEBUG("armor_solver", "Tracker state: TEMP_LOST {}", tracked_id);
         }
-    } else if (tracker_state == TEMP_LOST) {
+        break;
+
+    case TEMP_LOST:
         if (!matched) {
             lost_count_++;
             if (lost_count_ > lost_thres) {
@@ -185,6 +191,14 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             lost_count_   = 0;
             FYT_DEBUG("armor_solver", "Tracker state: TRACKING {}", tracked_id);
         }
+        break;
+
+    default: break;
+    }
+
+    if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
+        target_state[S_VYAW]   = target_state[S_VYAW] > 0 ? 2.51 : -2.51;
+        target_state[S_RADIUS] = 0.55 / 2.;
     }
 }
 

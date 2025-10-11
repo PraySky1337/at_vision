@@ -2,7 +2,6 @@
 
 #include "packet.hpp"
 #include "usb.hpp"
-#include "planner.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -26,7 +25,6 @@
 #include <tf2_ros/transform_listener.h>
 
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
-#include "rm_interfaces/msg/plan_control_cmd.hpp"
 
 namespace rm_gimbal {
 
@@ -47,7 +45,6 @@ private:
     void control_cmd_callback(rm_interfaces::msg::GimbalCmd::ConstSharedPtr plan_control_cmd_msg);
 
 private:
-    std::unique_ptr<Planner> planner;
     DeviceParser parser_;
     Device device_;
     uint8_t buffer_[64];
@@ -63,7 +60,6 @@ private:
     rclcpp::AsyncParametersClient::SharedPtr detector_client;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
 
-    rclcpp::Publisher<rm_interfaces::msg::PlanGimbalCmd>::SharedPtr plan_gimbal_cmd_pub_;
     rclcpp::Subscription<rm_interfaces::msg::GimbalCmd>::SharedPtr control_cmd_sub_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;

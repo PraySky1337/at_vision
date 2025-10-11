@@ -1,7 +1,5 @@
 #pragma once
 
-#pragma once
-
 #include <Eigen/Dense>
 #include <functional>
 
@@ -13,22 +11,22 @@ namespace at {
 template <int N_X, int N_Z>
 class KalmanFilterBase {
 public:
-    using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
-    using MatrixXZ = Eigen::Matrix<double, N_X, N_Z>;
-    using MatrixZX = Eigen::Matrix<double, N_Z, N_X>;
-    using MatrixZZ = Eigen::Matrix<double, N_Z, N_Z>;
-    using MatrixX1 = Eigen::Matrix<double, N_X, 1>;
-    using MatrixZ1 = Eigen::Matrix<double, N_Z, 1>;
+    using MatrixXX    = Eigen::Matrix<double, N_X, N_X>;
+    using MatrixXZ    = Eigen::Matrix<double, N_X, N_Z>;
+    using MatrixZX    = Eigen::Matrix<double, N_Z, N_X>;
+    using MatrixZZ    = Eigen::Matrix<double, N_Z, N_Z>;
+    using MatrixX1    = Eigen::Matrix<double, N_X, 1>;
+    using MatrixZ1    = Eigen::Matrix<double, N_Z, 1>;
     using UpdateQFunc = std::function<MatrixXX()>;
     using UpdateRFunc = std::function<MatrixZZ(const MatrixZ1&)>;
 
     virtual ~KalmanFilterBase() = default;
 
-    virtual void setState(const MatrixX1& x0) noexcept = 0;
-    virtual MatrixX1 predict() noexcept = 0;
+    virtual void setState(const MatrixX1& x0) noexcept  = 0;
+    virtual MatrixX1 predict() noexcept                 = 0;
     virtual MatrixX1 update(const MatrixZ1& z) noexcept = 0;
 
-    virtual const MatrixX1& state() const noexcept = 0;
+    virtual const MatrixX1& state() const noexcept      = 0;
     virtual const MatrixXX& covariance() const noexcept = 0;
 
     virtual void setUpdateQFunc(const UpdateQFunc& f) noexcept { update_Q_ = f; }
@@ -52,4 +50,4 @@ protected:
     UpdateRFunc update_R_;
 };
 
-}  // namespace fyt
+} // namespace at

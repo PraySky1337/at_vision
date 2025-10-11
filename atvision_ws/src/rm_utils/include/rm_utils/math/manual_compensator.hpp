@@ -16,7 +16,6 @@
 #define RM_UTILS_MANUAL_COMPENSATOR_HPP_
 
 #include <algorithm>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -61,34 +60,31 @@ public:
     };
 
     struct DistMapNode {
-        DistMapNode(const LineRegion& region, const std::vector<HeightMapNode> h_nodes)
+        DistMapNode(const LineRegion& region, std::vector<HeightMapNode> h_nodes)
             : dist_region(region)
-            , height_map(h_nodes) {}
+            , height_map(std::move(h_nodes)) {}
         LineRegion dist_region;
         std::vector<HeightMapNode> height_map;
     };
 
     ManualCompensator() = default;
 
-    std::vector<double> angleHardCorrect(const double dist, const double height);
+    std::vector<double> angleHardCorrect(double dist, double height);
 
     bool updateMap(
-        const LineRegion& d_region, const LineRegion& h_region, const double pitch_offset,
-        const double yaw_offset);
+        const LineRegion& d_region, const LineRegion& h_region, double pitch_offset,
+        double yaw_offset);
 
     bool updateMapByStr(const std::string& str);
 
-    bool updateMapFlow(const std::vector<std::string> strs) {
-        for (const auto& str : strs) {
-            if (!updateMapByStr(str)) {
-                return false;
-            }
-        }
-        return true;
+    bool updateMapFlow(std::vector<std::string> strs) {
+        return std::all_of(strs.begin(), strs.end(), [this](const std::string& str) {
+            return updateMapByStr(str);
+        });
     }
 
 private:
-    bool parseStr(const std::string& str, std::vector<double>& nums);
+    static bool parseStr(const std::string& str, std::vector<double>& nums);
 
     std::vector<DistMapNode> angle_offset_map_;
 };

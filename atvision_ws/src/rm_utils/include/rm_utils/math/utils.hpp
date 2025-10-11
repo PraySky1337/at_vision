@@ -79,6 +79,53 @@ inline Eigen::MatrixXd cvToEigen(const cv::Mat& cv_mat) noexcept {
     return eigen_mat;
 }
 
+template <typename T>
+inline void xyz2pyd(const T xyz[3], T pyd[3]) {
+    T x     = xyz[0];
+    T y     = xyz[1];
+    T z     = xyz[2];
+    T r     = sqrt(x * x + y * y + z * z);
+    T yaw   = atan2(y, x); // azimuthal angle
+    T pitch = acos(z / r); // polar angle
+    pyd[0]  = pitch;
+    pyd[1]  = yaw;
+    pyd[2]  = r;
+}
+
+template <typename T>
+inline void pyd2xyz(const T pyd[3], T xyz[3]) {
+    T pitch = pyd[0];
+    T yaw   = pyd[1];
+    T r     = pyd[2];
+    T x     = r * sin(pitch) * cos(yaw);
+    T y     = r * sin(pitch) * sin(yaw);
+    T z     = r * cos(pitch);
+    xyz[0]  = x;
+    xyz[1]  = y;
+    xyz[2]  = z;
+}
+
+template <typename T>
+Eigen::Vector3<T> pyd2xyz(const Eigen::Vector3<T>& pyd) {
+    T pitch = pyd.x();
+    T yaw   = pyd.y();
+    T r     = pyd.z();
+    T x     = r * sin(pitch) * cos(yaw);
+    T y     = r * sin(pitch) * sin(yaw);
+    T z     = r * cos(pitch);
+    return Eigen::Vector3<T>(x, y, z);
+}
+
+template <typename T>
+Eigen::Vector3<T> xyz2pyd(const Eigen::Vector3<T>& xyz) {
+    T x     = xyz[0];
+    T y     = xyz[1];
+    T z     = xyz[2];
+    T r     = sqrt(x * x + y * y + z * z);
+    T yaw   = atan2(y, x); // azimuthal angle
+    T pitch = acos(z / r); // polar angle
+    return Eigen::Vector3<T>(pitch, yaw, r);
+}
 } // namespace utils
 } // namespace fyt
 #endif
