@@ -26,7 +26,6 @@ struct DeviceParser {
     using ParserFunc = std::function<void(const std::byte*, size_t)>;
 
     void parse(const std::byte* data, size_t size) const {
-        /* ---------- 原有校验 ---------- */
         if (size < sizeof(HeaderFrame)) [[unlikely]] {
             RCLCPP_WARN(
                 rclcpp::get_logger("gimbal_node"), "Frame size too small, expected %zu, got %zu",

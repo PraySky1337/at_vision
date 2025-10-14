@@ -31,10 +31,9 @@
 #include <angles/angles.h>
 // project
 #include "rm_utils/logger/log.hpp"
-#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
-Tracker::Tracker(double max_match_distance, double max_match_yaw_diff, KFType kf_type)
+Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
     : tracker_state(LOST)
     , tracked_id(std::string(""))
     , measurement(Eigen::VectorXd::Zero(4))
@@ -43,7 +42,6 @@ Tracker::Tracker(double max_match_distance, double max_match_yaw_diff, KFType kf
     , max_match_yaw_diff_(max_match_yaw_diff)
     , detect_count_(0)
     , lost_count_(0)
-    , update_count(0)
     , last_yaw_(0) {}
 
 void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
@@ -61,7 +59,8 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
         }
     }
 
-    initKF(tracked_armor);
+    update_count = 0;
+    initEKF(tracked_armor);
     FYT_INFO("armor_solver", "Init EKF!");
 
     tracked_id    = tracked_armor.number;
@@ -79,7 +78,7 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
 
 void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     // KF predict
-    Eigen::VectorXd ekf_prediction = kf->predict();
+    Eigen::VectorXd ekf_prediction = ekf->predict();
 
     bool matched = false;
     // Use KF prediction as default target state if no matched armor is found
@@ -126,14 +125,10 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             // Matched armor found
             matched = true;
             auto p  = tracked_armor.pose.position;
-            // Update Kalman filter
-            Eigen::Vector3d position_vec(p.x, p.y, p.z);
-            auto pyd = utils::xyz2pyd(position_vec);
-            measurement[0] = pyd[0];
-            measurement[1] = pyd[1];
-            measurement[2] = pyd[2];
-            measurement[3] = orientationToYaw(tracked_armor.pose.orientation);;
-            target_state = kf->update(measurement);
+            // Update EKF
+            double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
+            measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
+            target_state        = ekf->update(measurement);
             update_count++;
         } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
             // Matched armor not found, but there is only one armor with the same id
@@ -149,9 +144,9 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     // Prevent radius from spreading
     // 详见机器人制作规范手册
     // https://www.robomaster.com/zh-CN/resource/announcement/competition
-    target_state(S_RADIUS) = std::clamp(target_state(S_RADIUS), 0.12, 0.4);
-    target_state(S_DZC)    = std::clamp(target_state(S_DZC), -0.1, 0.1);
-    kf->setState(target_state);
+    target_state(8) = std::clamp(target_state(8), 0.12, 0.4);
+    target_state(9) = std::clamp(target_state(9), -0.1, 0.1);
+
     // Tracking state machine
     switch (tracker_state) {
     case DETECTING:
@@ -159,7 +154,6 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             detect_count_++;
             if (detect_count_ > tracking_thres) {
                 detect_count_ = 0;
-                update_count  = 0;
                 tracker_state = TRACKING;
                 FYT_DEBUG("armor_solver", "Tracker state: TRACKING {}", tracked_id);
             }
@@ -197,12 +191,13 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     }
 
     if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
-        target_state[S_VYAW]   = target_state[S_VYAW] > 0 ? 2.51 : -2.51;
-        target_state[S_RADIUS] = 0.55 / 2.;
+        target_state[7]   = target_state[7] > 0 ? 2.51 : -2.51;
+        target_state[8] = 0.55 / 2.;
     }
+    ekf->setState(target_state);
 }
 
-void Tracker::initKF(const Armor& a) noexcept {
+void Tracker::initEKF(const Armor& a) noexcept {
     double xa  = a.pose.position.x;
     double ya  = a.pose.position.y;
     double za  = a.pose.position.z;
@@ -218,7 +213,7 @@ void Tracker::initKF(const Armor& a) noexcept {
     d_za = 0, d_zc = 0, another_r = r;
     target_state << xc, 0, yc, 0, zc, 0, yaw, 0, r, d_zc;
 
-    kf->setState(target_state);
+    ekf->setState(target_state);
 }
 
 void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
@@ -258,7 +253,7 @@ void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
         FYT_WARN("armor_solver", "State wrong!");
     }
 
-    kf->setState(target_state);
+    ekf->setState(target_state);
 }
 
 double Tracker::orientationToYaw(const geometry_msgs::msg::Quaternion& q) noexcept {

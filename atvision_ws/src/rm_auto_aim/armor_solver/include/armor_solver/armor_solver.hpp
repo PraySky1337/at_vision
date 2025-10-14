@@ -45,7 +45,7 @@ public:
     // Throw: tf2::TransformException if the transform from "odom" to "gimbal_link" is not available
     rm_interfaces::msg::GimbalCmd solve(
         const rm_interfaces::msg::Target& target_msg, const rclcpp::Time& current_time,
-        const std::shared_ptr<tf2_ros::Buffer>& tf2_buffer_);
+        std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
 
     enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state;
 
@@ -70,8 +70,8 @@ private:
         double distance) const noexcept;
 
     std::unique_ptr<TrajectoryCompensator> trajectory_compensator_;
+    std::unique_ptr<ManualCompensator> manual_compensator_;
 
-    // R & T
     Eigen::Vector3d rpy_;
     Eigen::Vector3d xyz_;
 

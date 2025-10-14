@@ -56,7 +56,6 @@ private:
 
     std::atomic<uint8_t> aiming_color_;
 
-    std::mutex param_mutex_;
     rclcpp::AsyncParametersClient::SharedPtr detector_client;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
 

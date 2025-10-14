@@ -19,13 +19,14 @@
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
-#include <utility>
 // project
+#include "armor_solver/armor_solver_node.hpp"
 #include "rm_utils/logger/log.hpp"
+#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
 Solver::Solver(std::weak_ptr<rclcpp::Node> n)
-    : node_(std::move(n)) {
+    : node_(n) {
     auto node = node_.lock();
 
     shooting_range_w_    = node->declare_parameter("solver.shooting_range_width", 0.135);
@@ -44,6 +45,12 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
     trajectory_compensator_->gravity    = node->declare_parameter("solver.gravity", 9.8);
     trajectory_compensator_->resistance = node->declare_parameter("solver.resistance", 0.001);
 
+    manual_compensator_ = std::make_unique<ManualCompensator>();
+    auto angle_offset = node->declare_parameter("solver.angle_offset", std::vector<std::string>{});
+    if (!manual_compensator_->updateMapFlow(angle_offset)) {
+        FYT_WARN("armor_solver", "Manual compensator update failed!");
+    }
+
     state            = State::TRACKING_ARMOR;
     overflow_count_  = 0;
     transfer_thresh_ = 5;
@@ -53,7 +60,7 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
 
 rm_interfaces::msg::GimbalCmd Solver::solve(
     const rm_interfaces::msg::Target& target, const rclcpp::Time& current_time,
-    const std::shared_ptr<tf2_ros::Buffer>& tf2_buffer_) {
+    std::shared_ptr<tf2_ros::Buffer> tf2_buffer_) {
     // Get newest parameters
     try {
         auto node            = node_.lock();
@@ -71,18 +78,17 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     try {
         auto gimbal_tf =
             tf2_buffer_->lookupTransform(target.header.frame_id, "muzzle_link", tf2::TimePointZero);
-        auto msg_q = gimbal_tf.transform.rotation;
+        auto msg_q       = gimbal_tf.transform.rotation;
+        auto translation = gimbal_tf.transform.translation;
 
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
-        tf2::Matrix3x3(tf_q).getRPY(rpy_.x(), rpy_.y(), rpy_.z());
-        auto translation = gimbal_tf.transform.translation;
+        tf2::Matrix3x3(tf_q).getRPY(rpy_[0], rpy_[1], rpy_[2]);
+        xyz_[0] = translation.x;
+        xyz_[1] = translation.y;
+        xyz_[2] = translation.z;
 
-        xyz_.x() = translation.x;
-        xyz_.y() = translation.y;
-        xyz_.z() = translation.z;
-
-        rpy_[1] = -rpy_[1]; // 谁TM这么写的弹道解算，真狗屎
+        rpy_[1] = -rpy_[1];
     } catch (tf2::TransformException& ex) {
         FYT_ERROR("armor_solver", "{}", ex.what());
         throw ex;
@@ -108,7 +114,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     auto chosen_armor_position = armor_positions.at(idx);
     chosen_armor_position -= xyz_;
     double distance = chosen_armor_position.norm();
-    if (chosen_armor_position.norm() < 0.1) {
+    if (distance < 0.1) {
         throw std::runtime_error("No valid armor to shoot");
     }
 
@@ -170,8 +176,12 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     }
 
     // Compensate angle by angle_offset_map
-    double cmd_pitch = pitch;
-    double cmd_yaw   = angles::normalize_angle(yaw);
+    auto angle_offset =
+        manual_compensator_->angleHardCorrect(target_position.head(2).norm(), target_position.z());
+    double pitch_offset = angle_offset[0] * M_PI / 180;
+    double yaw_offset   = angle_offset[1] * M_PI / 180;
+    double cmd_pitch    = pitch + pitch_offset;
+    double cmd_yaw      = angles::normalize_angle(yaw + yaw_offset);
 
     gimbal_cmd.yaw        = cmd_yaw * 180 / M_PI;
     gimbal_cmd.pitch      = cmd_pitch * 180 / M_PI;
@@ -234,12 +244,12 @@ int Solver::selectBestArmor(
     double beta = target_yaw;
 
     // clang-format off
-    Eigen::Matrix2d R_odom2center;
-    Eigen::Matrix2d R_odom2armor;
-    R_odom2center << std::cos(alpha), std::sin(alpha), 
-                    -std::sin(alpha), std::cos(alpha);
-    R_odom2armor << std::cos(beta), std::sin(beta), 
-                    -std::sin(beta), std::cos(beta);
+  Eigen::Matrix2d R_odom2center;
+  Eigen::Matrix2d R_odom2armor;
+  R_odom2center << std::cos(alpha), std::sin(alpha), 
+                  -std::sin(alpha), std::cos(alpha);
+  R_odom2armor << std::cos(beta), std::sin(beta), 
+                 -std::sin(beta), std::cos(beta);
     // clang-format on
     Eigen::Matrix2d R_center2armor = R_odom2center.transpose() * R_odom2armor;
 
@@ -254,13 +264,13 @@ int Solver::selectBestArmor(
         theta = 0;
     }
 
-    double temp_angle = decision_angle + M_PI / static_cast<int>(armors_num) - theta;
+    double temp_angle = decision_angle + M_PI / armors_num - theta;
 
     if (temp_angle < 0) {
         temp_angle += 2 * M_PI;
     }
 
-    int selected_id = static_cast<int>(temp_angle / (2 * M_PI / static_cast<int>(armors_num)));
+    int selected_id = static_cast<int>(temp_angle / (2 * M_PI / armors_num));
     return selected_id;
 }
 
@@ -285,4 +295,5 @@ std::vector<std::pair<double, double>> Solver::getTrajectory() const noexcept {
     }
     return trajectory;
 }
+
 } // namespace fyt::auto_aim

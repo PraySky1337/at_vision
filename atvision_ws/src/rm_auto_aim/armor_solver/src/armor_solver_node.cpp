@@ -30,6 +30,7 @@ namespace fyt::auto_aim {
 ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     : Node("armor_solver", options)
     , solver_(nullptr) {
+    // Register logger
     FYT_REGISTER_LOGGER("armor_solver", "~/fyt2024-log", INFO);
     FYT_INFO("armor_solver", "Starting ArmorSolverNode!");
 
@@ -39,140 +40,128 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     double max_match_distance = this->declare_parameter("tracker.max_match_distance", 0.2);
     double max_match_yaw_diff = this->declare_parameter("tracker.max_match_yaw_diff", 1.0);
     tracker_                  = std::make_unique<Tracker>(max_match_distance, max_match_yaw_diff);
-    tracker_->tracking_thres =
-        static_cast<int>(this->declare_parameter("tracker.tracking_thres", 5));
-    lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
+    tracker_->tracking_thres  = this->declare_parameter("tracker.tracking_thres", 5);
+    lost_time_thres_          = this->declare_parameter("tracker.lost_time_thres", 0.3);
 
-    initKF();
-
-    // TF2
-    tf2_buffer_          = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
-        this->get_node_base_interface(), this->get_node_timers_interface());
-    tf2_buffer_->setCreateTimerInterface(timer_interface);
-    tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
-
-    // Subscriber + TF2 filter
-    armors_sub_.subscribe(this, "armor_detector/armors", rmw_qos_profile_sensor_data);
-    target_frame_ = this->declare_parameter("target_frame", "odom");
-    tf2_filter_   = std::make_shared<tf2_filter>(
-        armors_sub_, *tf2_buffer_, target_frame_, 10, this->get_node_logging_interface(),
-        this->get_node_clock_interface(), std::chrono::duration<int>(1));
-    tf2_filter_->registerCallback(&ArmorSolverNode::armorsCallback, this);
-
-    // Publishers
-    measure_pub_ = this->create_publisher<rm_interfaces::msg::Measurement>(
-        "armor_solver/measurement", rclcpp::SensorDataQoS());
-    target_pub_ = this->create_publisher<rm_interfaces::msg::Target>(
-        "armor_solver/target", rclcpp::SensorDataQoS());
-    gimbal_pub_ = this->create_publisher<rm_interfaces::msg::GimbalCmd>(
-        "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS());
-
-    // Timer 250 Hz
-    pub_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(4), std::bind(&ArmorSolverNode::timerCallback, this));
-
-    armor_target_.header.frame_id = "";
-    if (debug_mode_)
-        initMarkers();
-
-    heartbeat_ = HeartBeatPublisher::create(this);
-}
-
-void ArmorSolverNode::initKF() {
-    // 状态维度说明：
+    // EKF
+    // xa = x_armor, xc = x_robot_center
     // state: xc, v_xc, yc, v_yc, zc, v_zc, yaw, v_yaw, r, d_zc
     // measurement: p, y, d, yaw
-
-    // 定义非线性函数
-    auto f                  = Predict(0.005);
-    auto h                  = Measure();
-    std::string kf_type_str = this->declare_parameter("kalman_filter_type", "EKF");
-    std::transform(kf_type_str.begin(), kf_type_str.end(), kf_type_str.begin(), tolower);
-    KFType kf_type;
-    if (kf_type_str == "ekf") {
-        kf_type = KFType::EKF;
-    } else if (kf_type_str == "ukf") {
-        kf_type = KFType::UKF;
-    } else {
-        RCLCPP_ERROR(
-            get_logger(), "Kalman Filter type invalid: %s, use default ekf", kf_type_str.c_str());
-        kf_type_str = "ekf";
-        kf_type     = KFType::EKF;
-    }
-    const auto& p = kf_type_str;
-
-    // ---------- Q ----------
-    s2qx_    = declare_parameter(p + ".sigma2_q_x", 20.0);
-    s2qy_    = declare_parameter(p + ".sigma2_q_y", 20.0);
-    s2qz_    = declare_parameter(p + ".sigma2_q_z", 20.0);
-    s2qyaw_  = declare_parameter(p + ".sigma2_q_yaw", 100.0);
-    s2qr_    = declare_parameter(p + ".sigma2_q_r", 800.0);
-    s2qd_zc_ = declare_parameter(p + ".sigma2_q_d_zc", 800.0);
+    // f - Process function
+    auto f = Predict(0.005);
+    // h - Observation function
+    auto h = Measure();
+    // update_Q - process noise covariance matrix
+    s2qx_    = declare_parameter("ekf.sigma2_q_x", 20.0);
+    s2qy_    = declare_parameter("ekf.sigma2_q_y", 20.0);
+    s2qz_    = declare_parameter("ekf.sigma2_q_z", 20.0);
+    s2qyaw_  = declare_parameter("ekf.sigma2_q_yaw", 100.0);
+    s2qr_    = declare_parameter("ekf.sigma2_q_r", 800.0);
+    s2qd_zc_ = declare_parameter("ekf.sigma2_q_d_zc", 800.0);
 
     auto u_q = [this]() {
         Eigen::Matrix<double, X_N, X_N> q;
         double t = dt_, x = s2qx_, y = s2qy_, z = s2qz_, yaw = s2qyaw_, r = s2qr_, d_zc = s2qd_zc_;
         double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
         double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y, q_vy_vy = pow(t, 2) * y;
-        double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * z, q_vz_vz = pow(t, 2) * z;
-        double q_yaw_yaw = pow(t, 4) / 4 * yaw, q_yaw_vyaw = pow(t, 3) / 2 * yaw;
-        double q_vyaw_vyaw = pow(t, 2) * yaw;
+        double q_z_z = pow(t, 4) / 4 * x, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
+        double q_yaw_yaw = pow(t, 4) / 4 * yaw, q_yaw_vyaw = pow(t, 3) / 2 * x,
+               q_vyaw_vyaw = pow(t, 2) * yaw;
         double q_r         = pow(t, 4) / 4 * r;
         double q_d_zc      = pow(t, 4) / 4 * d_zc;
-
-        q.setZero();
         // clang-format off
-        q <<  q_x_x,  q_x_vx, 0,      0,      0,      0,      0,          0,          0,      0,
-              q_x_vx, q_vx_vx,0,      0,      0,      0,      0,          0,          0,      0,
-              0,      0,      q_y_y,  q_y_vy, 0,      0,      0,          0,          0,      0,
-              0,      0,      q_y_vy, q_vy_vy,0,      0,      0,          0,          0,      0,
-              0,      0,      0,      0,      q_z_z,  q_z_vz, 0,          0,          0,      0,
-              0,      0,      0,      0,      q_z_vz, q_vz_vz,0,          0,          0,      0,
-              0,      0,      0,      0,      0,      0,      q_yaw_yaw,  q_yaw_vyaw, 0,      0,
-              0,      0,      0,      0,      0,      0,      q_yaw_vyaw, q_vyaw_vyaw,0,      0,
-              0,      0,      0,      0,      0,      0,      0,          0,          q_r,    0,
-              0,      0,      0,      0,      0,      0,      0,          0,          0,      q_d_zc;
+    //    xc      v_xc    yc      v_yc    zc      v_zc    yaw         v_yaw       r       d_za
+    q <<  q_x_x,  q_x_vx, 0,      0,      0,      0,      0,          0,          0,      0,
+          q_x_vx, q_vx_vx,0,      0,      0,      0,      0,          0,          0,      0,
+          0,      0,      q_y_y,  q_y_vy, 0,      0,      0,          0,          0,      0,
+          0,      0,      q_y_vy, q_vy_vy,0,      0,      0,          0,          0,      0,
+          0,      0,      0,      0,      q_z_z,  q_z_vz, 0,          0,          0,      0,
+          0,      0,      0,      0,      q_z_vz, q_vz_vz,0,          0,          0,      0,
+          0,      0,      0,      0,      0,      0,      q_yaw_yaw,  q_yaw_vyaw, 0,      0,
+          0,      0,      0,      0,      0,      0,      q_yaw_vyaw, q_vyaw_vyaw,0,      0,
+          0,      0,      0,      0,      0,      0,      0,          0,          q_r,    0,
+          0,      0,      0,      0,      0,      0,      0,          0,          0,      q_d_zc;
+
         // clang-format on
         return q;
     };
-
-    // ---------- R ----------
-    r_x_   = declare_parameter(p + ".r_pitch", 0.0001);
-    r_y_   = declare_parameter(p + ".r_yaw", 0.0001);
-    r_z_   = declare_parameter(p + ".r_distance", 0.0025);
-    r_yaw_ = declare_parameter(p + ".r_armor_yaw", 0.02);
-
+    // update_R - measurement noise covariance matrix
+    r_x_     = declare_parameter("ekf.r_x", 0.05);
+    r_y_     = declare_parameter("ekf.r_y", 0.05);
+    r_z_     = declare_parameter("ekf.r_z", 0.05);
+    r_yaw_   = declare_parameter("ekf.r_yaw", 0.02);
     auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
         Eigen::Matrix<double, Z_N, Z_N> r;
         // clang-format off
-        r << r_x_ * std::abs(z[0]), 0, 0, 0,
-             0, r_y_ * std::abs(z[1]), 0, 0,
-             0, 0, r_z_ * std::abs(z[2]), 0,
-             0, 0, 0, r_yaw_;
+    r << r_x_ * std::abs(z[0]), 0, 0, 0,
+         0, r_y_ * std::abs(z[1]), 0, 0,
+         0, 0, r_z_ * std::abs(z[2]), 0,
+         0, 0, 0, r_yaw_;
         // clang-format on
         return r;
     };
-
-    // ---------- 初始协方差 ----------
+    // P - error estimate covariance matrix
     Eigen::DiagonalMatrix<double, X_N> p0;
     p0.setIdentity();
+    double alpha  = declare_parameter("ukf.alpha", 0.1);
+    double beta   = declare_parameter("ukf.beta", 2.0);
+    double kappa  = declare_parameter("ukf.kappa", 0.0);
+    tracker_->ekf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, p0, alpha, beta, kappa);
 
-    // ---------- 创建 EKF 或 UKF ----------
-    // tracker_->ekf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, p0);
-    // 若想切换 UKF，只需改成：
-    if (kf_type == KFType::EKF) {
-        tracker_->kf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, p0);
-    } else {
-        auto alpha   = declare_parameter(p + ".alpha", 1e-2);
-        auto beta    = declare_parameter(p + ".beta", 2.0);
-        auto kappa   = declare_parameter(p + ".kappa", 0.0);
-        tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, p0, alpha, beta, kappa);
+    // Subscriber with tf2 message_filter
+    // tf2 relevant
+    tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    // Create the timer interface before call to waitForTransform,
+    // to avoid a tf2_ros::CreateTimerInterfaceException exception
+    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+        this->get_node_base_interface(), this->get_node_timers_interface());
+    tf2_buffer_->setCreateTimerInterface(timer_interface);
+    tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
+    // subscriber and filter
+    armors_sub_.subscribe(this, "armor_detector/armors", rmw_qos_profile_sensor_data);
+    target_frame_ = this->declare_parameter("target_frame", "odom");
+    tf2_filter_   = std::make_shared<tf2_filter>(
+        armors_sub_, *tf2_buffer_, target_frame_, 10, this->get_node_logging_interface(),
+        this->get_node_clock_interface(), std::chrono::duration<int>(1));
+    // Register a callback with tf2_ros::MessageFilter to be called when
+    // transforms are available
+    tf2_filter_->registerCallback(&ArmorSolverNode::armorsCallback, this);
+
+    // Measurement publisher (for debug usage)
+    measure_pub_ = this->create_publisher<rm_interfaces::msg::Measurement>(
+        "armor_solver/measurement", rclcpp::SensorDataQoS());
+
+    // Publisher
+    target_pub_ = this->create_publisher<rm_interfaces::msg::Target>(
+        "armor_solver/target", rclcpp::SensorDataQoS());
+    gimbal_pub_ = this->create_publisher<rm_interfaces::msg::GimbalCmd>(
+        "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS());
+    // Timer 250 Hz
+    pub_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(4), std::bind(&ArmorSolverNode::timerCallback, this));
+    armor_target_.header.frame_id = "";
+
+    // Enable/Disable Armor Solver
+    enable_       = true;
+    set_mode_srv_ = this->create_service<rm_interfaces::srv::SetMode>(
+        "armor_solver/set_mode",
+        std::bind(
+            &ArmorSolverNode::setModeCallback, this, std::placeholders::_1, std::placeholders::_2));
+
+    if (debug_mode_) {
+        initMarkers();
     }
+
+    // Heartbeat
+    heartbeat_ = HeartBeatPublisher::create(this);
 }
 
 void ArmorSolverNode::timerCallback() {
-    if (solver_ == nullptr) [[unlikely]] {
+    if (solver_ == nullptr) {
+        return;
+    }
+
+    if (!enable_) {
         return;
     }
 
@@ -220,8 +209,9 @@ void ArmorSolverNode::initMarkers() noexcept {
     position_marker_.ns      = "position";
     position_marker_.type    = visualization_msgs::msg::Marker::SPHERE;
     position_marker_.scale.x = position_marker_.scale.y = position_marker_.scale.z = 0.1;
-    position_marker_.color.a                                                       = 0.3;
-    position_marker_.color.g                                                       = 0.3;
+
+    position_marker_.color.a  = 0.3;
+    position_marker_.color.g  = 1.0;
     linear_v_marker_.type     = visualization_msgs::msg::Marker::ARROW;
     linear_v_marker_.ns       = "linear_v";
     linear_v_marker_.scale.x  = 0.03;
@@ -242,19 +232,18 @@ void ArmorSolverNode::initMarkers() noexcept {
     armors_marker_.scale.z    = 0.125;
     armors_marker_.color.a    = 0.3;
     armors_marker_.color.b    = 1.0;
-    armors_marker_.color.g    = 1.0;
     selection_marker_.ns      = "selection";
     selection_marker_.type    = visualization_msgs::msg::Marker::SPHERE;
-    selection_marker_.scale.x = selection_marker_.scale.y = selection_marker_.scale.z = 0.05;
+    selection_marker_.scale.x = selection_marker_.scale.y = selection_marker_.scale.z = 0.1;
 
-    selection_marker_.color.a  = 0.2;
+    selection_marker_.color.a  = 0.3;
     selection_marker_.color.g  = 1.0;
     selection_marker_.color.r  = 1.0;
     trajectory_marker_.ns      = "trajectory";
     trajectory_marker_.type    = visualization_msgs::msg::Marker::POINTS;
     trajectory_marker_.scale.x = 0.01;
     trajectory_marker_.scale.y = 0.01;
-    trajectory_marker_.color.a = 0.2;
+    trajectory_marker_.color.a = 0.3;
     trajectory_marker_.color.r = 1.0;
     trajectory_marker_.color.g = 0.75;
     trajectory_marker_.color.b = 0.79;
@@ -305,16 +294,16 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         dt_                  = (time - last_time_).seconds();
         tracker_->lost_thres = std::abs(static_cast<int>(lost_time_thres_ / dt_));
         if (tracker_->tracked_id == "outpost") {
-            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
+            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
         } else {
-            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
+            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
         }
         tracker_->update(armors_msg);
         // Publish measurement
-        measure_msg.pitch     = tracker_->measurement(0);
-        measure_msg.yaw       = tracker_->measurement(1);
-        measure_msg.distance  = tracker_->measurement(2);
-        measure_msg.armor_yaw = tracker_->measurement(3);
+        measure_msg.x   = tracker_->measurement(0);
+        measure_msg.y   = tracker_->measurement(1);
+        measure_msg.z   = tracker_->measurement(2);
+        measure_msg.yaw = tracker_->measurement(3);
         measure_pub_->publish(measure_msg);
 
         if (tracker_->tracker_state == Tracker::DETECTING) {
@@ -324,8 +313,7 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
             || tracker_->tracker_state == Tracker::TEMP_LOST) {
             target_msg.tracking = true;
             // Fill target message
-            const auto& state = tracker_->target_state;
-
+            const auto& state     = tracker_->target_state;
             target_msg.id         = tracker_->tracked_id;
             target_msg.armors_num = static_cast<int>(tracker_->tracked_armors_num);
             target_msg.position.x = state(0);
@@ -396,7 +384,7 @@ void ArmorSolverNode::publishMarkers(
         geometry_msgs::msg::Point p_a;
         double r = 0;
         for (size_t i = 0; i < a_n; i++) {
-            double tmp_yaw = yaw + static_cast<int>(i) * (2 * M_PI / static_cast<int>(a_n));
+            double tmp_yaw = yaw + i * (2 * M_PI / a_n);
             // Only 4 armors has 2 radius and height
             if (a_n == 4) {
                 r               = is_current_pair ? r1 : r2;
@@ -409,7 +397,7 @@ void ArmorSolverNode::publishMarkers(
             p_a.x = xc - r * cos(tmp_yaw);
             p_a.y = yc - r * sin(tmp_yaw);
 
-            armors_marker_.id            = static_cast<int>(i);
+            armors_marker_.id            = i;
             armors_marker_.pose.position = p_a;
             tf2::Quaternion q;
             q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
@@ -459,6 +447,33 @@ void ArmorSolverNode::publishMarkers(
     marker_array.markers.emplace_back(armors_marker_);
     marker_array.markers.emplace_back(selection_marker_);
     marker_pub_->publish(marker_array);
+}
+
+void ArmorSolverNode::setModeCallback(
+    const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
+    std::shared_ptr<rm_interfaces::srv::SetMode::Response> response) {
+    response->success = true;
+
+    VisionMode mode       = static_cast<VisionMode>(request->mode);
+    std::string mode_name = visionModeToString(mode);
+    if (mode_name == "UNKNOWN") {
+        FYT_ERROR("armor_solver", "Invalid mode: {}", request->mode);
+        return;
+    }
+
+    switch (mode) {
+    case VisionMode::AUTO_AIM_RED:
+    case VisionMode::AUTO_AIM_BLUE: {
+        enable_ = true;
+        break;
+    }
+    default: {
+        enable_ = false;
+        break;
+    }
+    }
+
+    FYT_WARN("armor_solver", "Set Mode to {}", visionModeToString(mode));
 }
 
 } // namespace fyt::auto_aim

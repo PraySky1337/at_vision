@@ -126,6 +126,7 @@ Eigen::Vector3<T> xyz2pyd(const Eigen::Vector3<T>& xyz) {
     T pitch = acos(z / r); // polar angle
     return Eigen::Vector3<T>(pitch, yaw, r);
 }
+
 } // namespace utils
 } // namespace fyt
 #endif

@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
 
 // ceres
@@ -19,7 +18,6 @@
 // project
 #include "rm_utils/math/extended_kalman_filter.hpp"
 #include "rm_utils/math/unscented_kalman_filter.hpp"
-#include "rm_utils/math/utils.hpp"
 
 namespace fyt::auto_aim {
 
@@ -72,22 +70,14 @@ struct Predict {
 
 struct Measure {
     template <typename T>
-    void operator()(const T x[X_N], T z[Z_N]) const noexcept {
-        const T xyz_armor[3] = {
-            x[0] - x[8] * ceres::cos(x[6]), // x = x_c + r1 * cos(yaw)
-            x[2] - x[8] * ceres::sin(x[6]), // y = y_c + r1 * sin(yaw)
-            x[4] + x[9]                     // z = z_c + d_zc
-        };
-        T pyd[3];
-        utils::xyz2pyd(xyz_armor, pyd);
-        for (int i = 0; i < 3; i++) {
-            z[i] = pyd[i];
-        }
+    void operator()(const T x[Z_N], T z[Z_N]) {
+        z[0] = x[0] - ceres::cos(x[6]) * x[8];
+        z[1] = x[2] - ceres::sin(x[6]) * x[8];
+        z[2] = x[4] + x[9];
         z[3] = x[6];
     }
 };
 
-using RobotStateKF  = at::KalmanFilterBase<X_N, Z_N>;
 using RobotStateEKF = at::ExtendedKalmanFilter<X_N, Z_N, Predict, Measure>;
 using RobotStateUKF = at::UnscentedKalmanFilter<X_N, Z_N, Predict, Measure>;
 

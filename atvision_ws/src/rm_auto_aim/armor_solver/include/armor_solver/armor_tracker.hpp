@@ -38,24 +38,9 @@ namespace fyt::auto_aim {
 
 enum class ArmorsNum { NORMAL_4 = 4, BALANCE_2 = 2, OUTPOST_3 = 3 };
 
-enum class KFType { EKF, UKF };
-
-enum Statement {
-    S_XC     = 0, // 车中心odom坐标与速度 0 - 5
-    S_VX     = 1,
-    S_YC     = 2,
-    S_VY     = 3,
-    S_ZC     = 4,
-    S_VZ     = 5,
-    S_YAW    = 6, // 连续角 (-inf-inf) 车体角度
-    S_VYAW   = 7, // 转速
-    S_RADIUS = 8, // 车体半径 r1
-    S_DZC    = 9  // 装甲板高度差
-};
-
 class Tracker {
 public:
-    Tracker(double max_match_distance, double max_match_yaw, KFType kf_type = KFType::EKF);
+    Tracker(double max_match_distance, double max_match_yaw);
 
     using Armors = rm_interfaces::msg::Armors;
     using Armor  = rm_interfaces::msg::Armor;
@@ -71,8 +56,7 @@ public:
         TEMP_LOST,
     } tracker_state;
 
-    // 只存在其中一个实例
-    std::unique_ptr<RobotStateKF> kf;
+    std::unique_ptr<RobotStateUKF> ekf;
 
     int tracking_thres; // frame
     int lost_thres;     // second
@@ -90,7 +74,7 @@ public:
     double d_zc;
 
 private:
-    void initKF(const Armor& a) noexcept;
+    void initEKF(const Armor& a) noexcept;
 
     void handleArmorJump(const Armor& current_armor) noexcept;
 
@@ -103,7 +87,7 @@ private:
 
     int detect_count_;
     int lost_count_;
-    size_t update_count;
+    int update_count;
 
     double last_yaw_;
 };
