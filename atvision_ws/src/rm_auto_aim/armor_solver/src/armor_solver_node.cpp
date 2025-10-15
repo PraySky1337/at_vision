@@ -43,71 +43,7 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     tracker_->tracking_thres  = this->declare_parameter("tracker.tracking_thres", 5);
     lost_time_thres_          = this->declare_parameter("tracker.lost_time_thres", 0.3);
 
-    // EKF
-    // xa = x_armor, xc = x_robot_center
-    // state: xc, v_xc, yc, v_yc, zc, v_zc, yaw, v_yaw, r, d_zc
-    // measurement: p, y, d, yaw
-    // f - Process function
-    auto f = Predict(0.005);
-    // h - Observation function
-    auto h = Measure();
-    // update_Q - process noise covariance matrix
-    s2qx_    = declare_parameter("ekf.sigma2_q_x", 20.0);
-    s2qy_    = declare_parameter("ekf.sigma2_q_y", 20.0);
-    s2qz_    = declare_parameter("ekf.sigma2_q_z", 20.0);
-    s2qyaw_  = declare_parameter("ekf.sigma2_q_yaw", 100.0);
-    s2qr_    = declare_parameter("ekf.sigma2_q_r", 800.0);
-    s2qd_zc_ = declare_parameter("ekf.sigma2_q_d_zc", 800.0);
-
-    auto u_q = [this]() {
-        Eigen::Matrix<double, X_N, X_N> q;
-        double t = dt_, x = s2qx_, y = s2qy_, z = s2qz_, yaw = s2qyaw_, r = s2qr_, d_zc = s2qd_zc_;
-        double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
-        double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y, q_vy_vy = pow(t, 2) * y;
-        double q_z_z = pow(t, 4) / 4 * x, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
-        double q_yaw_yaw = pow(t, 4) / 4 * yaw, q_yaw_vyaw = pow(t, 3) / 2 * x,
-               q_vyaw_vyaw = pow(t, 2) * yaw;
-        double q_r         = pow(t, 4) / 4 * r;
-        double q_d_zc      = pow(t, 4) / 4 * d_zc;
-        // clang-format off
-    //    xc      v_xc    yc      v_yc    zc      v_zc    yaw         v_yaw       r       d_za
-    q <<  q_x_x,  q_x_vx, 0,      0,      0,      0,      0,          0,          0,      0,
-          q_x_vx, q_vx_vx,0,      0,      0,      0,      0,          0,          0,      0,
-          0,      0,      q_y_y,  q_y_vy, 0,      0,      0,          0,          0,      0,
-          0,      0,      q_y_vy, q_vy_vy,0,      0,      0,          0,          0,      0,
-          0,      0,      0,      0,      q_z_z,  q_z_vz, 0,          0,          0,      0,
-          0,      0,      0,      0,      q_z_vz, q_vz_vz,0,          0,          0,      0,
-          0,      0,      0,      0,      0,      0,      q_yaw_yaw,  q_yaw_vyaw, 0,      0,
-          0,      0,      0,      0,      0,      0,      q_yaw_vyaw, q_vyaw_vyaw,0,      0,
-          0,      0,      0,      0,      0,      0,      0,          0,          q_r,    0,
-          0,      0,      0,      0,      0,      0,      0,          0,          0,      q_d_zc;
-
-        // clang-format on
-        return q;
-    };
-    // update_R - measurement noise covariance matrix
-    r_x_     = declare_parameter("ekf.r_x", 0.05);
-    r_y_     = declare_parameter("ekf.r_y", 0.05);
-    r_z_     = declare_parameter("ekf.r_z", 0.05);
-    r_yaw_   = declare_parameter("ekf.r_yaw", 0.02);
-    auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
-        Eigen::Matrix<double, Z_N, Z_N> r;
-        // clang-format off
-    r << r_x_ * std::abs(z[0]), 0, 0, 0,
-         0, r_y_ * std::abs(z[1]), 0, 0,
-         0, 0, r_z_ * std::abs(z[2]), 0,
-         0, 0, 0, r_yaw_;
-        // clang-format on
-        return r;
-    };
-    // P - error estimate covariance matrix
-    Eigen::DiagonalMatrix<double, X_N> p0;
-    p0.setIdentity();
-    double alpha  = declare_parameter("ukf.alpha", 0.1);
-    double beta   = declare_parameter("ukf.beta", 2.0);
-    double kappa  = declare_parameter("ukf.kappa", 0.0);
-    tracker_->ekf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, p0, alpha, beta, kappa);
-
+    initKF();
     // Subscriber with tf2 message_filter
     // tf2 relevant
     tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -154,6 +90,92 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
 
     // Heartbeat
     heartbeat_ = HeartBeatPublisher::create(this);
+}
+
+void ArmorSolverNode::initKF() {
+    // EKF
+    // xa = x_armor, xc = x_robot_center
+    // state: xc, v_xc, yc, v_yc, zc, v_zc, yaw, v_yaw, r, d_zc
+    // measurement: p, y, d, yaw
+    // f - Process function
+    auto f = Predict(0.005);
+    // h - Observation function
+    auto h = Measure();
+    // update_Q - process noise covariance matrix
+    s2qx_    = declare_parameter("kf.sigma2_q_x", 20.0);
+    s2qy_    = declare_parameter("kf.sigma2_q_y", 20.0);
+    s2qz_    = declare_parameter("kf.sigma2_q_z", 20.0);
+    s2qyaw_  = declare_parameter("kf.sigma2_q_yaw", 100.0);
+    s2qr_    = declare_parameter("kf.sigma2_q_r", 800.0);
+    s2qd_zc_ = declare_parameter("kf.sigma2_q_d_zc", 800.0);
+
+    auto u_q = [this]() {
+        Eigen::Matrix<double, X_N, X_N> q;
+        double t = dt_, x = s2qx_, y = s2qy_, z = s2qz_, yaw = s2qyaw_, r = s2qr_, d_zc = s2qd_zc_;
+        double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
+        double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y, q_vy_vy = pow(t, 2) * y;
+        double q_z_z = pow(t, 4) / 4 * x, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
+        double q_yaw_yaw = pow(t, 4) / 4 * yaw, q_yaw_vyaw = pow(t, 3) / 2 * x,
+               q_vyaw_vyaw = pow(t, 2) * yaw;
+        double q_r         = pow(t, 4) / 4 * r;
+        double q_d_zc      = pow(t, 4) / 4 * d_zc;
+        // clang-format off
+    //    xc      v_xc    yc      v_yc    zc      v_zc    yaw         v_yaw       r       d_za
+    q <<  q_x_x,  q_x_vx, 0,      0,      0,      0,      0,          0,          0,      0,
+          q_x_vx, q_vx_vx,0,      0,      0,      0,      0,          0,          0,      0,
+          0,      0,      q_y_y,  q_y_vy, 0,      0,      0,          0,          0,      0,
+          0,      0,      q_y_vy, q_vy_vy,0,      0,      0,          0,          0,      0,
+          0,      0,      0,      0,      q_z_z,  q_z_vz, 0,          0,          0,      0,
+          0,      0,      0,      0,      q_z_vz, q_vz_vz,0,          0,          0,      0,
+          0,      0,      0,      0,      0,      0,      q_yaw_yaw,  q_yaw_vyaw, 0,      0,
+          0,      0,      0,      0,      0,      0,      q_yaw_vyaw, q_vyaw_vyaw,0,      0,
+          0,      0,      0,      0,      0,      0,      0,          0,          q_r,    0,
+          0,      0,      0,      0,      0,      0,      0,          0,          0,      q_d_zc;
+
+        // clang-format on
+        return q;
+    };
+    // update_R - measurement noise covariance matrix
+    r_x_     = declare_parameter("kf.r_x", 0.05);
+    r_y_     = declare_parameter("kf.r_y", 0.05);
+    r_z_     = declare_parameter("kf.r_z", 0.05);
+    r_yaw_   = declare_parameter("kf.r_yaw", 0.02);
+    auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
+        Eigen::Matrix<double, Z_N, Z_N> r;
+        // clang-format off
+    r << r_x_ * std::abs(z[0]), 0, 0, 0,
+         0, r_y_ * std::abs(z[1]), 0, 0,
+         0, 0, r_z_ * std::abs(z[2]), 0,
+         0, 0, 0, r_yaw_ * std::sqrt(z[0]*z[0] + z[1]*z[1] + z[2]*z[2]);
+        // clang-format on
+        return r;
+    };
+    // P - error estimate covariance matrix
+    Eigen::Matrix<double, X_N, X_N> P0 = Eigen::Matrix<double, X_N, X_N>::Identity();
+
+    // 给位置和速度引入负相关
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.set__floating_point_range({rcl_interfaces::msg::FloatingPointRange()
+                                        .set__from_value(-1.0)
+                                        .set__to_value(1.0)
+                                        .set__step(0.01)})
+        .set__description("from -1.0 to +1.0");
+    double coordinate_corr = declare_parameter("kf.corr.xyz", -0.3, desc);
+    double yaw_corr        = declare_parameter("kf.corr.yaw", -0.3, desc);
+    double vxvy_omega_corr = declare_parameter("kf.corr.xyzomega", -0.3, desc);
+    P0(0, 1) = P0(1, 0) = coordinate_corr * std::sqrt(P0(0, 0) * P0(1, 1)); // x 与 v_x
+    P0(2, 3) = P0(3, 2) = coordinate_corr * std::sqrt(P0(2, 2) * P0(3, 3)); // y 与 v_y
+    P0(4, 5) = P0(5, 4) = coordinate_corr * std::sqrt(P0(4, 4) * P0(5, 5)); // z 与 v_z
+    P0(6, 7) = P0(7, 6) = yaw_corr * std::sqrt(P0(6, 6) * P0(7, 7));        // yaw 与 v_yaw
+    P0(1, 7) = P0(7, 1) = vxvy_omega_corr * std::sqrt(P0(1, 1) * P0(7, 7)); // v_x 与 v_yaw
+    P0(3, 7) = P0(7, 3) = vxvy_omega_corr * std::sqrt(P0(3, 3) * P0(7, 7)); // v_y 与 v_yaw
+    if (Eigen::LLT<Eigen::MatrixXd>(P0).info() != Eigen::Success)
+        RCLCPP_WARN(get_logger(), "Warning: P0 not positive definite, adjust corr params!");
+
+    double alpha = declare_parameter("ukf.alpha", 0.1);
+    double beta  = declare_parameter("ukf.beta", 2.0);
+    double kappa = declare_parameter("ukf.kappa", 0.0);
+    tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, P0, alpha, beta, kappa);
 }
 
 void ArmorSolverNode::timerCallback() {
@@ -294,9 +316,9 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         dt_                  = (time - last_time_).seconds();
         tracker_->lost_thres = std::abs(static_cast<int>(lost_time_thres_ / dt_));
         if (tracker_->tracked_id == "outpost") {
-            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
+            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
         } else {
-            tracker_->ekf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
+            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
         }
         tracker_->update(armors_msg);
         // Publish measurement

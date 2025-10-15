@@ -128,9 +128,9 @@ void ArmorPoseEstimator::sortPnPResult(
     double error2 =
         pnp_solver_->calculateReprojectionError(armor.landmarks(), rvec2, tvec2, coord_frame_name);
 
-    // 两个解的重投影误差差距较大或者roll角度较大时，不做选择
-    if ((error2 / error1 > PROJECT_ERR_THRES) || (rpy1[0] > 10 * 180 / M_PI)
-        || (rpy2[0] > 10 * 180 / M_PI)) {
+    const double ROLL_THRES_RAD = 10.0 * M_PI / 180.0;
+    if ((error2 / error1 > PROJECT_ERR_THRES) || (std::abs(rpy1[0]) > ROLL_THRES_RAD)
+        || (std::abs(rpy2[0]) > ROLL_THRES_RAD)) {
         return;
     }
 

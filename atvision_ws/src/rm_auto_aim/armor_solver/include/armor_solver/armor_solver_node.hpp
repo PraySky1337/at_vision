@@ -55,6 +55,8 @@ private:
 
   void initMarkers() noexcept;
 
+  void initKF();
+
   void publishMarkers(const rm_interfaces::msg::Target &target_msg,
                       const rm_interfaces::msg::GimbalCmd &gimbal_cmd) noexcept;
 

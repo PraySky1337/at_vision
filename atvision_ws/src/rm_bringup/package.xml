@@ -10,9 +10,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>auto_aim_interfaces</depend>
-  <depend>armor_detector</depend>
-  <depend>armor_solver</depend>
-  <depend>usb_driver</depend>
+  <depend>rm_auto_aim</depend>
+  <depend>rm_gimbal</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

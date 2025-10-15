@@ -230,13 +230,11 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
 
     // Init classifier
     namespace fs               = std::filesystem;
-    const std::string nn_model = declare_parameter("openvino.model_path", "best_06_02.xml");
+    const std::string nn_model = declare_parameter("openvino.model_path", "yolox_armor3.xml");
     fs::path lenet_model_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/lenet.onnx");
     fs::path label_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model/label.txt");
-    fs::path tup_label_path =
-        utils::URLResolver::getResolvedPath("package://armor_detector/model/tup_label.txt");
     fs::path openvino_model_path =
         utils::URLResolver::getResolvedPath("package://armor_detector/model");
     openvino_model_path /= nn_model;
@@ -249,11 +247,13 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
     std::vector<std::string> ignore_classes =
         this->declare_parameter("ignore_classes", std::vector<std::string>{"negative"});
     if (debug_) {
-        detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
-        detector->classifier         = std::make_unique<NumberClassifier>(
+        detector->openvino_inference =
+            std::make_unique<rm_auto_aim::Inference>(openvino_model_path);
+        detector->classifier = std::make_unique<NumberClassifier>(
             lenet_model_path, label_path, threshold, ignore_classes);
     } else if (use_nn_) {
-        detector->openvino_inference = std::make_unique<OpenvinoInfer>(openvino_model_path, device);
+        detector->openvino_inference =
+            std::make_unique<rm_auto_aim::Inference>(openvino_model_path);
     } else {
         detector->classifier = std::make_unique<NumberClassifier>(
             lenet_model_path, label_path, threshold, ignore_classes);

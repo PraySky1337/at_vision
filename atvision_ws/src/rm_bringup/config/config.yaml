@@ -7,7 +7,7 @@
 
     use_nn: false
     device: "CPU"
-    openvino.model_path: "0526.onnx"
+    openvino.model_path: "yolox_armor3.xml"
     use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
 

@@ -29,12 +29,12 @@
 // project
 #include "armor_detector/light_corner_corrector.hpp"
 #include "armor_detector/number_classifier.hpp"
-#include "armor_detector/openvino_infer.hpp"
+#include "armor_detector/openvino.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_interfaces/msg/debug_armors.hpp"
 #include "rm_interfaces/msg/debug_lights.hpp"
 
-#include "openvino_infer.hpp"
+#include "inference.hpp"
 
 namespace fyt::auto_aim {
 class Detector {
@@ -82,7 +82,7 @@ public:
     std::unique_ptr<NumberClassifier> classifier;
     std::unique_ptr<LightCornerCorrector> corner_corrector;
 
-    std::unique_ptr<OpenvinoInfer> openvino_inference;
+    std::unique_ptr<rm_auto_aim::Inference> openvino_inference;
 
     // Debug msgs
     cv::Mat binary_img;

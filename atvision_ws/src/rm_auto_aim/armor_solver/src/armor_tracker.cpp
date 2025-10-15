@@ -78,7 +78,7 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
 
 void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     // KF predict
-    Eigen::VectorXd ekf_prediction = ekf->predict();
+    Eigen::VectorXd ekf_prediction = kf->predict();
 
     bool matched = false;
     // Use KF prediction as default target state if no matched armor is found
@@ -128,7 +128,7 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
             // Update EKF
             double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
             measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-            target_state        = ekf->update(measurement);
+            target_state        = kf->update(measurement);
             update_count++;
         } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
             // Matched armor not found, but there is only one armor with the same id
@@ -191,10 +191,10 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
     }
 
     if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
-        target_state[7]   = target_state[7] > 0 ? 2.51 : -2.51;
+        target_state[7] = target_state[7] > 0 ? 2.51 : -2.51;
         target_state[8] = 0.55 / 2.;
     }
-    ekf->setState(target_state);
+    kf->setState(target_state);
 }
 
 void Tracker::initEKF(const Armor& a) noexcept {
@@ -213,7 +213,7 @@ void Tracker::initEKF(const Armor& a) noexcept {
     d_za = 0, d_zc = 0, another_r = r;
     target_state << xc, 0, yc, 0, zc, 0, yaw, 0, r, d_zc;
 
-    ekf->setState(target_state);
+    kf->setState(target_state);
 }
 
 void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
@@ -253,7 +253,7 @@ void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
         FYT_WARN("armor_solver", "State wrong!");
     }
 
-    ekf->setState(target_state);
+    kf->setState(target_state);
 }
 
 double Tracker::orientationToYaw(const geometry_msgs::msg::Quaternion& q) noexcept {

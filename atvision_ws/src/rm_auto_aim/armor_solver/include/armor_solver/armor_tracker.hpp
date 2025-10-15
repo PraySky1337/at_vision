@@ -56,7 +56,7 @@ public:
         TEMP_LOST,
     } tracker_state;
 
-    std::unique_ptr<RobotStateUKF> ekf;
+    std::unique_ptr<RobotStateUKF> kf;
 
     int tracking_thres; // frame
     int lost_thres;     // second

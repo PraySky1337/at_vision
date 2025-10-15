@@ -44,54 +44,56 @@ Detector::Detector(
     , armor_params(a) {}
 
 std::vector<Armor> Detector::detect(const cv::Mat& input, bool use_nn) noexcept {
-
     if (use_nn && openvino_inference) {
         armors_.clear();
-        debug_lights.data.clear();
-        debug_armors.data.clear();
-        auto& objs = openvino_inference->tmp_objects;
-        openvino_inference->infer(input, 1);
-        for (const auto& obj : objs) {
-            cv::Point2f tl{obj.landmarks[0], obj.landmarks[1]};
-            cv::Point2f bl{obj.landmarks[2], obj.landmarks[3]};
-            cv::Point2f br{obj.landmarks[4], obj.landmarks[5]};
-            cv::Point2f tr{obj.landmarks[6], obj.landmarks[7]};
-            Light right{tl, bl};
-            Light left{tr, br};
-            Armor armor{left, right};
-            armor.number     = openvino_inference->labels_lookup[obj.label];
-            armor.type       = armor.number == "1" ? ArmorType::LARGE : ArmorType::SMALL;
-            armor.confidence = obj.prob;
+        lights_.clear();
+        std::vector<rm_auto_aim::ArmorObject> objects;
+        if (openvino_inference->infer(input, objects)) {}
+        for (const auto& obj : objects) {
+            Light l1{obj.apex[0], obj.apex[1]};
+            Light l2{obj.apex[3], obj.apex[2]};
+            lights_.emplace_back(l1);
+            lights_.emplace_back(l2);
+            Armor armor{l1, l2};
             armor.color      = obj.color == 1 ? EnemyColor::BLUE : EnemyColor::RED;
+            armor.confidence = obj.prob;
+            armor.type       = ArmorType::SMALL;
+            armor.number     = openvino_inference->lookupLabel[obj.cls];
             armor.classfication_result =
                 fmt::format("{}:{:.1f}%", armor.number, armor.confidence * 100.0);
+            cv::cvtColor(input, gray_img_, cv::COLOR_RGB2GRAY);
+            if (corner_corrector != nullptr) {
+                corner_corrector->correctCorners(armor, gray_img_);
+            }
+
             armors_.emplace_back(std::move(armor));
         }
-        return armors_;
     }
-    // 1. Preprocess the image
-    binary_img = preprocessImage(input);
-    // 2. Find lights
-    lights_ = findLights(input, binary_img);
-    // 3. Match lights to armors
-    armors_ = matchLights(lights_);
+    if (!use_nn) {
+        // 1. Preprocess the image
+        binary_img = preprocessImage(input);
+        // 2. Find lights
+        lights_ = findLights(input, binary_img);
+        // 3. Match lights to armors
+        armors_ = matchLights(lights_);
 
-    if (!armors_.empty() && classifier != nullptr) {
-        // Parallel processing
-        std::for_each(
-            std::execution::par, armors_.begin(), armors_.end(), [this, &input](Armor& armor) {
-                // 4. Extract the number image
-                armor.number_img = classifier->extractNumber(input, armor);
-                // 5. Do classification
-                classifier->classify(input, armor);
-                // 6. Correct the corners of the armor
-                if (corner_corrector != nullptr) {
-                    corner_corrector->correctCorners(armor, gray_img_);
-                }
-            });
+        if (!armors_.empty() && classifier != nullptr) {
+            // Parallel processing
+            std::for_each(
+                std::execution::par, armors_.begin(), armors_.end(), [this, &input](Armor& armor) {
+                    // 4. Extract the number image
+                    armor.number_img = classifier->extractNumber(input, armor);
+                    // 5. Do classification
+                    classifier->classify(input, armor);
+                    // 6. Correct the corners of the armor
+                    if (corner_corrector != nullptr) {
+                        corner_corrector->correctCorners(armor, gray_img_);
+                    }
+                });
 
-        // 7. Erase the armors with ignore classes
-        classifier->eraseIgnoreClasses(armors_);
+            // 7. Erase the armors with ignore classes
+            classifier->eraseIgnoreClasses(armors_);
+        }
     }
 
     return armors_;
@@ -106,12 +108,10 @@ cv::Mat Detector::preprocessImage(const cv::Mat& rgb_img) noexcept {
     return binary_img;
 }
 
-std::vector<Light>
-    Detector::findLights(const cv::Mat& rgb_img, const cv::Mat& bin_img) noexcept {
+std::vector<Light> Detector::findLights(const cv::Mat& rgb_img, const cv::Mat& bin_img) noexcept {
     using std::vector;
     vector<vector<cv::Point>> contours;
-    vector<cv::Vec4i> hierarchy;
-    cv::findContours(binary_img, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+    cv::findContours(binary_img, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
 
     vector<Light> lights;
     debug_lights.data.clear();
