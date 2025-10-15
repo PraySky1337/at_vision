@@ -17,7 +17,7 @@ find_package(OpenCV REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN "armor_auto_aim::PubVideoNode"
+  PLUGIN "pub_video::PubVideoNode"
   EXECUTABLE ${PROJECT_NAME}_node
 )
 
@@ -28,7 +28,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+set(USE_SCOPED_HEADER_INSTALL_DIR ON)
 ament_auto_package(
   # INSTALL_TO_SHARE
-    # video
 )

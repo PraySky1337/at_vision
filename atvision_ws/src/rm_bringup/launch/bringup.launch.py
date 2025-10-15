@@ -12,7 +12,7 @@ node_params = os.path.join(
 
 
 def generate_launch_description():
-    from common import armor_solver_node, rsp_component, usb_driver_node, armor_detector_node, camera_node 
+    from common import armor_solver_node, rsp_component, gimbal_node, armor_detector_node, camera_node 
     from launch_ros.actions import ComposableNodeContainer
     from launch.actions import Shutdown
     from launch import LaunchDescription
@@ -24,7 +24,7 @@ def generate_launch_description():
         executable='component_container_mt',
         composable_node_descriptions=[
             rsp_component,
-            usb_driver_node,
+            gimbal_node,
             armor_solver_node,
         ],
         output='both',

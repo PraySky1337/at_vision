@@ -53,4 +53,5 @@ endif()
 ## Install ##
 #############
 
+set(USE_SCOPED_HEADER_INSTALL_DIR ON)
 ament_auto_package()

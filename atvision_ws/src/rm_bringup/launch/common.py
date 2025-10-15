@@ -56,12 +56,20 @@ armor_solver_node = ComposableNode(
     parameters=[node_params],
 )
 
-usb_driver_node = ComposableNode(
+gimbal_node = ComposableNode(
     package='rm_gimbal',
     plugin='rm_gimbal::GimbalNode',
     name='rm_gimbal',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': False}],
+)
+
+pub_video_node = ComposableNode(
+    package='pub_video',
+    plugin='pub_video::PubVideoNode',
+    name='pub_video',
+    parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': True}],
 )
 
 foxglove_node = ComposableNode(

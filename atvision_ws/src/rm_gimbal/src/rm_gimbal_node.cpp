@@ -15,7 +15,6 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     , tf_broadcaster_(*this)
     , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN)) {
     tf_buffer_        = std::make_shared<tf2_ros::Buffer>(get_clock());
-    tf_listener_      = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
     detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
     reset_tracker_srv = create_client<std_srvs::srv::Trigger>("reset_tracker");
     this->init_parser();

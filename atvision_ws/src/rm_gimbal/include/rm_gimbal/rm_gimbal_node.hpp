@@ -20,7 +20,6 @@
 #include <tf2/LinearMath/Transform.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
-#include <tf2_ros/buffer_interface.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
@@ -51,7 +50,6 @@ private:
 
     tf2_ros::Buffer::SharedPtr tf_buffer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     rclcpp::CallbackGroup::SharedPtr call_back_group;
 
     std::atomic<uint8_t> aiming_color_;

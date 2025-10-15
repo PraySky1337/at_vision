@@ -19,12 +19,9 @@
 
 // std
 #include <algorithm>
-#include <cstddef>
 #include <filesystem>
 #include <functional>
-#include <map>
 #include <memory>
-#include <numeric>
 #include <string>
 #include <vector>
 // ros2
@@ -46,7 +43,6 @@
 // project
 #include "armor_detector/armor_detector_node.hpp"
 #include "armor_detector/ba_solver.hpp"
-#include "armor_detector/openvino_infer.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_utils/assert.hpp"
 #include "rm_utils/common.hpp"

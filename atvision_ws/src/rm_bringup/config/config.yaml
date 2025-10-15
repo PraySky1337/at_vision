@@ -26,7 +26,6 @@
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
 
-
 /armor_solver:
   ros__parameters:
     debug: true
@@ -139,3 +138,34 @@
           durability: volatile
           history: keep_last
           reliability: reliable
+
+/pub_video:
+  ros__parameters:
+    camera_info_url: package://rm_bringup/config/camera_info.yaml
+    camera_name: camera
+    image_raw:
+      enable_pub_plugins:
+      - image_transport/compressed
+      - image_transport/raw
+      format: jpeg
+      jpeg_quality: 95
+      png_level: 3
+      tiff:
+        res_unit: inch
+        xdpi: -1
+        ydpi: -1
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+      /tf:
+        publisher:
+          depth: 100
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    use_sim_time: false
+    video_path: /home/developer/ws/assets/2025-05-21 00-07-19.mkv

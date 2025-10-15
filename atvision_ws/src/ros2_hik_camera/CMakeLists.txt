@@ -63,6 +63,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+set(USE_SCOPED_HEADER_INSTALL_DIR ON)
 ament_auto_package(
   INSTALL_TO_SHARE
   config

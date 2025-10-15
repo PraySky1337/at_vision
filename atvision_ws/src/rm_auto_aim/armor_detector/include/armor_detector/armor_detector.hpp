@@ -29,7 +29,6 @@
 // project
 #include "armor_detector/light_corner_corrector.hpp"
 #include "armor_detector/number_classifier.hpp"
-#include "armor_detector/openvino.hpp"
 #include "armor_detector/types.hpp"
 #include "rm_interfaces/msg/debug_armors.hpp"
 #include "rm_interfaces/msg/debug_lights.hpp"

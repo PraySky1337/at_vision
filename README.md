@@ -54,12 +54,14 @@ code --install-extension ms-vscode-remote.remote-containers
 
 - [x] 更准确的弹道解算(考虑枪口系)
 
-- [] 调整 UKF，增加拟合判断
+- [x] 调整 UKF
 
 - [] 自动测定usb通讯回环延迟以确定时间戳偏移量
 
-- [] 模拟视频发布 pub_video 节点实现
+- [x] 模拟视频发布 pub_video 节点实现
 
 - [] cleanup
 
 - [] 补充开发/使用文档
+
+- [] 仿真
