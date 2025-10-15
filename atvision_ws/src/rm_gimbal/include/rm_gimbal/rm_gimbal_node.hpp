@@ -43,6 +43,8 @@ private:
 
     void control_cmd_callback(rm_interfaces::msg::GimbalCmd::ConstSharedPtr plan_control_cmd_msg);
 
+    void set_params(const std::string& color);
+
 private:
     DeviceParser parser_;
     Device device_;
@@ -54,16 +56,17 @@ private:
 
     std::atomic<uint8_t> aiming_color_;
 
-    rclcpp::AsyncParametersClient::SharedPtr detector_client;
-    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr reset_tracker_srv;
+    rclcpp::AsyncParametersClient::SharedPtr detector_client_;
 
     rclcpp::Subscription<rm_interfaces::msg::GimbalCmd>::SharedPtr control_cmd_sub_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
 
+    // usb thread
     std::atomic<bool> running_;
     std::thread thread_;
 
+    // flag
     std::atomic<double> timestamp_offset_ms_;
     bool debug_;
     bool use_roll_;

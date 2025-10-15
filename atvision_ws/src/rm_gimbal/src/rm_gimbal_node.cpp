@@ -14,9 +14,8 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     , device_(parser_)
     , tf_broadcaster_(*this)
     , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN)) {
-    tf_buffer_        = std::make_shared<tf2_ros::Buffer>(get_clock());
-    detector_client   = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
-    reset_tracker_srv = create_client<std_srvs::srv::Trigger>("reset_tracker");
+    tf_buffer_       = std::make_shared<tf2_ros::Buffer>(get_clock());
+    detector_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
     this->init_parser();
     try {
         if (device_.open(0x0483)) {
@@ -55,6 +54,29 @@ GimbalNode::~GimbalNode() {
     running_ = false;
     if (thread_.joinable()) {
         thread_.join();
+    }
+}
+
+void GimbalNode::set_params(const std::string& color) {
+    if (detector_client_->wait_for_service()) {
+        std::vector<rclcpp::Parameter> params;
+        params.emplace_back(rclcpp::Parameter{"detect_color", color});
+        auto result = detector_client_->set_parameters(params);
+        try {
+            if (result.get()[0].successful) {
+                aiming_color_ = color == "red" ? static_cast<int>(EnemyColor::RED)
+                               : static_cast<int>(EnemyColor::BLUE);
+                RCLCPP_INFO(get_logger(), "Set enemy color to %s successfully.", color.data());
+            } else {
+                RCLCPP_WARN(
+                    get_logger(), "Failed to set enemy color to %s: %s", color.data(),
+                    result.get()[0].reason.c_str());
+            }
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(get_logger(), "Service call failed: %s", e.what());
+        }
+    } else {
+        RCLCPP_WARN(get_logger(), "Service not available, cannot set enemy color.");
     }
 }
 
@@ -121,7 +143,7 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
     tf_broadcaster_.sendTransform(t);
 
     if (d.self_color != aiming_color_) {
-        // 原逻辑：占位，不做任何事
+        set_params(aiming_color_ == 0 ? "red" : "blue"); // 保持原逻辑
     }
 }
 

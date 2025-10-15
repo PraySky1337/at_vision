@@ -44,24 +44,24 @@ code --install-extension ms-vscode-remote.remote-containers
 
 ## 一些待完善的工作
 
-- [] 将Solver与状态估计器解耦，在rm_gimbal包中添加二次规划功能
+- [ ] 将Solver与状态估计器解耦，在rm_gimbal包中添加二次规划功能
 
-- [] ros bag 回放
+- [ ] ros bag 回放
 
-- [] 全向感知
+- [ ] 全向感知
 
-- [] 在线手眼标定 from rm_calibration
+- [ ] 在线手眼标定 from rm_calibration
 
 - [x] 更准确的弹道解算(考虑枪口系)
 
 - [x] 调整 UKF
 
-- [] 自动测定usb通讯回环延迟以确定时间戳偏移量
+- [ ] 自动测定usb通讯回环延迟以确定时间戳偏移量
 
 - [x] 模拟视频发布 pub_video 节点实现
 
-- [] cleanup
+- [ ] cleanup
 
-- [] 补充开发/使用文档
+- [ ] 补充开发/使用文档
 
-- [] 仿真
+- [ ] 仿真

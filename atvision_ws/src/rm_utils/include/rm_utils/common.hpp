@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <string>
 
 namespace fyt {
@@ -35,9 +36,11 @@ inline std::string enemyColorToString(EnemyColor color) {
 }
 
 inline EnemyColor strToEnemyColor(const std::string& str) {
-    if (str == "RED") {
+    std::string upper_str = str;
+    std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(), ::toupper);
+    if (upper_str == "RED") {
         return EnemyColor::RED;
-    } else if (str == "BLUE") {
+    } else if (upper_str == "BLUE") {
         return EnemyColor::BLUE;
     } else {
         return EnemyColor::WHITE;

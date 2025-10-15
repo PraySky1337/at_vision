@@ -1,62 +1,26 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.8)
 project(rm_calibration)
 
-## Use C++14
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
-## enforcing cleaner code.
-add_definitions(-Wall -Werror -O3)
-
-## Export compile commands for clangd
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-#######################
-## Find dependencies ##
-#######################
-
-find_package(ament_cmake_auto REQUIRED)
-find_package(OpenCV REQUIRED)
-ament_auto_find_build_dependencies()
-
-###########
-## Build ##
-###########
-
-ament_auto_add_library(${PROJECT_NAME} SHARED
-  DIRECTORY src
-)
-
-rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN rm_calibration::CalibratorNode
-  EXECUTABLE rm_calibrator_node
-)
-
-target_link_libraries(${PROJECT_NAME} 
-    ${OpenCV_LIBS}
-)
-
-#############
-## Testing ##
-#############
+# find dependencies
+find_package(ament_cmake REQUIRED)
+# uncomment the following section in order to fill in
+# further dependencies manually.
+# find_package(<dependency> REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
-  list(APPEND AMENT_LINT_AUTO_EXCLUDE
-    ament_cmake_copyright
-    ament_cmake_uncrustify
-    ament_cmake_cpplint
-  )
+  # the following line skips the linter which checks for copyrights
+  # comment the line when a copyright and license is added to all source files
+  set(ament_cmake_copyright_FOUND TRUE)
+  # the following line skips cpplint (only works in a git repo)
+  # comment the line when this package is in a git repo and when
+  # a copyright and license is added to all source files
+  set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
-
-  find_package(ament_cmake_gtest)
-
 endif()
 
-#############
-## Install ##
-#############
-
-set(USE_SCOPED_HEADER_INSTALL_DIR ON)
-ament_auto_package()
+ament_package()
