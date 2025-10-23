@@ -21,11 +21,33 @@ RoboMaster Vision System Based On ROS2
 Docker安装完成后，构建即可。
 
 ```sh
-docker build . -t atvision
+docker build . --target atvision-runtime -t atvision-runtime:latest
+```
+
+```sh
+docker build . --target atvision-dev -t atvision-dev:latest;
 ```
 
 如果出现 docker pull 失败的情况，建议[手动配置镜像源或使用代理](docs/zh_cn/docker_usage.md)
 
+随后 导出runtime镜像
+并通过scp或其他方式将 `atvisoin-runtime.tar` 传输到nuc上
+
+```sh
+docker save atvision-runtime:latest > atvision-runtime.tar
+scp atvision-runtime.tar nuc@nuc.local:/home/nuc/Desktop
+```
+
+在nuc上执行以下命令
+
+```sh
+docker load -i atvision-runtime.tar
+```
+
+在目标机器上自动启动
+```sh
+docker run -d --restart=unless-stopped --privileged --network=host -v /dev:/dev atvision-runtime:latest
+```
 
 #### Container dev
 
@@ -41,6 +63,26 @@ code --install-extension ms-vscode-remote.remote-containers
 
 进入容器后，可选./vscode中的settings.default.json作为推荐设置进行开发
 
+
+#### Runtime - intel激活OV
+
+```sh
+# activate ov gpu 目前只支持 x86_64 
+mkdir -p ~/neo && \
+cd ~/neo && \
+wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-core_1.0.13463.18_amd64.deb  &&\
+wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-opencl_1.0.13463.18_amd64.deb &&\
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu-dbgsym_1.3.25812.14_amd64.ddeb &&\ 
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu_1.3.25812.14_amd64.deb  &&\
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd-dbgsym_23.09.25812.14_amd64.ddeb  &&\
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd_23.09.25812.14_amd64.deb  &&\
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/libigdgmm12_22.3.0_amd64.deb  &&\
+wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/ww09.sum &&\
+sha256sum -c ww09.sum &&\
+sudo dpkg -i *.deb &&\
+rm -rf ~/neo
+cd /home/developer/ws
+```
 
 ## 一些待完善的工作
 
@@ -65,3 +107,9 @@ code --install-extension ms-vscode-remote.remote-containers
 - [ ] 补充开发/使用文档
 
 - [ ] 仿真
+
+- [ ] 重新构建 Docker 镜像
+
+- [ ] 将通信中间件替换为 Zehno
+
+- [ ] openvino版本升级为 25 版

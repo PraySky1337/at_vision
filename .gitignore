@@ -6,5 +6,6 @@ MvFGSdkLog
 MvSdkLog
 third_party
 *.zip
+*.tar
 *.mp4
 *.mkv

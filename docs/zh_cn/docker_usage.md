@@ -11,7 +11,7 @@ docker build . -t atvision
 需要注意的是，部分国家和地区会阻断对 `github` 的连接，此时构建需要使用代理：
 
 ```bash
-docker build . -t atvision \
+docker build . --target atvision-runtime -t atvision-runtime:latest \
 --network host \
 --build-arg HTTP_PROXY=http://127.0.0.1:7890 \
 --build-arg HTTPS_PROXY=http://127.0.0.1:7890

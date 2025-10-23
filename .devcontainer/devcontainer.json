@@ -1,12 +1,11 @@
 {
   "name": "ATVISION Dev",
-  "image": "atvision", 
+  "image": "atvision-dev:latest", 
   "privileged": true,
   "workspaceFolder": "/home/developer/ws",
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/developer/ws,type=bind",
   "runArgs": [
-    "--network", "host",
-    "--group-add=plugdev"
+    "--network", "host"
   ],
   "mounts": [
   {

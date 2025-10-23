@@ -24,7 +24,6 @@ def generate_launch_description():
         executable='component_container_mt',
         composable_node_descriptions=[
             rsp_component,
-            gimbal_node,
             armor_solver_node,
         ],
         output='both',

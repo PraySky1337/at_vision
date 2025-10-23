@@ -1,9 +1,8 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 # =========================
 # parameter
 # =========================
 WORKSPACE=${WORKSPACE:-/home/developer/ws}            # 源码根目录
-RUNTIME_DIR=${RUNTIME_DIR:-/home/developer/atvruntime}  # 构建产物输出路径
 BUILD_TYPE=${BUILD_TYPE:-Release}             # 可选: Debug / Release / RelWithDebInfo
 CPU_COUNT=$(nproc)
 JOBS=${JOBS:-$((CPU_COUNT - 1))}              # 默认使用 CPU 核心数-1
@@ -15,7 +14,6 @@ EVENT_HANDLER=${EVENT_HANDLER:-console_cohesion+}  # 日志显示模式
 echo "=========================================="
 echo "Colcon 构建配置"
 echo "Workspace:     $WORKSPACE"
-echo "Runtime Dir:   $RUNTIME_DIR"
 echo "Build Type:    $BUILD_TYPE"
 echo "Parallel Jobs: $JOBS"
 echo "Event Handler: $EVENT_HANDLER"
@@ -26,7 +24,6 @@ echo
 colcon build \
     --merge-install \
     --event-handlers "${EVENT_HANDLER}" \
-    --install-base "${RUNTIME_DIR}/install" \
     --parallel-workers "${JOBS}" \
     --cmake-args \
         -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
@@ -35,6 +32,5 @@ colcon build \
 # Build compelete
 echo
 echo "=========================================="
-echo "✅ Build complete!"
-echo "👉 install: ${RUNTIME_DIR}/install"
+echo "Build complete!"
 echo "=========================================="

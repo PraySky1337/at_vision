@@ -17,17 +17,6 @@ if [[ "${IN_DOCKER:-false}" == "true" ]]; then
         echo "[WARN] ROS setup file not found at /opt/ros/$ROS_DISTRO/setup.bash"
     fi
 
-    # 若项目环境存在则加载
-    if [ -f "/usr/local/bin/setupenv" ]; then
-        echo "[INFO] Sourcing setupenv ..."
-        source /usr/local/bin/setupenv
-    elif [ -f "/home/atvruntime/install/setup.bash" ]; then
-        echo "[INFO] Sourcing /home/atvruntime/install/setup.bash ..."
-        source /home/atvruntime/install/setup.bash
-    else
-        echo "[WARN] No runtime setup file found. Launch may fail."
-    fi
-
     # 启动主 launch 文件
     echo "[INFO] Launching ROS2 bringup..."
     exec ros2 launch rm_bringup bringup.launch.py

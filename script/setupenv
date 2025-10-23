@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# 获取脚本所在目录
+BASE_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+# 自动链接 candy 与 dev 脚本 并跳过.md
+for DIR in "${BASE_DIR}/candy" "${BASE_DIR}/dev"; do
+    if [ -d "$DIR" ]; then
+        for FILE in "$DIR"/*; do
+            [ -f "$FILE" ] || continue
+            if [ ! -x "$FILE" ]; then
+                chmod +x "$FILE"
+                echo "[FIX] Added execute permission to $FILE"
+            fi
+            ln_name="/usr/local/bin/$(basename "$FILE")"
+            sudo ln -sf "$FILE" "$ln_name"
+            echo "[OK] Linked: $ln_name → $FILE"
+        done
+    fi
+done

@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+
+import sys
+import re
+import os
+
+if len(sys.argv) <= 1:
+    print("Usage: set-robot <robot_type>")
+    sys.exit(1)
+elif len(sys.argv) > 2:
+    print("Error: Too many arguments.")
+    sys.exit(1)
+
+robot_type = sys.argv[1]
+cur = os.getenv("ROBOT_TYPE")
+
+if cur != robot_type:
+    os.system(f"sed -i '/^export ROBOT_TYPE=/d' ~/.bashrc")
+    os.system(f"echo 'export ROBOT_TYPE={robot_type}' >> ~/.bashrc")
+    print(f"ROBOT_TYPE set to {robot_type}")
+else:
+    print(f"ROBOT_TYPE already = {robot_type}")

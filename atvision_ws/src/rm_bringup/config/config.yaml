@@ -2,11 +2,11 @@
   ros__parameters:
     debug: true
     target_frame: odom
-    detect_color: "BLUE"
+    detect_color: "RED"
     binary_thres: 90
 
-    use_nn: false
-    device: "CPU"
+    use_nn: true
+    device: "GPU"
     openvino.model_path: "yolox_armor3.xml"
     use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
@@ -52,7 +52,7 @@
       side_angle: 0.0
     target_frame: odom
     tracker:
-      lost_time_thres: 1.0
+      lost_time_thres: 0.4
       max_match_distance: 0.5
       max_match_yaw_diff: 1.0
       tracking_thres: 2
@@ -168,4 +168,4 @@
           history: keep_last
           reliability: reliable
     use_sim_time: false
-    video_path: /home/developer/ws/assets/2025-05-21 00-07-19.mkv
+    video_path: /home/developer/ws/assets/armor_demo.mp4

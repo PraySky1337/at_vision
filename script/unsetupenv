@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -e
+
+# ===============================
+# 清除 candy 与 dev 脚本链接
+# ===============================
+BASE_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+
+for DIR in "$BASE_DIR/candy" "$BASE_DIR/dev" "$BASE_DIR/ssh"; do
+    [ -d "$DIR" ] || continue
+    for FILE in "$DIR"/*; do
+        [[ -f "$FILE" && "${FILE##*.}" != "md" ]] || continue
+        ln_name="/usr/local/bin/$(basename "$FILE")"
+        if [ -L "$ln_name" ]; then
+            sudo rm -f "$ln_name"
+            echo "[DEL] Removed link: $ln_name"
+        fi
+    done
+done
+
+echo "[OK] All symbolic links removed."

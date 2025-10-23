@@ -300,7 +300,7 @@ bool Inference::initModel(const std::string& path) {
 
     // Step 2. Compile the model
     compiled_model = core.compile_model(
-        model, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+        model, "GPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
     ov::hint::inference_precision(ov::element::f16);
     // std::cout << "checkpoint - 4" << std::endl;
 

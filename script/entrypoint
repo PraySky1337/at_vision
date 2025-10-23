@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+echo "=========================================="
+echo " ATVision Start"
+echo "=========================================="
+
+rm -rf /tmp/*
+
+service ssh start
+
+# 检查 ROBOT_TYPE 是否定义
+if [[ -z "${ROBOT_TYPE}" ]]; then
+    echo "[WARN] ROBOT_TYPE 未定义，跳过启动 atvision-service"
+else
+    echo "[INFO] 检测到 ROBOT_TYPE=${ROBOT_TYPE}，启动 atvision-service"
+    atvision-service start
+fi
+
+sleep infinity
