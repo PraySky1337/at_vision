@@ -29,7 +29,6 @@ def generate_launch_description():
         ],
         output='both',
         emulate_tty=True,
-        required=True,
         on_exit=Shutdown()
     )
 
@@ -44,7 +43,6 @@ def generate_launch_description():
         ],
         output='both',
         emulate_tty=True,
-        required=True,
         on_exit=Shutdown()
     )
 

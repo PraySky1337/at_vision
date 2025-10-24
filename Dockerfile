@@ -47,7 +47,8 @@ RUN groupadd -g ${USER_GID} ${USERNAME} && \
     echo "root:aaa" | chpasswd \
     echo "${USERNAME} ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     gpasswd --add ${USERNAME} dialout && \
-    gpasswd --add ${USERNAME} plugdev
+    gpasswd --add ${USERNAME} plugdev && \
+    gpasswd --add ${USERNAME} sudo
 
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}

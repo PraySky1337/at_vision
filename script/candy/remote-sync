@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+import os, select, subprocess, ctypes, time, signal, sys
+
+IN_MODIFY = 0x00000002
+IN_CREATE = 0x00000100
+IN_DELETE = 0x00000200
+EVENT_MASK = IN_MODIFY | IN_CREATE | IN_DELETE
+
+libc = ctypes.CDLL("libc.so.6")
+SRC = "/home/developer/ws"
+DST = "developer@localhost:/home/developer/ws"
+PORT = "2025"
+
+fd = libc.inotify_init()
+
+def add_watch_recursive(root):
+    for d, _, _ in os.walk(root):
+        libc.inotify_add_watch(fd, d.encode(), EVENT_MASK)
+
+add_watch_recursive(SRC)
+
+GREEN, YELLOW, RED, RESET = "\033[92m", "\033[93m", "\033[91m", "\033[0m"
+last_sync = 0
+running = True
+
+def remote_sync(reason):
+    global last_sync
+    if time.time() - last_sync < 0.5:
+        return
+    last_sync = time.time()
+    print(f"{GREEN}[SYNC]{RESET} Triggered by {reason}")
+    subprocess.run([
+        "rsync", "-az", "-e", f"ssh -p {PORT}", "--delete",
+        SRC + "/", DST
+    ])
+    print(f"{YELLOW}[DEBUG]{RESET} rsync done {time.strftime('%H:%M:%S')}")
+
+def handle_exit(signum, frame):
+    global running
+    print(f"\n{RED}[EXIT]{RESET} Caught signal {signum}, cleaning up...")
+    os.close(fd)
+    running = False
+
+signal.signal(signal.SIGINT, handle_exit)
+signal.signal(signal.SIGTERM, handle_exit)
+
+print(f"{YELLOW}[DEBUG]{RESET} Monitoring {SRC} ...")
+
+while running:
+    try:
+        r, _, _ = select.select([fd], [], [], 1)
+        if fd in r:
+            os.read(fd, 4096)
+            remote_sync("FILE CHANGE")
+    except OSError:
+        break
+
+print(f"{GREEN}[INFO]{RESET} Remote sync watcher exited.")
+sys.exit(0)
