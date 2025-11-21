@@ -46,6 +46,7 @@
 #include "armor_detector/number_classifier.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
+#include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
 
@@ -56,10 +57,12 @@ namespace fyt::auto_aim {
 // the detected armors
 class ArmorDetectorNode : public rclcpp::Node {
 public:
-    explicit ArmorDetectorNode(const rclcpp::NodeOptions& options);
+    ArmorDetectorNode(const rclcpp::NodeOptions& options);
 
 private:
-    void imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg);
+    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
+    // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
+    // target_msg);
 
     std::unique_ptr<Detector> initDetector();
 
@@ -83,7 +86,6 @@ private:
 
     // Pose Solver
     bool use_ba_;
-    bool use_nn_;
     std::unique_ptr<ArmorPoseEstimator> armor_pose_estimator_;
 
     // Detected armors publisher
@@ -103,6 +105,11 @@ private:
 
     // Image subscription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
+
+    // Target subscription
+    // rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
+    // rm_interfaces::msg::Target::SharedPtr tracked_target_;
+    std::deque<Armor> tracked_armors_;
 
     // ReceiveData subscripiton
     std::string odom_frame_;

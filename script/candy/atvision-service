@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+#################### 配置区 ####################
+SERVICE_NAME="atvision"          # 服务名，用于 pid/log 文件命名
+WORKDIR="/home/developer/ws"           # 工作目录（ros2 工程目录）
+ROS_SETUP="/opt/ros/humble/setup.bash" # ROS2 环境
+WS_SETUP="$WORKDIR/install/setup.bash" # 工作空间环境
+
+# 要运行的 ros2 launch cli
+SERVICE_CMD="ros2 launch rm_bringup armor_detector.launch.py"
+
+# PID / 日志路径（可以换成 /var/run /var/log 等）
+RUNTIME_DIR="$WORKDIR/.service_runtime"
+PID_FILE="$RUNTIME_DIR/${SERVICE_NAME}.pid"
+LOG_FILE="$RUNTIME_DIR/${SERVICE_NAME}.log"
+################## 配置区结束 ##################
+
+mkdir -p "$RUNTIME_DIR"
+
+_red()  { printf "\033[31m%s\033[0m\n" "$*" >&2; }
+_green(){ printf "\033[32m%s\033[0m\n" "$*"; }
+_yellow(){ printf "\033[33m%s\033[0m\n" "$*"; }
+
+is_running() {
+    [[ -f "$PID_FILE" ]] || return 1
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null || echo "")
+    [[ -n "$pid" ]] || return 1
+    if kill -0 "$pid" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+start_service() {
+    if is_running; then
+        _yellow "[$SERVICE_NAME] 已在运行 (pid=$(cat "$PID_FILE"))."
+        exit 0
+    fi
+
+    _green "启动 [$SERVICE_NAME] ..."
+    # 追加日志，简单做个日期分隔
+    echo "===== $(date '+%F %T') START $SERVICE_NAME =====" >>"$LOG_FILE"
+
+    (
+        cd "$WORKDIR"
+        # 加载环境
+        if [[ -f "$ROS_SETUP" ]]; then
+            # shellcheck disable=SC1090
+            source "$ROS_SETUP"
+        fi
+        if [[ -f "$WS_SETUP" ]]; then
+            # shellcheck disable=SC1090
+            source "$WS_SETUP"
+        fi
+
+        # 新建会话 + 后台运行，stdout/stderr 写入日志
+        # setsid 保证它是自己会话/进程组的 leader，方便 stop 时一锅端
+        setsid bash -lc "$SERVICE_CMD" >>"$LOG_FILE" 2>&1
+    ) &
+
+    local pid=$!
+    echo "$pid" >"$PID_FILE"
+    _green "[$SERVICE_NAME] 已启动 (pid=$pid)."
+}
+
+stop_service() {
+    if ! is_running; then
+        _yellow "[$SERVICE_NAME] 未运行。"
+        [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
+        exit 0
+    fi
+
+    local pid pgid
+    pid=$(cat "$PID_FILE")
+    pgid=$(ps -o pgid= "$pid" 2>/dev/null | tr -d ' ' || echo "")
+
+    if [[ -z "$pgid" ]]; then
+        pgid="$pid"
+    fi
+
+    _yellow "停止 [$SERVICE_NAME] (pid=$pid, pgid=$pgid)..."
+
+    # 优雅退出：先发 TERM 给整个进程组
+    if kill -TERM -"${pgid}" 2>/dev/null; then
+        # 等一会儿看是否退出
+        for _i in {1..30}; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+                _green "已优雅停止。"
+                rm -f "$PID_FILE"
+                echo "===== $(date '+%F %T') STOP $SERVICE_NAME =====" >>"$LOG_FILE"
+                return 0
+            fi
+            sleep 0.5
+        done
+    fi
+
+    _yellow "优雅停止超时，强制杀死整个进程组..."
+    kill -KILL -"${pgid}" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "===== $(date '+%F %T') KILL $SERVICE_NAME =====" >>"$LOG_FILE"
+    _green "已强制停止。"
+}
+
+status_service() {
+    if is_running; then
+        local pid
+        pid=$(cat "$PID_FILE")
+        local pgid
+        pgid=$(ps -o pgid= "$pid" 2>/dev/null | tr -d ' ' || echo "")
+        _green "[$SERVICE_NAME] 运行中 (pid=$pid, pgid=${pgid:-N/A})."
+    else
+        _yellow "[$SERVICE_NAME] 未运行。"
+    fi
+}
+
+logs_service() {
+    if [[ ! -f "$LOG_FILE" ]]; then
+        _yellow "暂无日志文件：$LOG_FILE"
+        exit 0
+    fi
+    _green "显示日志：$LOG_FILE (Ctrl+C 退出)"
+    tail -n 100 -F "$LOG_FILE"
+}
+
+usage() {
+    cat <<EOF
+用法: $0 {start|stop|restart|status|logs}
+
+  start    启动服务 (ros2 launch ...)
+  stop     停止服务（整组 kill，包括 ros2 launch 拉起的子进程）
+  restart  重启服务
+  status   查看服务状态
+  logs     实时查看日志 (tail -f)
+
+当前配置:
+  SERVICE_NAME = $SERVICE_NAME
+  WORKDIR      = $WORKDIR
+  CMD          = $SERVICE_CMD
+  PID_FILE     = $PID_FILE
+  LOG_FILE     = $LOG_FILE
+EOF
+}
+
+case "${1:-}" in
+    start)   start_service   ;;
+    stop)    stop_service    ;;
+    restart) stop_service; start_service ;;
+    status)  status_service  ;;
+    logs)    logs_service    ;;
+    *)       usage; exit 1   ;;
+esac

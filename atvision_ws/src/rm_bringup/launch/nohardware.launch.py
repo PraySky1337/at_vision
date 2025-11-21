@@ -12,7 +12,7 @@ node_params = os.path.join(
 
 
 def generate_launch_description():
-    from common import armor_solver_node, rsp_component, gimbal_node, armor_detector_node, pub_video_node
+    import common
     from launch_ros.actions import ComposableNodeContainer
     from launch.actions import Shutdown
     from launch import LaunchDescription
@@ -23,8 +23,8 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            rsp_component,
-            armor_solver_node,
+            common.rsp_component,
+            common.armor_solver_node(node_params),
         ],
         output='both',
         emulate_tty=True,
@@ -37,8 +37,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            pub_video_node,
-            armor_detector_node
+            common.armor_detector_ov_node(node_params)
         ],
         output='both',
         emulate_tty=True,

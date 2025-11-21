@@ -33,8 +33,6 @@
 #include "rm_interfaces/msg/debug_armors.hpp"
 #include "rm_interfaces/msg/debug_lights.hpp"
 
-#include "inference.hpp"
-
 namespace fyt::auto_aim {
 class Detector {
 public:
@@ -80,8 +78,6 @@ public:
 
     std::unique_ptr<NumberClassifier> classifier;
     std::unique_ptr<LightCornerCorrector> corner_corrector;
-
-    std::unique_ptr<rm_auto_aim::Inference> openvino_inference;
 
     // Debug msgs
     cv::Mat binary_img;

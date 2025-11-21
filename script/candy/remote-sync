@@ -8,7 +8,7 @@ EVENT_MASK = IN_MODIFY | IN_CREATE | IN_DELETE
 
 libc = ctypes.CDLL("libc.so.6")
 SRC = "/home/developer/ws"
-DST = "developer@localhost:/home/developer/ws"
+DST = "developer@192.168.10.49:/home/developer/ws"
 PORT = "2025"
 
 fd = libc.inotify_init()

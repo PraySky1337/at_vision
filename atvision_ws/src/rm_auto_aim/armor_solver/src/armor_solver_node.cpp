@@ -154,28 +154,22 @@ void ArmorSolverNode::initKF() {
     Eigen::Matrix<double, X_N, X_N> P0 = Eigen::Matrix<double, X_N, X_N>::Identity();
 
     // 给位置和速度引入负相关
-    rcl_interfaces::msg::ParameterDescriptor desc;
-    desc.set__floating_point_range({rcl_interfaces::msg::FloatingPointRange()
-                                        .set__from_value(-1.0)
-                                        .set__to_value(1.0)
-                                        .set__step(0.01)})
-        .set__description("from -1.0 to +1.0");
-    double coordinate_corr = declare_parameter("kf.corr.xyz", -0.3, desc);
-    double yaw_corr        = declare_parameter("kf.corr.yaw", -0.3, desc);
-    double vxvy_omega_corr = declare_parameter("kf.corr.xyzomega", -0.3, desc);
-    P0(0, 1) = P0(1, 0) = coordinate_corr * std::sqrt(P0(0, 0) * P0(1, 1)); // x 与 v_x
-    P0(2, 3) = P0(3, 2) = coordinate_corr * std::sqrt(P0(2, 2) * P0(3, 3)); // y 与 v_y
-    P0(4, 5) = P0(5, 4) = coordinate_corr * std::sqrt(P0(4, 4) * P0(5, 5)); // z 与 v_z
-    P0(6, 7) = P0(7, 6) = yaw_corr * std::sqrt(P0(6, 6) * P0(7, 7));        // yaw 与 v_yaw
-    P0(1, 7) = P0(7, 1) = vxvy_omega_corr * std::sqrt(P0(1, 1) * P0(7, 7)); // v_x 与 v_yaw
-    P0(3, 7) = P0(7, 3) = vxvy_omega_corr * std::sqrt(P0(3, 3) * P0(7, 7)); // v_y 与 v_yaw
-    if (Eigen::LLT<Eigen::MatrixXd>(P0).info() != Eigen::Success)
-        RCLCPP_WARN(get_logger(), "Warning: P0 not positive definite, adjust corr params!");
+    // rcl_interfaces::msg::ParameterDescriptor desc;
+    // desc.set__floating_point_range({rcl_interfaces::msg::FloatingPointRange()
+    //                                     .set__from_value(-1.0)
+    //                                     .set__to_value(1.0)
+    //                                     .set__step(0.01)})
+    //     .set__description("from -1.0 to +1.0");
+    // double vxvy_omega_corr = declare_parameter("kf.corr.xyzomega", -0.3, desc);
+    // P0(1, 7) = P0(7, 1) = vxvy_omega_corr * std::sqrt(P0(1, 1) * P0(7, 7)); // v_x 与 v_yaw
+    // P0(3, 7) = P0(7, 3) = vxvy_omega_corr * std::sqrt(P0(3, 3) * P0(7, 7)); // v_y 与 v_yaw
+    // if (Eigen::LLT<Eigen::MatrixXd>(P0).info() != Eigen::Success)
+    //     RCLCPP_WARN(get_logger(), "Warning: P0 not positive definite, adjust corr params!");
 
-    double alpha = declare_parameter("ukf.alpha", 0.1);
-    double beta  = declare_parameter("ukf.beta", 2.0);
-    double kappa = declare_parameter("ukf.kappa", 0.0);
-    tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, P0, alpha, beta, kappa);
+    // double alpha = declare_parameter("ukf.alpha", 0.1);
+    // double beta  = declare_parameter("ukf.beta", 2.0);
+    // double kappa = declare_parameter("ukf.kappa", 0.0);
+    tracker_->kf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, P0);
 }
 
 void ArmorSolverNode::timerCallback() {

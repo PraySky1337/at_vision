@@ -18,7 +18,6 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     reconnect_max_attempts_ = this->declare_parameter("reconnect_max_attempts", -1);
     timestamp_offset_ms_    = this->declare_parameter("timestamp_offset_ms", 10);
     bayer_cvt_quality_      = this->declare_parameter("bayer_cvt_color_quality", 1);
-    heartbeat_ = fyt::HeartBeatPublisher::create(this); // 传入Node*
     // 尝试打开相机（第一次初始化）
     if (!openCamera()) {
         RCLCPP_WARN(this->get_logger(), "Initial camera open failed, entering reconnect loop.");

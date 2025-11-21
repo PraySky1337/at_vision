@@ -2,12 +2,9 @@
   ros__parameters:
     debug: true
     target_frame: odom
-    detect_color: "RED"
+    detect_color: "BLUE"
     binary_thres: 90
 
-    use_nn: true
-    device: "GPU"
-    openvino.model_path: "yolox_armor3.xml"
     use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
 
@@ -22,9 +19,15 @@
     armor.max_large_center_distance: 8.0
     armor.max_angle: 35.0
 
-
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
+
+/armor_detector_ov:
+  ros__parameters:
+    debug: true
+    target_frame: odom
+    detect_color: "BLUE"
+    model_path: package://armor_detector_ov/model/opt-1208-001.onnx
 
 /armor_solver:
   ros__parameters:
@@ -80,7 +83,7 @@
   ros__parameters:
     camera_info_url: package://rm_bringup/config/camera_info.yaml
     camera_name: camera
-    exposure_time: 5000
+    exposure_time: 3000
     gain: 16.7
     image_raw:
       enable_pub_plugins:

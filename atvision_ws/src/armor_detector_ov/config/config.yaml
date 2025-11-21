@@ -1,0 +1,6 @@
+/armor_detector_ov:
+  ros__parameters:
+    debug: true
+    target_frame: odom
+    detect_color: "BLUE"
+    model_path: package://armor_detector_ov/model/opt-1208-001.onnx

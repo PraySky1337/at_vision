@@ -16,7 +16,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include "rm_utils/heartbeat.hpp"
 
 namespace hik_camera {
 
@@ -67,7 +66,6 @@ private:
 
     // mutex to protect camera_handle_ and SDK calls
     std::mutex camera_mutex_;
-    fyt::HeartBeatPublisher::SharedPtr heartbeat_;
 };
 
 } // namespace hik_camera

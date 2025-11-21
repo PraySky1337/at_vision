@@ -97,7 +97,6 @@ RUN apt update && apt install -y openssh-server tini ros-$ROS_DISTRO-foxglove-br
 
 # script
 COPY --chmod=755 script/entrypoint  /usr/local/bin/entrypoint
-COPY --chmod=755 script/atvision-service  /usr/local/bin/atvision-service
 
 WORKDIR /root/
 ENTRYPOINT [ "tini", "--" ]

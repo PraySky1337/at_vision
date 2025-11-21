@@ -6,13 +6,6 @@ from launch.substitutions import Command
 from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode
 
-launch_params = yaml.safe_load(open(os.path.join(
-    get_package_share_directory('rm_bringup'), 'config', 'launch_params.yaml')))
-
-
-node_params = os.path.join(
-    get_package_share_directory('rm_bringup'), 'config', 'config.yaml')
-
 xacro_file = os.path.join(
     get_package_share_directory('rm_gimbal'), 'urdf', 'rm_gimbal.urdf.xacro')
 
@@ -33,15 +26,17 @@ rsp_component = ComposableNode(
     extra_arguments=[{'use_intra_process_comms': False}]
 )
 
-camera_node = ComposableNode(
-    package='hik_camera',
-    plugin='hik_camera::HikCameraNode',
-    name='camera_node',
-    parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': True}]
-)
+def camera_node(node_params):
+    return ComposableNode(
+        package='hik_camera',
+        plugin='hik_camera::hikcameranode',
+        name='camera_node',
+        parameters=[node_params],
+        extra_arguments=[{'use_intra_process_comms': True}]
+    )
 
-armor_detector_node = ComposableNode(
+def armor_detector_node(node_params):
+    return ComposableNode(
     package='armor_detector', 
     plugin='fyt::auto_aim::ArmorDetectorNode',
     name='armor_detector',
@@ -49,14 +44,24 @@ armor_detector_node = ComposableNode(
     extra_arguments=[{'use_intra_process_comms': True}]
 )
 
-armor_solver_node = ComposableNode(
+def armor_detector_ov_node(node_params): 
+    return ComposableNode(
+    package='armor_detector_ov', 
+    plugin='rm_auto_aim::ArmorDetectorOVNode',
+    name='armor_detector_ov',
+    parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': True}])
+
+def armor_solver_node(node_params):
+    return ComposableNode(
     package='armor_solver',
     plugin='fyt::auto_aim::ArmorSolverNode',
     name='armor_solver',
     parameters=[node_params],
 )
 
-gimbal_node = ComposableNode(
+def gimbal_node(node_params) :
+    return ComposableNode(
     package='rm_gimbal',
     plugin='rm_gimbal::GimbalNode',
     name='rm_gimbal',
@@ -64,26 +69,11 @@ gimbal_node = ComposableNode(
     extra_arguments=[{'use_intra_process_comms': False}],
 )
 
-pub_video_node = ComposableNode(
+def pub_video_node(node_params) :
+    return ComposableNode(
     package='pub_video',
     plugin='pub_video::PubVideoNode',
     name='pub_video',
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': True}],
-)
-
-foxglove_node = ComposableNode(
-    package='foxglove_bridge',
-    plugin='foxglove_bridge::FoxgloveBridge',
-    name='foxglove_bridge',
-    parameters=[{
-        'port': 8765,
-        'address': '0.0.0.0',
-        'send_buffer_limit': 10000000,   # bytes
-        'min_qos_depth': 1,
-        'max_qos_depth': 25,
-        'include_hidden': False,
-        'capabilities': ['clientPublish','parameters','parametersSubscribe','services','connectionGraph','assets'],
-    }],
-    extra_arguments=[{'use_intra_process_comms': False}],
 )

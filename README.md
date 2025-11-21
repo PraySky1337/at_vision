@@ -102,14 +102,17 @@ cd /home/developer/ws
 
 - [x] 模拟视频发布 pub_video 节点实现
 
-- [ ] cleanup
-
 - [ ] 补充开发/使用文档
 
-- [ ] 仿真
+- [x] 仿真 
+    基于 Bevy(rust) 的 bevy_rm_simulator 非常感谢 
 
 - [ ] 重新构建 Docker 镜像
 
-- [ ] 将通信中间件替换为 Zehno
+- [x] 将通信中间件替换为 Zehno
+    另注: 已经放弃该方案。因其使用zehno_cpp服务进程，本质中心化。
+    目前的工作是将关键瓶颈升级为内存通信
 
 - [ ] openvino版本升级为 25 版
+
+- [ ] 删除 rm_utils 和心跳 非常糟糕的软件设计。
