@@ -77,13 +77,6 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         std::chrono::milliseconds(4), std::bind(&ArmorSolverNode::timerCallback, this));
     armor_target_.header.frame_id = "";
 
-    // Enable/Disable Armor Solver
-    enable_       = true;
-    set_mode_srv_ = this->create_service<rm_interfaces::srv::SetMode>(
-        "armor_solver/set_mode",
-        std::bind(
-            &ArmorSolverNode::setModeCallback, this, std::placeholders::_1, std::placeholders::_2));
-
     if (debug_mode_) {
         initMarkers();
     }
@@ -153,31 +146,14 @@ void ArmorSolverNode::initKF() {
     // P - error estimate covariance matrix
     Eigen::Matrix<double, X_N, X_N> P0 = Eigen::Matrix<double, X_N, X_N>::Identity();
 
-    // 给位置和速度引入负相关
-    // rcl_interfaces::msg::ParameterDescriptor desc;
-    // desc.set__floating_point_range({rcl_interfaces::msg::FloatingPointRange()
-    //                                     .set__from_value(-1.0)
-    //                                     .set__to_value(1.0)
-    //                                     .set__step(0.01)})
-    //     .set__description("from -1.0 to +1.0");
-    // double vxvy_omega_corr = declare_parameter("kf.corr.xyzomega", -0.3, desc);
-    // P0(1, 7) = P0(7, 1) = vxvy_omega_corr * std::sqrt(P0(1, 1) * P0(7, 7)); // v_x 与 v_yaw
-    // P0(3, 7) = P0(7, 3) = vxvy_omega_corr * std::sqrt(P0(3, 3) * P0(7, 7)); // v_y 与 v_yaw
-    // if (Eigen::LLT<Eigen::MatrixXd>(P0).info() != Eigen::Success)
-    //     RCLCPP_WARN(get_logger(), "Warning: P0 not positive definite, adjust corr params!");
-
-    // double alpha = declare_parameter("ukf.alpha", 0.1);
-    // double beta  = declare_parameter("ukf.beta", 2.0);
-    // double kappa = declare_parameter("ukf.kappa", 0.0);
-    tracker_->kf = std::make_unique<RobotStateEKF>(f, h, u_q, u_r, P0);
+    double alpha = declare_parameter("ukf.alpha", 0.1);
+    double beta  = declare_parameter("ukf.beta", 2.0);
+    double kappa = declare_parameter("ukf.kappa", 0.0);
+    tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, P0, alpha, beta, kappa);
 }
 
 void ArmorSolverNode::timerCallback() {
     if (solver_ == nullptr) {
-        return;
-    }
-
-    if (!enable_) {
         return;
     }
 
@@ -288,19 +264,13 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         }
     }
 
-    // Filter abnormal armors
-    armors_msg->armors.erase(
-        std::remove_if(
-            armors_msg->armors.begin(), armors_msg->armors.end(),
-            [](const rm_interfaces::msg::Armor& armor) { return abs(armor.pose.position.z) > 2; }),
-        armors_msg->armors.end());
-
     // Init message
     rm_interfaces::msg::Measurement measure_msg;
     rm_interfaces::msg::Target target_msg;
     rclcpp::Time time          = armors_msg->header.stamp;
     target_msg.header.stamp    = time;
     target_msg.header.frame_id = target_frame_;
+    matcher.filter(*armors_msg, target_msg);
 
     // Update tracker
     if (tracker_->tracker_state == Tracker::LOST) {
@@ -316,10 +286,10 @@ void ArmorSolverNode::armorsCallback(const rm_interfaces::msg::Armors::SharedPtr
         }
         tracker_->update(armors_msg);
         // Publish measurement
-        measure_msg.x   = tracker_->measurement(0);
-        measure_msg.y   = tracker_->measurement(1);
-        measure_msg.z   = tracker_->measurement(2);
-        measure_msg.yaw = tracker_->measurement(3);
+        measure_msg.x1   = tracker_->measurement(0);
+        measure_msg.y1   = tracker_->measurement(1);
+        measure_msg.z1   = tracker_->measurement(2);
+        measure_msg.yaw1 = tracker_->measurement(3);
         measure_pub_->publish(measure_msg);
 
         if (tracker_->tracker_state == Tracker::DETECTING) {
@@ -463,33 +433,6 @@ void ArmorSolverNode::publishMarkers(
     marker_array.markers.emplace_back(armors_marker_);
     marker_array.markers.emplace_back(selection_marker_);
     marker_pub_->publish(marker_array);
-}
-
-void ArmorSolverNode::setModeCallback(
-    const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-    std::shared_ptr<rm_interfaces::srv::SetMode::Response> response) {
-    response->success = true;
-
-    VisionMode mode       = static_cast<VisionMode>(request->mode);
-    std::string mode_name = visionModeToString(mode);
-    if (mode_name == "UNKNOWN") {
-        FYT_ERROR("armor_solver", "Invalid mode: {}", request->mode);
-        return;
-    }
-
-    switch (mode) {
-    case VisionMode::AUTO_AIM_RED:
-    case VisionMode::AUTO_AIM_BLUE: {
-        enable_ = true;
-        break;
-    }
-    default: {
-        enable_ = false;
-        break;
-    }
-    }
-
-    FYT_WARN("armor_solver", "Set Mode to {}", visionModeToString(mode));
 }
 
 } // namespace fyt::auto_aim

@@ -1,4 +1,4 @@
-#include "armor_detector_ov/ov_armor_tup.hpp"
+#include "ov_armor_tup.hpp"
 
 // STD
 #include <algorithm>

@@ -66,10 +66,7 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
     tracked_id    = tracked_armor.number;
     tracker_state = DETECTING;
 
-    if (tracked_armor.type == "large"
-        && (tracked_id == "3" || tracked_id == "4" || tracked_id == "5")) {
-        tracked_armors_num = ArmorsNum::BALANCE_2;
-    } else if (tracked_id == "outpost") {
+    if (tracked_id == "outpost") {
         tracked_armors_num = ArmorsNum::OUTPOST_3;
     } else {
         tracked_armors_num = ArmorsNum::NORMAL_4;
@@ -107,10 +104,7 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
                     yaw_diff = abs(orientationToYaw(armor.pose.orientation) - ekf_prediction(6));
                     tracked_armor = armor;
                     // Update tracked armor type
-                    if (tracked_armor.type == "large"
-                        && (tracked_id == "3" || tracked_id == "4" || tracked_id == "5")) {
-                        tracked_armors_num = ArmorsNum::BALANCE_2;
-                    } else if (tracked_id == "outpost") {
+                    if (tracked_id == "outpost") {
                         tracked_armors_num = ArmorsNum::OUTPOST_3;
                     } else {
                         tracked_armors_num = ArmorsNum::NORMAL_4;

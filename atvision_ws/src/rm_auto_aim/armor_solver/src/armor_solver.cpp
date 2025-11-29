@@ -106,7 +106,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     target_yaw += dt * target.v_yaw;
 
     // Choose the best armor to shoot
-    std::vector<Eigen::Vector3d> armor_positions = getArmorPositions(
+    std::vector<Eigen::Vector3d> armor_positions = util::getRoboArmorPositions(
         target_position, target_yaw, target.radius_1, target.radius_2, target.d_zc, target.d_za,
         target.armors_num);
     int idx = selectBestArmor(
@@ -146,7 +146,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             target_position.y() += controller_delay_ * target.velocity.y;
             target_position.z() += controller_delay_ * target.velocity.z;
             target_yaw += controller_delay_ * target.v_yaw;
-            armor_positions = getArmorPositions(
+            armor_positions = util::getRoboArmorPositions(
                 target_position, target_yaw, target.radius_1, target.radius_2, target.d_zc,
                 target.d_za, target.armors_num);
             chosen_armor_position = armor_positions.at(idx) - xyz_;
@@ -210,29 +210,6 @@ bool Solver::isOnTarget(
     }
 
     return false;
-}
-
-std::vector<Eigen::Vector3d> Solver::getArmorPositions(
-    const Eigen::Vector3d& target_center, const double target_yaw, const double r1, const double r2,
-    const double d_zc, const double d_za, const size_t armors_num) noexcept {
-    auto armor_positions = std::vector<Eigen::Vector3d>(armors_num, Eigen::Vector3d::Zero());
-    // Calculate the position of each armor
-    bool is_current_pair = true;
-    double r = 0., target_dz = 0.;
-    for (size_t i = 0; i < armors_num; i++) {
-        double temp_yaw = target_yaw + i * (2 * M_PI / armors_num);
-        if (armors_num == 4) {
-            r               = is_current_pair ? r1 : r2;
-            target_dz       = d_zc + (is_current_pair ? 0 : d_za);
-            is_current_pair = !is_current_pair;
-        } else {
-            r         = r1;
-            target_dz = d_zc;
-        }
-        armor_positions[i] =
-            target_center + Eigen::Vector3d(-r * cos(temp_yaw), -r * sin(temp_yaw), target_dz);
-    }
-    return armor_positions;
 }
 
 int Solver::selectBestArmor(

@@ -42,6 +42,7 @@
 #include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
+#include "matcher.hpp"
 
 namespace fyt::auto_aim {
 using tf2_filter = tf2_ros::MessageFilter<rm_interfaces::msg::Armors>;
@@ -81,6 +82,7 @@ private:
 
     // Armor Solver
     std::unique_ptr<Solver> solver_;
+    armor_tracker::Matcher matcher;
 
     // Subscriber with tf2 message_filter
     std::string target_frame_;
@@ -98,10 +100,6 @@ private:
     rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_pub_;
     rclcpp::TimerBase::SharedPtr pub_timer_;
     void timerCallback();
-
-    // Enable/Disable Armor Solver
-    bool enable_;
-    rclcpp::Service<rm_interfaces::srv::SetMode>::SharedPtr set_mode_srv_;
 
     // Visualization marker publisher
     visualization_msgs::msg::Marker position_marker_;

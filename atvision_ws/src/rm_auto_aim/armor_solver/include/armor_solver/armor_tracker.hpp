@@ -36,7 +36,7 @@
 
 namespace fyt::auto_aim {
 
-enum class ArmorsNum { NORMAL_4 = 4, BALANCE_2 = 2, OUTPOST_3 = 3 };
+enum class ArmorsNum { NORMAL_4 = 4, OUTPOST_3 = 3 };
 
 class Tracker {
 public:
@@ -56,7 +56,7 @@ public:
         TEMP_LOST,
     } tracker_state;
 
-    std::unique_ptr<RobotStateEKF> kf;
+    std::unique_ptr<RobotStateUKF> kf;
 
     int tracking_thres; // frame
     int lost_thres;     // second

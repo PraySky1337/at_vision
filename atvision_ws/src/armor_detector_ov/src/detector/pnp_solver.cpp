@@ -1,5 +1,5 @@
 // Copyright
-#include "armor_detector_ov/pnp_solver.hpp"
+#include "pnp_solver.hpp"
 
 #include <array>
 #include <ceres/ceres.h>

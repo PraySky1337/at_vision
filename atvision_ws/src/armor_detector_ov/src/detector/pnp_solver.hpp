@@ -1,6 +1,6 @@
 // Copyright 2022 Chen Jun
 #pragma once
-#include "armor_types.hpp"
+#include "armor_detector_ov/armor_types.hpp"
 #include <array>
 #include <opencv2/core.hpp>
 #include <vector>

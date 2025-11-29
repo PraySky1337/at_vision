@@ -32,6 +32,7 @@
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_utils/math/manual_compensator.hpp"
 #include "rm_utils/math/trajectory_compensator.hpp"
+#include "util.hpp"
 
 namespace fyt::auto_aim {
 // Solver class used to solve the gimbal command from tracked target
@@ -52,10 +53,7 @@ public:
     std::vector<std::pair<double, double>> getTrajectory() const noexcept;
 
 private:
-    // Get the armor positions from the target robot
-    static std::vector<Eigen::Vector3d> getArmorPositions(
-        const Eigen::Vector3d& target_center, double yaw, double r1, double r2, double d_zc,
-        double d_za, size_t armors_num) noexcept;
+
 
     // Select the best armor to shoot
     // Return: selected idx in {0, 1, ..., armors_num - 1}

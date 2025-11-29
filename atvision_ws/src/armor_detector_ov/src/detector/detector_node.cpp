@@ -1,4 +1,4 @@
-#include "armor_detector_ov/detector_node.hpp"
+#include "detector_node.hpp"
 
 // ROS
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -14,7 +14,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
-#include "armor_detector_ov/ov_armor_tup.hpp"
+#include "ov_armor_tup.hpp"
 
 namespace {
 inline std::string resolve_pkg_url(const std::string& url) {

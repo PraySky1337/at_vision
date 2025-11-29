@@ -18,7 +18,7 @@
     "target": "/tmp/.X11-unix",
     "type": "bind"
   }
-  ],
+],
   "containerEnv": {
 	  "DISPLAY": "${localEnv:DISPLAY}"
   },

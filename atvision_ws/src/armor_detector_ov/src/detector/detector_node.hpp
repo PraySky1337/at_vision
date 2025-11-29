@@ -18,7 +18,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 
 // 项目
-#include "ov_model_base.hpp"
+#include "armor_detector_ov/ov_model_base.hpp"
 #include "pnp_solver.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 

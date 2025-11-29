@@ -1,5 +1,5 @@
 #pragma once
-#include "ov_model_base.hpp"
+#include "armor_detector_ov/ov_model_base.hpp"
 
 #include <Eigen/Core>
 #include <memory>
