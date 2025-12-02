@@ -45,6 +45,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        rest_container,
         cam_detector_container,
+        rest_container,
     ])

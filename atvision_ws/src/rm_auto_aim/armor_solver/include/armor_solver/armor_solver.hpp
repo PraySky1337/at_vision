@@ -58,7 +58,7 @@ private:
     // Select the best armor to shoot
     // Return: selected idx in {0, 1, ..., armors_num - 1}
     int selectBestArmor(
-        const std::vector<Eigen::Vector3d>& armor_positions, const Eigen::Vector3d& target_center,
+        const std::vector<Eigen::Vector4d>& armor_positions, const Eigen::Vector3d& target_center,
         double target_yaw, double target_v_yaw, size_t armors_num) const noexcept;
 
     void calcYawAndPitch(const Eigen::Vector3d& p, double& yaw, double& pitch) const noexcept;
@@ -71,7 +71,7 @@ private:
     std::unique_ptr<ManualCompensator> manual_compensator_;
 
     Eigen::Vector3d rpy_;
-    Eigen::Vector3d xyz_;
+    Eigen::Vector4d xyza_;
 
     double prediction_delay_;
     double controller_delay_;

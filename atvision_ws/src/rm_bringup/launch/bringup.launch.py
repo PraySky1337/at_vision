@@ -23,7 +23,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            common.rsp_component,
+            # common.rsp_component,
             common.gimbal_node(node_params),
             common.armor_solver_node(node_params),
         ],

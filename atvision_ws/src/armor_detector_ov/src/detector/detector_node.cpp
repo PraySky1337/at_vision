@@ -190,11 +190,8 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
     }
 
     std::vector<ArmorObject> dets;
-    if (auto* armor = dynamic_cast<OVArmorTUP*>(model_.get())) {
-        if (!armor->detect(img, dets)) {
-            RCLCPP_INFO(get_logger(), "armor detect failed");
-        }
-
+    if (auto* armor_ov_tup = dynamic_cast<OVArmorTUP*>(model_.get())) {
+        armor_ov_tup->detect(img, dets);
     } else
         (void)model_->run(img);
 
@@ -334,7 +331,7 @@ void ArmorDetectorOVNode::drawResults(
         const int fthick       = std::clamp(thick - 1, 1, 3);
 
         fillRectAlpha(src, r, color, 0.15);
-        drawCornerBox(src, r, color, thick);
+        // drawCornerBox(src, r, color, thick);
 
         // 四点框
         for (int i = 0; i < 4; ++i)

@@ -30,6 +30,7 @@
 // third party
 #include <angles/angles.h>
 // project
+#include "armor_solver/util.hpp"
 #include "rm_utils/logger/log.hpp"
 
 namespace fyt::auto_aim {
@@ -37,7 +38,7 @@ Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
     : tracker_state(LOST)
     , tracked_id(std::string(""))
     , measurement(Eigen::VectorXd::Zero(4))
-    , target_state(Eigen::VectorXd::Zero(9))
+    , target_state(Eigen::VectorXd::Zero(X_N))
     , max_match_distance_(max_match_distance)
     , max_match_yaw_diff_(max_match_yaw_diff)
     , detect_count_(0)
@@ -51,16 +52,29 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
 
     // Simply choose the armor that is closest to image center
     double min_distance = DBL_MAX;
-    tracked_armor       = armors_msg->armors[0];
+    auto& tracked_armor = armors_msg->armors[0];
     for (const auto& armor : armors_msg->armors) {
         if (armor.distance_to_image_center < min_distance) {
             min_distance  = armor.distance_to_image_center;
             tracked_armor = armor;
         }
     }
+    const auto& a = tracked_armor;
+    update_count  = 0;
+    double xa     = a.pose.position.x;
+    double ya     = a.pose.position.y;
+    double za     = a.pose.position.z;
+    double yaw    = orientationToYaw(a.pose.orientation);
+    last_yaw_ = yaw;
 
-    update_count = 0;
-    initEKF(tracked_armor);
+    // Set initial position at 0.2m behind the target
+    target_state = Eigen::VectorXd::Zero(X_N);
+    double r     = 0.26;
+    double xc    = xa + r * cos(yaw);
+    double yc    = ya + r * sin(yaw);
+    target_state << xc, 0, yc, 0, za, 0, yaw, 0, r, 0, 0;
+
+    kf->setState(target_state);
     FYT_INFO("armor_solver", "Init EKF!");
 
     tracked_id    = tracked_armor.number;
@@ -73,75 +87,61 @@ void Tracker::init(const Armors::SharedPtr& armors_msg) noexcept {
     }
 }
 
-void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
-    // KF predict
+void Tracker::update(
+    Armors::SharedPtr& armors_msg, const armor_tracker::Matcher& matcher) noexcept {
+    // 1) UKF 预测一步
     Eigen::VectorXd ekf_prediction = kf->predict();
+    ekf_prediction(util::V_YAW)    = std::clamp(ekf_prediction(util::V_YAW), -20.0, 20.0);
+    target_state                   = ekf_prediction;
 
-    bool matched = false;
-    // Use KF prediction as default target state if no matched armor is found
-    target_state = ekf_prediction;
+    // 2) 构造 Target，给 matcher 算四个装甲板几何位置
+    rm_interfaces::msg::Target target_msg = util::state2target(ekf_prediction);
+    target_msg.armors_num                 = (tracked_armors_num == ArmorsNum::NORMAL_4) ? 4 : 3;
+    target_msg.id                         = tracked_id;
+    target_msg.yaw                        = util::limit_rad(target_msg.yaw);
 
+    // 3) 调 matcher：就地筛掉不属于本目标的装甲板（最多保留 2 个）
+    auto matched_pos_ids = matcher.filter(*armors_msg, target_msg);
+
+    bool matched           = false;
+    Eigen::VectorXd x_post = ekf_prediction;
     if (!armors_msg->armors.empty()) {
-        // Find the closest armor with the same id
-        Armor same_id_armor;
-        int same_id_armors_count = 0;
-        auto predicted_position  = getArmorPositionFromState(ekf_prediction);
-        double min_position_diff = DBL_MAX;
-        double yaw_diff          = DBL_MAX;
-        for (const auto& armor : armors_msg->armors) {
-            // Only consider armors with the same id
-            if (armor.number == tracked_id) {
-                same_id_armor = armor;
-                same_id_armors_count++;
-                // Calculate the difference between the predicted position and the
-                // current armor position
-                auto p = armor.pose.position;
-                Eigen::Vector3d position_vec(p.x, p.y, p.z);
-                double position_diff = (predicted_position - position_vec).norm();
-                if (position_diff < min_position_diff) {
-                    // Find the closest armor
-                    min_position_diff = position_diff;
-                    yaw_diff = abs(orientationToYaw(armor.pose.orientation) - ekf_prediction(6));
-                    tracked_armor = armor;
-                    // Update tracked armor type
-                    if (tracked_id == "outpost") {
-                        tracked_armors_num = ArmorsNum::OUTPOST_3;
-                    } else {
-                        tracked_armors_num = ArmorsNum::NORMAL_4;
-                    }
-                }
-            }
-        }
+        const int armors_num = target_msg.armors_num > 0
+                                   ? target_msg.armors_num
+                                   : static_cast<int>(tracked_armors_num);
+        for (size_t idx = 0; idx < armors_msg->armors.size(); ++idx) {
+            const auto& armor = armors_msg->armors[idx];
+            // 如需保险，可再按 id 过滤：
+            // if (armor.number != tracked_id) continue;
 
-        // Check if the distance and yaw difference of closest armor are within the
-        // threshold
-        if (min_position_diff < max_match_distance_ && yaw_diff < max_match_yaw_diff_) {
-            // Matched armor found
+            const auto& p = armor.pose.position;
+            double yaw_meas = orientationToYaw(armor.pose.orientation);
+
+            // 4) 对这一块装甲做一次量测更新
+            Eigen::Vector4d measure_x;
+            measure_x << p.x, p.y, p.z, yaw_meas;
+
+            int armor_id = 0;
+            if (idx < matched_pos_ids.size()) {
+                armor_id = matched_pos_ids[idx];
+            }
+            Measure measure_func{armor_id, armors_num};
+            kf->setMeasureFunc(measure_func);
+
+            x_post  = kf->update(measure_x);
             matched = true;
-            auto p  = tracked_armor.pose.position;
-            // Update EKF
-            double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
-            measurement         = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-            target_state        = kf->update(measurement);
-            update_count++;
-        } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
-            // Matched armor not found, but there is only one armor with the same id
-            // and yaw has jumped, take this case as the target is spinning and armor
-            // jumped
-            handleArmorJump(same_id_armor);
-        } else {
-            // No matched armor found
-            FYT_WARN("armor_solver", "No matched armor found!");
+            ++update_count;
         }
+    } else {
+        FYT_WARN("armor_solver", "No armors after matcher.filter()");
     }
 
-    // Prevent radius from spreading
-    // 详见机器人制作规范手册
-    // https://www.robomaster.com/zh-CN/resource/announcement/competition
-    target_state(8) = std::clamp(target_state(8), 0.12, 0.4);
-    target_state(9) = std::clamp(target_state(9), -0.1, 0.1);
+    target_state = x_post;
 
-    // Tracking state machine
+    // 7) 写回 UKF
+    kf->setState(target_state);
+
+    // 8) 状态机：用 matched 这个标志即可
     switch (tracker_state) {
     case DETECTING:
         if (matched) {
@@ -183,71 +183,6 @@ void Tracker::update(const Armors::SharedPtr& armors_msg) noexcept {
 
     default: break;
     }
-
-    if (update_count > 10 && tracked_armors_num == ArmorsNum::OUTPOST_3) {
-        target_state[7] = target_state[7] > 0 ? 2.51 : -2.51;
-        target_state[8] = 0.55 / 2.;
-    }
-    kf->setState(target_state);
-}
-
-void Tracker::initEKF(const Armor& a) noexcept {
-    double xa  = a.pose.position.x;
-    double ya  = a.pose.position.y;
-    double za  = a.pose.position.z;
-    last_yaw_  = 0;
-    double yaw = orientationToYaw(a.pose.orientation);
-
-    // Set initial position at 0.2m behind the target
-    target_state = Eigen::VectorXd::Zero(X_N);
-    double r     = 0.26;
-    double xc    = xa + r * cos(yaw);
-    double yc    = ya + r * sin(yaw);
-    double zc    = za;
-    d_za = 0, d_zc = 0, another_r = r;
-    target_state << xc, 0, yc, 0, zc, 0, yaw, 0, r, d_zc;
-
-    kf->setState(target_state);
-}
-
-void Tracker::handleArmorJump(const Armor& current_armor) noexcept {
-    double last_yaw = target_state(6);
-    double yaw      = orientationToYaw(current_armor.pose.orientation);
-
-    if (abs(yaw - last_yaw) > 0.4) {
-        // Armor angle also jumped, take this case as target spinning
-        target_state(6) = yaw;
-        // Only 4 armors has 2 radius and height
-        if (tracked_armors_num == ArmorsNum::NORMAL_4) {
-            d_za = target_state(4) + target_state(9) - current_armor.pose.position.z;
-            std::swap(target_state(8), another_r);
-            d_zc            = d_zc == 0 ? -d_za : 0;
-            target_state(9) = d_zc;
-        }
-        FYT_DEBUG("armor_solver", "Armor Jump!");
-    }
-
-    auto p = current_armor.pose.position;
-    Eigen::Vector3d current_p(p.x, p.y, p.z);
-    Eigen::Vector3d infer_p = getArmorPositionFromState(target_state);
-
-    if ((current_p - infer_p).norm() > max_match_distance_) {
-        // If the distance between the current armor and the inferred armor is too
-        // large, the state is wrong, reset center position and velocity in the
-        // state
-        d_zc            = 0;
-        double r        = target_state(8);
-        target_state(0) = p.x + r * cos(yaw); // xc
-        target_state(1) = 0;                  // vxc
-        target_state(2) = p.y + r * sin(yaw); // yc
-        target_state(3) = 0;                  // vyc
-        target_state(4) = p.z;                // zc
-        target_state(5) = 0;                  // vzc
-        target_state(9) = d_zc;               // d_zc
-        FYT_WARN("armor_solver", "State wrong!");
-    }
-
-    kf->setState(target_state);
 }
 
 double Tracker::orientationToYaw(const geometry_msgs::msg::Quaternion& q) noexcept {
@@ -269,6 +204,14 @@ Eigen::Vector3d Tracker::getArmorPositionFromState(const Eigen::VectorXd& x) noe
     double xa = xc - r * cos(yaw);
     double ya = yc - r * sin(yaw);
     return Eigen::Vector3d(xa, ya, za);
+}
+
+rm_interfaces::msg::Target Tracker::predict() const {
+    rm_interfaces::msg::Target target;
+    auto prediction   = kf->predict();
+    target            = util::state2target(prediction);
+    target.armors_num = tracked_armors_num == ArmorsNum::NORMAL_4 ? 4 : 3;
+    return target;
 }
 
 } // namespace fyt::auto_aim

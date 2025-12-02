@@ -121,7 +121,7 @@ public:
 
         // 状态与协方差更新
         x_post_.noalias() = x_pri_ + K_ * innov;
-        // Joseph 形式近似可进一步稳定，这里用标准式 + 对称化
+        // Joseph 形式近似可进一步稳定，这里用标准式 + 对称化 todo
         P_post_.noalias() = P_pri_ - K_ * S * K_.transpose();
         P_post_           = (P_post_ + P_post_.transpose()) * 0.5;
 

@@ -18,6 +18,7 @@
 // project
 #include "rm_utils/math/extended_kalman_filter.hpp"
 #include "rm_utils/math/unscented_kalman_filter.hpp"
+#include "util.hpp"
 
 namespace fyt::auto_aim {
 
@@ -28,9 +29,8 @@ enum class MotionModel {
 };
 
 // X_N: state dimension, Z_N: measurement dimension
-constexpr int X_N = 10;
-constexpr int MAX_ARMORS = 1;
-constexpr int Z_N = 4 * MAX_ARMORS;
+constexpr int X_N = util::STATE_MAX;
+constexpr int Z_N = 4;
 
 struct Predict {
     explicit Predict(double dt, MotionModel model = MotionModel::CONSTANT_VEL_ROT)
@@ -39,21 +39,19 @@ struct Predict {
 
     template <typename T>
     void operator()(const T x0[X_N], T x1[X_N]) {
-        for (int i = 0; i < X_N; i++) {
-            x1[i] = x0[i];
-        }
+        std::memcpy(x1, x0, X_N * sizeof(T));
 
         // v_xyz
         if (model == MotionModel::CONSTANT_VEL_ROT || model == MotionModel::CONSTANT_VELOCITY) {
             // linear velocity
-            x1[0] += x0[1] * dt;
-            x1[2] += x0[3] * dt;
-            x1[4] += x0[5] * dt;
+            x1[util::XC] += x0[util::VX] * dt;
+            x1[util::YC] += x0[util::VY] * dt;
+            x1[util::ZC] += x0[util::VZ] * dt;
         } else {
             // no velocity
-            x1[1] *= 0.;
-            x1[3] *= 0.;
-            x1[5] *= 0.;
+            x1[util::VX] *= 0.;
+            x1[util::VY] *= 0.;
+            x1[util::VZ] *= 0.;
         }
 
         // v_yaw
@@ -71,12 +69,21 @@ struct Predict {
 };
 
 struct Measure {
+    Measure() = default;
+    explicit Measure(int id, int armors_num)
+        : current_id(id), armors_num(armors_num) {}
+    int current_id = 0;
+    int armors_num = 4;
+
     template <typename T>
     void operator()(const T x[X_N], T z[Z_N]) {
-        z[0] = x[0] - ceres::cos(x[6]) * x[8];
-        z[1] = x[2] - ceres::sin(x[6]) * x[8];
-        z[2] = x[4] + x[9];
-        z[3] = x[6];
+        int id              = current_id;
+        double yaw_rad      = x[util::YAW] + id * 2 * M_PI / armors_num;
+        Eigen::Vector3d xyz = util::state2armor_xyz(x, id, armors_num);
+        z[0]                = xyz[0];
+        z[1]                = xyz[1];
+        z[2]                = xyz[2];
+        z[3]                = yaw_rad;
     }
 };
 

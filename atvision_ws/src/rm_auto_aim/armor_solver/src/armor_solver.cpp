@@ -84,9 +84,10 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
         tf2::Matrix3x3(tf_q).getRPY(rpy_[0], rpy_[1], rpy_[2]);
-        xyz_[0] = translation.x;
-        xyz_[1] = translation.y;
-        xyz_[2] = translation.z;
+        xyza_[0] = translation.x;
+        xyza_[1] = translation.y;
+        xyza_[2] = translation.z;
+        xyza_[3] = 0.;
 
         rpy_[1] = -rpy_[1];
     } catch (tf2::TransformException& ex) {
@@ -106,21 +107,22 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     target_yaw += dt * target.v_yaw;
 
     // Choose the best armor to shoot
-    std::vector<Eigen::Vector3d> armor_positions = util::getRoboArmorPositions(
-        target_position, target_yaw, target.radius_1, target.radius_2, target.d_zc, target.d_za,
-        target.armors_num);
-    int idx = selectBestArmor(
-        armor_positions, target_position, target_yaw, target.v_yaw, target.armors_num);
-    auto chosen_armor_position = armor_positions.at(idx);
-    chosen_armor_position -= xyz_;
-    double distance = chosen_armor_position.norm();
+    std::vector<Eigen::Vector4d> armor_pose = util::getRoboArmorPose(target);
+
+    int idx =
+        selectBestArmor(armor_pose, target_position, target_yaw, target.v_yaw, target.armors_num);
+    auto chosen_armor_pose = armor_pose.at(idx);
+    chosen_armor_pose -= xyza_;
+    Eigen::Vector3d armor_position{
+        chosen_armor_pose.x(), chosen_armor_pose.y(), chosen_armor_pose.z()};
+    double distance = chosen_armor_pose.norm();
     if (distance < 0.1) {
         throw std::runtime_error("No valid armor to shoot");
     }
 
     // Calculate yaw, pitch, distance
     double yaw, pitch;
-    calcYawAndPitch(chosen_armor_position, yaw, pitch);
+    calcYawAndPitch(armor_position, yaw, pitch);
 
     // Initialize gimbal_cmd
     rm_interfaces::msg::GimbalCmd gimbal_cmd;
@@ -146,15 +148,12 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             target_position.y() += controller_delay_ * target.velocity.y;
             target_position.z() += controller_delay_ * target.velocity.z;
             target_yaw += controller_delay_ * target.v_yaw;
-            armor_positions = util::getRoboArmorPositions(
-                target_position, target_yaw, target.radius_1, target.radius_2, target.d_zc,
-                target.d_za, target.armors_num);
-            chosen_armor_position = armor_positions.at(idx) - xyz_;
-            gimbal_cmd.distance   = chosen_armor_position.norm();
-            if (chosen_armor_position.norm() < 0.1) {
-                throw std::runtime_error("No valid armor to shoot");
-            }
-            calcYawAndPitch(chosen_armor_position, yaw, pitch);
+            armor_pose        = util::getRoboArmorPose(target);
+            chosen_armor_pose = armor_pose.at(idx) - xyza_;
+            armor_position    = Eigen::Vector3d(
+                chosen_armor_pose.x(), chosen_armor_pose.y(), chosen_armor_pose.z());
+            gimbal_cmd.distance = armor_position.norm();
+            calcYawAndPitch(armor_position, yaw, pitch);
         }
         break;
     }
@@ -174,14 +173,8 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         break;
     }
     }
-
-    // Compensate angle by angle_offset_map
-    auto angle_offset =
-        manual_compensator_->angleHardCorrect(target_position.head(2).norm(), target_position.z());
-    double pitch_offset = angle_offset[0] * M_PI / 180;
-    double yaw_offset   = angle_offset[1] * M_PI / 180;
-    double cmd_pitch    = pitch + pitch_offset;
-    double cmd_yaw      = angles::normalize_angle(yaw + yaw_offset);
+    double cmd_pitch    = pitch;
+    double cmd_yaw      = angles::normalize_angle(yaw);
 
     gimbal_cmd.yaw        = cmd_yaw * 180 / M_PI;
     gimbal_cmd.pitch      = cmd_pitch * 180 / M_PI;
@@ -213,7 +206,7 @@ bool Solver::isOnTarget(
 }
 
 int Solver::selectBestArmor(
-    const std::vector<Eigen::Vector3d>& armor_positions, const Eigen::Vector3d& target_center,
+    const std::vector<Eigen::Vector4d>& armor_positions, const Eigen::Vector3d& target_center,
     const double target_yaw, const double target_v_yaw, const size_t armors_num) const noexcept {
     // Angle between the car's center and the X-axis
     double alpha = std::atan2(target_center.y(), target_center.x());
@@ -241,7 +234,7 @@ int Solver::selectBestArmor(
         theta = 0;
     }
 
-    double temp_angle = decision_angle + M_PI / armors_num - theta;
+    double temp_angle = decision_angle + M_PI / (int)armors_num - theta;
 
     if (temp_angle < 0) {
         temp_angle += 2 * M_PI;
@@ -256,7 +249,9 @@ void Solver::calcYawAndPitch(const Eigen::Vector3d& p, double& yaw, double& pitc
     yaw   = atan2(p.y(), p.x());
     pitch = atan2(p.z(), p.head(2).norm());
 
-    if (double temp_pitch = pitch; trajectory_compensator_->compensate(p, temp_pitch)) {
+    Eigen::Vector3d position = {p.x(), p.y(), p.z()};
+
+    if (double temp_pitch = pitch; trajectory_compensator_->compensate(position, temp_pitch)) {
         pitch = temp_pitch;
     }
 }

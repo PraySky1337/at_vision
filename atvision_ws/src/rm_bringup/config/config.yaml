@@ -10,14 +10,14 @@
 
     light.min_ratio: 0.0001
     light.max_ratio: 1.0
-    light.max_angle: 40.0
+    light.max_angle: 1000.
     light.color_diff_thresh: 20
     armor.min_light_ratio: 0.8
     armor.min_small_center_distance: 0.8
     armor.max_small_center_distance: 3.5
     armor.min_large_center_distance: 3.5
     armor.max_large_center_distance: 8.0
-    armor.max_angle: 35.0
+    armor.max_angle: 100.
 
     classifier_threshold: 0.5
     ignore_classes: ["negative"]

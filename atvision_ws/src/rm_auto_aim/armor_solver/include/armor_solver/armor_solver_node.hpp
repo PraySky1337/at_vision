@@ -36,13 +36,13 @@
 // project
 #include "armor_solver/armor_solver.hpp"
 #include "armor_solver/armor_tracker.hpp"
+#include "matcher.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/measurement.hpp"
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
-#include "matcher.hpp"
 
 namespace fyt::auto_aim {
 using tf2_filter = tf2_ros::MessageFilter<rm_interfaces::msg::Armors>;
@@ -51,7 +51,7 @@ public:
     explicit ArmorSolverNode(const rclcpp::NodeOptions& options);
 
 private:
-    void armorsCallback(const rm_interfaces::msg::Armors::SharedPtr armors_ptr);
+    void armorsCallback(rm_interfaces::msg::Armors::SharedPtr armors_ptr);
 
     void initMarkers() noexcept;
 
@@ -61,28 +61,24 @@ private:
         const rm_interfaces::msg::Target& target_msg,
         const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
 
-    void setModeCallback(
-        const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     bool debug_mode_;
-
-    // Heartbeat
-    HeartBeatPublisher::SharedPtr heartbeat_;
 
     // The time when the last message was received
     rclcpp::Time last_time_;
     double dt_;
 
     // Armor tracker
-    double s2qx_, s2qy_, s2qz_, s2qyaw_, s2qr_, s2qd_zc_;
+    double s2qxyz_, s2qyaw_, s2qr_, s2qd_zc_;
     double r_x_, r_y_, r_z_, r_yaw_;
     double lost_time_thres_;
     std::unique_ptr<Tracker> tracker_;
 
     // Armor Solver
     std::unique_ptr<Solver> solver_;
-    armor_tracker::Matcher matcher;
+    armor_tracker::Matcher matcher_;
+    std::mutex target_mutex_;
 
     // Subscriber with tf2 message_filter
     std::string target_frame_;
@@ -100,6 +96,13 @@ private:
     rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_pub_;
     rclcpp::TimerBase::SharedPtr pub_timer_;
     void timerCallback();
+    rclcpp::CallbackGroup::SharedPtr armors_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr timer_callback_group_;
+
+    struct TrackerSnapshot {
+        rm_interfaces::msg::Target target;
+        bool valid{false};
+    };
 
     // Visualization marker publisher
     visualization_msgs::msg::Marker position_marker_;
@@ -108,7 +111,11 @@ private:
     visualization_msgs::msg::Marker trajectory_marker_;
     visualization_msgs::msg::Marker armors_marker_;
     visualization_msgs::msg::Marker selection_marker_;
+    visualization_msgs::msg::Marker armor_id_marker_;
+    
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+
+    TrackerSnapshot tracker_snapshot_;
 };
 
 } // namespace fyt::auto_aim

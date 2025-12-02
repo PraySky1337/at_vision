@@ -33,6 +33,7 @@
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_utils/math/extended_kalman_filter.hpp"
+#include "armor_solver/matcher.hpp"
 
 namespace fyt::auto_aim {
 
@@ -47,7 +48,9 @@ public:
 
     void init(const Armors::SharedPtr& armors_msg) noexcept;
 
-    void update(const Armors::SharedPtr& armors_msg) noexcept;
+    void update(Armors::SharedPtr& armors_msg, const armor_tracker::Matcher& matcher) noexcept;
+
+    rm_interfaces::msg::Target predict() const;
 
     enum State {
         LOST,
@@ -55,29 +58,18 @@ public:
         TRACKING,
         TEMP_LOST,
     } tracker_state;
-
+    
     std::unique_ptr<RobotStateUKF> kf;
 
     int tracking_thres; // frame
     int lost_thres;     // second
 
-    Armor tracked_armor;
     std::string tracked_id;
     ArmorsNum tracked_armors_num;
     Eigen::VectorXd measurement;
     Eigen::VectorXd target_state;
 
-    // To store another pair of armors message
-    double d_za, another_r;
-
-    // To store offset relative to the reference plane
-    double d_zc;
-
 private:
-    void initEKF(const Armor& a) noexcept;
-
-    void handleArmorJump(const Armor& current_armor) noexcept;
-
     double orientationToYaw(const geometry_msgs::msg::Quaternion& q) noexcept;
 
     static Eigen::Vector3d getArmorPositionFromState(const Eigen::VectorXd& x) noexcept;

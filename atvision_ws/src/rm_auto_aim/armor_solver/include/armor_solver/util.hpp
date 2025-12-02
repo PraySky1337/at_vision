@@ -1,78 +1,61 @@
 #pragma once
+
 #include <Eigen/Dense>
-#include <rm_interfaces/msg/armors.hpp>
 #include <rm_interfaces/msg/target.hpp>
+#include <vector>
 
 namespace util {
-inline std::vector<Eigen::Vector3d> getRoboArmorPositions(
-    const Eigen::Vector3d& target_center, const double target_yaw, const double r1, const double r2,
-    const double d_zc, const double d_za, const size_t armors_num) noexcept {
-    auto armor_positions = std::vector<Eigen::Vector3d>(armors_num, Eigen::Vector3d::Zero());
-    // Calculate the position of each armor
-    bool is_current_pair = true;
-    double r = 0., target_dz = 0.;
-    for (size_t i = 0; i < armors_num; i++) {
-        double temp_yaw =
-            target_yaw + static_cast<int>(i) * (2 * M_PI / static_cast<int>(armors_num));
-        if (armors_num == 4) {
-            r               = is_current_pair ? r1 : r2;
-            target_dz       = d_zc + (is_current_pair ? 0 : d_za);
-            is_current_pair = !is_current_pair;
-        }
-        armor_positions[i] =
-            target_center + Eigen::Vector3d(-r * cos(temp_yaw), -r * sin(temp_yaw), target_dz);
-    }
-    return armor_positions;
+enum State : uint8_t {
+    XC    = 0,
+    VX    = 1,
+    YC    = 2,
+    VY    = 3,
+    ZC    = 4,
+    VZ    = 5,
+    YAW   = 6,
+    V_YAW = 7,
+    R     = 8,
+    L     = 9,  // L = r2 - r1
+    H     = 10, // z2 - z1
+    STATE_MAX   = 11,
+};
+
+enum Measure : uint8_t {
+    ARMOR_X   = 0,
+    ARMOR_Y   = 1,
+    ARMOR_Z   = 2,
+    ARMOR_YAW = 3,
+};
+
+// 根据目标中心、yaw、半径等参数，计算各装甲板中心位置
+std::vector<Eigen::Vector4d> getRoboArmorPose(
+    const Eigen::Vector3d& target_center, double target_yaw, double radius, double l, double z0,
+    double h, size_t armors_num);
+
+// 从 Target 消息中直接计算装甲板中心位置
+std::vector<Eigen::Vector4d> getRoboArmorPose(const rm_interfaces::msg::Target& target);
+
+// 熵权法，输入：样本矩阵 X（行：样本，列：指标），输出：各指标权重
+std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X);
+
+rm_interfaces::msg::Target state2target(const Eigen::MatrixXd& state);
+
+Eigen::Vector3d state2armor_xyz(double const* x, int id, int armors_num);
+
+double limit_rad(double angle);
+
+inline Eigen::Vector3d pose_discard2position(const Eigen::Vector4d& pose) {
+    return {pose.x(), pose.y(), pose.z()};
 }
 
 inline std::vector<Eigen::Vector3d>
-    getRoboArmorPositions(const rm_interfaces::msg::Target& target) {
-    auto& t = target;
-    Eigen::Vector3d target_center{t.position.x, t.position.y, t.position.z};
-    return getRoboArmorPositions(
-        target_center, t.yaw, t.radius_1, t.radius_2, t.d_zc, t.d_za, t.armors_num);
+    pose_discard2position(const std::vector<Eigen::Vector4d>& poses) {
+    std::vector<Eigen::Vector3d> positions;
+    positions.reserve(poses.size());
+    for (const auto& pose : poses) {
+        positions.emplace_back(pose.x(), pose.y(), pose.z());
+    }
+    return positions;
 }
 
-inline std::vector<double> entropyWeight(const std::vector<std::vector<double>>& X) {
-    int m = X.size();    // 样本数（armors 个数）
-    int n = X[0].size(); // 指标数（4 个）
-
-    std::vector<std::vector<double>> P(m, std::vector<double>(n));
-    std::vector<double> e(n, 0.0), w(n, 0.0);
-
-    // 归一化 max-min
-    for (int j = 0; j < n; ++j) {
-        double xmax = -1e9, xmin = 1e9;
-        for (int i = 0; i < m; ++i) {
-            xmax = std::max(xmax, X[i][j]);
-            xmin = std::min(xmin, X[i][j]);
-        }
-        for (int i = 0; i < m; ++i) {
-            if (xmax == xmin)
-                P[i][j] = 0.0;
-            else
-                P[i][j] = (X[i][j] - xmin) / (xmax - xmin);
-        }
-    }
-
-    // 熵值
-    const double k = 1.0 / std::log(m);
-    for (int j = 0; j < n; ++j) {
-        double sum = 0.0;
-        for (int i = 0; i < m; ++i) {
-            if (P[i][j] > 1e-12)
-                sum += P[i][j] * std::log(P[i][j]);
-        }
-        e[j] = -k * sum;
-    }
-
-    // 权重
-    double denom = 0.0;
-    for (double ei : e)
-        denom += (1.0 - ei);
-    for (int j = 0; j < n; ++j)
-        w[j] = (1.0 - e[j]) / denom;
-
-    return w;
-}
 } // namespace util
