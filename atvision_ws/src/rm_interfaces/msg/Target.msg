@@ -7,6 +7,5 @@ geometry_msgs/Vector3 velocity
 float64 yaw
 float64 v_yaw
 float64 radius0
-float64 l
-float64 z0
-float64 h
+float64 radius1
+float64 z1

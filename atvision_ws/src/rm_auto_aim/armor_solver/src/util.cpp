@@ -6,37 +6,32 @@
 
 namespace util {
 
-std::vector<Eigen::Vector4d> getRoboArmorPose(
-    const Eigen::Vector3d& target_center, const double yaw, const double radius, const double l,
-    const double z0, const double h, const size_t armors_num) {
-    (void)z0;
-    auto armor_positions = std::vector<Eigen::Vector4d>(armors_num, Eigen::Vector4d::Zero());
-    // Calculate the position of each armor
+std::vector<Eigen::Vector4d> get_robo_armor_poses(
+    const Eigen::Vector3d& target_pos, const double yaw, const double radius0, const double radius1,
+    const double z1, const size_t armors_num) {
+    std::vector<Eigen::Vector4d> poses(armors_num);
+    const double angle_step = 2.0 * M_PI / static_cast<double>(armors_num);
+    const double cx         = target_pos.x();
+    const double cy         = target_pos.y();
+    const double z0         = target_pos.z();
+
     for (size_t i = 0; i < armors_num; ++i) {
-        bool use_l_h = (i == 1 || i == 3);
-        double r;
-        double z;
-        double temp_yaw = yaw + (int)i * M_PI / 2;
-        if (use_l_h) {
-            r = radius + l;
-            z = target_center.z() + h;
-        } else {
-            r = radius;
-            z = target_center.z();
-        }
-        armor_positions[i] = Eigen::Vector4d(
-            target_center.x() - r * std::cos(temp_yaw), target_center.y() - r * std::sin(temp_yaw),
-            z, temp_yaw);
+        const bool another_pair = (armors_num == 4) && (i == 1 || i == 3);
+        const double r          = another_pair ? radius1 : radius0;
+        const double angle      = normalize_rad(yaw + angle_step * static_cast<double>(i));
+        poses[i].x()            = cx - r * std::cos(angle);
+        poses[i].y()            = cy - r * std::sin(angle);
+        poses[i].z()            = another_pair ? z1 : z0;
+        poses[i].w()            = angle;
     }
 
-    return armor_positions;
+    return poses;
 }
 
-std::vector<Eigen::Vector4d> getRoboArmorPose(const rm_interfaces::msg::Target& target) {
-    const auto& t = target;
-    Eigen::Vector3d target_center{t.position.x, t.position.y, t.position.z};
-
-    return getRoboArmorPose(target_center, t.yaw, t.radius0, t.l, t.z0, t.h, t.armors_num);
+std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target) {
+    Eigen::Vector3d target_center(target.position.x, target.position.y, target.position.z);
+    return get_robo_armor_poses(
+        target_center, target.yaw, target.radius0, target.radius1, target.z1, target.armors_num);
 }
 
 std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X) {
@@ -89,38 +84,30 @@ std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X) {
 
 rm_interfaces::msg::Target state2target(const Eigen::MatrixXd& state) {
     rm_interfaces::msg::Target target;
-    target.position.x = state(XC);
-    target.position.y = state(YC);
-    target.position.z = state(ZC);
-    target.velocity.x = state(VX);
-    target.velocity.y = state(VY);
-    target.velocity.z = state(VZ);
-    target.z0         = state(ZC);
-    target.yaw        = state(YAW);
-    target.v_yaw      = state(V_YAW);
-    target.radius0    = state(R);
-    target.l          = state(L);
-    target.h          = state(H);
+    // target.position.x = state(XC);
+    // target.position.y = state(YC);
+    // target.position.z = state(ZC);
+    // target.velocity.x = state(VX);
+    // target.velocity.y = state(VY);
+    // target.velocity.z = state(VZ);
+    // target.z0         = state(ZC);
+    // target.yaw        = state(YAW);
+    // target.v_yaw      = state(V_YAW);
+    // target.radius0    = state(R);
+    // target.l          = state(L);
+    // target.h          = state(H);
     return target;
 }
 
 Eigen::Vector3d state2armor_xyz(double const* x, int id, int armors_num) {
-    auto angle   = limit_rad(x[YAW] + id * 2 * M_PI / armors_num);
-    auto use_l_h = (armors_num == 4) && (id == 1 || id == 3);
-    auto r       = x[R];
-    if (use_l_h)
-        r += x[L]; // L = r2 - r1 so...
-    auto armor_x = x[XC] - r * std::cos(angle);
-    auto armor_y = x[YC] - r * std::sin(angle);
-    auto armor_z = use_l_h ? x[ZC] + x[H] : x[ZC];
+    auto angle = normalize_rad(x[YAW] + id * 2 * M_PI / armors_num);
+    // auto angle   = normalize_rad(x[YAW] + id * 2 * M_PI / armors_num);
+    bool another_pair = (armors_num == 4) && (id == 1 || id == 3);
+    double r          = another_pair ? x[R_1] : x[R_0];
+    auto armor_x      = x[XC] - r * std::cos(angle);
+    auto armor_y      = x[YC] - r * std::sin(angle);
+    auto armor_z      = another_pair ? x[Z0] : x[Z0] + x[H];
     return {armor_x, armor_y, armor_z};
 }
 
-double limit_rad(double angle) {
-    while (angle > M_PI)
-        angle -= 2 * M_PI;
-    while (angle <= -M_PI)
-        angle += 2 * M_PI;
-    return angle;
-}
 } // namespace util

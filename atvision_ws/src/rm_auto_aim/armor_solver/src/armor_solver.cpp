@@ -96,7 +96,8 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     }
 
     // Use flying time to approximately predict the position of target
-    Eigen::Vector3d target_position(target.position.x, target.position.y, target.position.z);
+    Eigen::Vector3d target_position(
+        target.position.x, target.position.y, (target.position.z + target.z1) / 2);
     double target_yaw  = target.yaw;
     double flying_time = trajectory_compensator_->getFlyingTime(target_position);
     double dt          = (current_time - rclcpp::Time(target.header.stamp)).seconds() + flying_time
@@ -107,7 +108,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     target_yaw += dt * target.v_yaw;
 
     // Choose the best armor to shoot
-    std::vector<Eigen::Vector4d> armor_pose = util::getRoboArmorPose(target);
+    std::vector<Eigen::Vector4d> armor_pose = util::get_robo_armor_poses(target);
 
     int idx =
         selectBestArmor(armor_pose, target_position, target_yaw, target.v_yaw, target.armors_num);
@@ -148,7 +149,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             target_position.y() += controller_delay_ * target.velocity.y;
             target_position.z() += controller_delay_ * target.velocity.z;
             target_yaw += controller_delay_ * target.v_yaw;
-            armor_pose        = util::getRoboArmorPose(target);
+            armor_pose        = util::get_robo_armor_poses(target);
             chosen_armor_pose = armor_pose.at(idx) - xyza_;
             armor_position    = Eigen::Vector3d(
                 chosen_armor_pose.x(), chosen_armor_pose.y(), chosen_armor_pose.z());
@@ -173,8 +174,8 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         break;
     }
     }
-    double cmd_pitch    = pitch;
-    double cmd_yaw      = angles::normalize_angle(yaw);
+    double cmd_pitch = pitch;
+    double cmd_yaw   = angles::normalize_angle(yaw);
 
     gimbal_cmd.yaw        = cmd_yaw * 180 / M_PI;
     gimbal_cmd.pitch      = cmd_pitch * 180 / M_PI;

@@ -19,41 +19,26 @@
 #include "armor_solver/armor_solver_node.hpp"
 
 // std
+#include <cmath>
 #include <memory>
 #include <vector>
 // project
-#include "armor_solver/motion_model.hpp"
 #include "rm_utils/common.hpp"
 #include "rm_utils/heartbeat.hpp"
 
 namespace fyt::auto_aim {
-constexpr double MIN_DT = 0.002;
-constexpr double MAX_DT = 0.1;
+
 ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     : Node("armor_solver", options)
     , dt_(0.004)
-    , solver_(nullptr)
-    , matcher_(get_logger()) {
+    , solver_(nullptr) {
     // Register logger
     FYT_REGISTER_LOGGER("armor_solver", "~/fyt2024-log", INFO);
     RCLCPP_INFO(get_logger(), "Starting ArmorSolver node");
 
-    debug_mode_          = this->declare_parameter("debug", true);
-    bool matcher_verbose = this->declare_parameter("matcher.verbose", false);
+    debug_mode_ = this->declare_parameter("debug", true);
 
-    // Tracker
-    double max_match_distance = this->declare_parameter("tracker.max_match_distance", 0.2);
-    double max_match_yaw_diff = this->declare_parameter("tracker.max_match_yaw_diff", 1.0);
-    matcher_.setVerbose(matcher_verbose);
-    matcher_.setConstraints(max_match_distance, max_match_yaw_diff, true);
-    tracker_                 = std::make_unique<Tracker>(max_match_distance, max_match_yaw_diff);
-    tracker_->tracking_thres = this->declare_parameter("tracker.tracking_thres", 5);
-    lost_time_thres_         = this->declare_parameter("tracker.lost_time_thres", 0.3);
-
-    initKF();
     // Callback groups
-    armors_callback_group_ =
-        this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     timer_callback_group_ =
         this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -63,9 +48,7 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         this->get_node_base_interface(), this->get_node_timers_interface());
     tf2_buffer_->setCreateTimerInterface(timer_interface);
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
-    rclcpp::SubscriptionOptions sub_options;
-    sub_options.callback_group = armors_callback_group_;
-    armors_sub_.subscribe(this, "armor_detector/armors", rmw_qos_profile_sensor_data, sub_options);
+    armors_sub_.subscribe(this, "armor_detector/armors", rmw_qos_profile_sensor_data);
     target_frame_ = this->declare_parameter("target_frame", "odom");
     tf2_filter_   = std::make_shared<tf2_filter>(
         armors_sub_, *tf2_buffer_, target_frame_, 10, this->get_node_logging_interface(),
@@ -89,73 +72,6 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         timer_callback_group_);
 
     initMarkers();
-}
-
-void ArmorSolverNode::initKF() {
-    // EKF
-    // xa = x_armor, xc = x_robot_center
-    // state: xc, v_xc, yc, v_yc, zc, v_zc, yaw, v_yaw, r, d_zc
-    // measurement: p, y, d, yaw
-    // f - Process function
-    auto f = Predict(0.005);
-    // h - Observation function
-    auto h = Measure();
-    // update_Q - process noise covariance matrix
-    s2qxyz_ = declare_parameter("kf.sigma2_q_x", 20.0);
-    s2qyaw_ = declare_parameter("kf.sigma2_q_yaw", 100.0);
-    s2qr_   = declare_parameter("kf.sigma2_q_r", 800.0);
-
-    auto u_q = [this]() {
-        Eigen::Matrix<double, X_N, X_N> q;
-        const double t = std::max(dt_, 1e-3);
-        double x = s2qxyz_, y = s2qxyz_, z = s2qxyz_, yaw = s2qyaw_, r = s2qr_;
-        double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
-        double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y, q_vy_vy = pow(t, 2) * y;
-        double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
-        double q_yaw_yaw = pow(t, 4) / 4 * yaw, q_yaw_vyaw = pow(t, 3) / 2 * x,
-               q_vyaw_vyaw = pow(t, 2) * yaw;
-        double q_r         = pow(t, 4) / 4 * r;
-        double q_l         = pow(t, 4) / 4;
-        double q_h         = pow(t, 4) / 4;
-        // clang-format off
-    //    xc      v_xc    yc      v_yc    zc      v_zc    yaw         v_yaw       r       h      l
-    q <<  q_x_x,  q_x_vx, 0,      0,      0,      0,      0,          0,          0,      0,      0,
-          q_x_vx, q_vx_vx,0,      0,      0,      0,      0,          0,          0,      0,      0,
-          0,      0,      q_y_y,  q_y_vy, 0,      0,      0,          0,          0,      0,      0,
-          0,      0,      q_y_vy, q_vy_vy,0,      0,      0,          0,          0,      0,      0,
-          0,      0,      0,      0,      q_z_z,  q_z_vz, 0,          0,          0,      0,      0,
-          0,      0,      0,      0,      q_z_vz, q_vz_vz,0,          0,          0,      0,      0,
-          0,      0,      0,      0,      0,      0,      q_yaw_yaw,  q_yaw_vyaw, 0,      0,      0,
-          0,      0,      0,      0,      0,      0,      q_yaw_vyaw, q_vyaw_vyaw,0,      0,      0,
-          0,      0,      0,      0,      0,      0,      0,          0,          q_r,    0,      0,
-          0,      0,      0,      0,      0,      0,      0,          0,          0,      q_l,    0,
-          0,      0,      0,      0,      0,      0,      0,          0,          0,      0,      q_h;
-
-        // clang-format on
-        return q;
-    };
-    // update_R - measurement noise covariance matrix
-    r_x_     = declare_parameter("kf.r_x", 0.05);
-    r_y_     = declare_parameter("kf.r_y", 0.05);
-    r_z_     = declare_parameter("kf.r_z", 0.05);
-    r_yaw_   = declare_parameter("kf.r_yaw", 0.02);
-    auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
-        Eigen::Matrix<double, Z_N, Z_N> r;
-        // clang-format off
-    r << r_x_ * std::abs(z[0]), 0, 0, 0,
-         0, r_y_ * std::abs(z[1]), 0, 0,
-         0, 0, r_z_ * std::abs(z[2]), 0,
-         0, 0, 0, r_yaw_ * std::sqrt(z[0]*z[0] + z[1]*z[1] + z[2]*z[2]);
-        // clang-format on
-        return r;
-    };
-    // P - error estimate covariance matrix
-    Eigen::Matrix<double, X_N, X_N> P0 = Eigen::Matrix<double, X_N, X_N>::Identity();
-
-    double alpha = declare_parameter("ukf.alpha", 0.1);
-    double beta  = declare_parameter("ukf.beta", 2.0);
-    double kappa = declare_parameter("ukf.kappa", 0.0);
-    tracker_->kf = std::make_unique<RobotStateUKF>(f, h, u_q, u_r, P0, alpha, beta, kappa);
 }
 
 void ArmorSolverNode::timerCallback() {
@@ -199,6 +115,7 @@ void ArmorSolverNode::timerCallback() {
         control_msg.distance    = -1;
         control_msg.fire_advice = false;
     }
+
     gimbal_pub_->publish(control_msg);
 
     if (debug_mode_ && marker_pub_ != nullptr) {
@@ -273,72 +190,23 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
             return;
         }
     }
+    armors_msg->header.frame_id = target_frame_;
 
     // Init message
-    rm_interfaces::msg::Measurement measure_msg;
-    rm_interfaces::msg::Target target_msg;
-    rclcpp::Time time          = armors_msg->header.stamp;
-    target_msg.header.stamp    = time;
-    target_msg.header.frame_id = target_frame_;
-    if (last_time_.nanoseconds() > 0) {
-        dt_ = (time - last_time_).seconds();
-    }
-    dt_ = std::clamp(dt_, MIN_DT, MAX_DT);
-
     // Update tracker
-    bool publish_measure = false;
-    TrackerSnapshot snapshot;
-    if (tracker_->tracker_state == Tracker::LOST) {
-        tracker_->init(armors_msg);
-        target_msg.id       = tracker_->tracked_id;
-        target_msg.tracking = false;
+    std::string number;
+    auto n = now();
+    target.predict((n - armors_msg->header.stamp).seconds());
+    if (target.state == armor_tracker::Tracker::IDLE) {
+        number = target.first_meet_u(*armors_msg);
     } else {
-        tracker_->lost_thres = std::abs(static_cast<int>(lost_time_thres_ / dt_));
-        if (tracker_->tracked_id == "outpost") {
-            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_ROTATION});
-        } else {
-            tracker_->kf->setPredictFunc(Predict{dt_, MotionModel::CONSTANT_VEL_ROT});
-        }
-        tracker_->update(armors_msg, matcher_);
-        // Publish measurement
-        measure_msg.x1   = tracker_->measurement(0);
-        measure_msg.y1   = tracker_->measurement(1);
-        measure_msg.z1   = tracker_->measurement(2);
-        measure_msg.yaw1 = tracker_->measurement(3);
-        measure_msg.x2   = 0;
-        measure_msg.y2   = 0;
-        measure_msg.z2   = 0;
-        measure_msg.yaw2 = 0;
-        publish_measure  = true;
-
-        if (tracker_->tracker_state == Tracker::DETECTING) {
-            target_msg.id       = tracker_->tracked_id;
-            target_msg.tracking = false;
-        } else if (
-            tracker_->tracker_state == Tracker::TRACKING
-            || tracker_->tracker_state == Tracker::TEMP_LOST) {
-            target_msg.tracking = true;
-            // Fill target message
-            auto header           = target_msg.header; // preserve header
-            target_msg            = util::state2target(tracker_->target_state);
-            target_msg.header     = header;
-            target_msg.id         = tracker_->tracked_id;
-            target_msg.armors_num = static_cast<int>(tracker_->tracked_armors_num);
-        }
+        target.update(*armors_msg);
     }
+    rm_interfaces::msg::Target target_msg = target.get_target();
 
-    // Snapshot a safe copy for marker publishing (no Eigen inside)
-    snapshot.target            = util::state2target(tracker_->target_state);
-    snapshot.target.header     = target_msg.header;
-    snapshot.target.tracking   = tracker_->tracker_state != Tracker::LOST;
-    snapshot.target.id         = tracker_->tracked_id;
-    snapshot.target.armors_num = static_cast<int>(tracker_->tracked_armors_num);
-    snapshot.target.radius0    = tracker_->target_state[util::R];
-    snapshot.target.l          = tracker_->target_state(util::L);
-    snapshot.target.h          = tracker_->target_state(util::H);
-    snapshot.target.z0         = snapshot.target.position.z;
-    snapshot.valid             = tracker_->tracker_state != Tracker::LOST;
-
+    target_msg.header.stamp    = n;
+    target_msg.header.frame_id = target_frame_;
+    target_msg.id              = number;
     // Store and Publish the target_msg
     {
         std::lock_guard<std::mutex> lock(target_mutex_);
@@ -347,11 +215,6 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
             solver_ = std::make_unique<Solver>(weak_from_this());
         }
         armor_target_ = target_msg;
-        tracker_snapshot_ = snapshot;
-        last_time_    = time;
-    }
-    if (publish_measure) {
-        measure_pub_->publish(measure_msg);
     }
     target_pub_->publish(target_msg);
 }
@@ -359,163 +222,169 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
 void ArmorSolverNode::publishMarkers(
     const rm_interfaces::msg::Target& target_msg,
     const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept {
-    // 记录上一帧装甲板数量，用于 DELETE 多余的旧 marker
-    RCLCPP_DEBUG(get_logger(), "Publish Marker");
+    using visualization_msgs::msg::Marker;
+    using visualization_msgs::msg::MarkerArray;
+    MarkerArray marry;
+    const std_msgs::msg::Header hdr = target_msg.header;
 
-    rm_interfaces::msg::Target display_target = target_msg;
-    TrackerSnapshot snapshot_copy;
-    {
-        std::lock_guard<std::mutex> lock(target_mutex_);
-        snapshot_copy = tracker_snapshot_;
-    }
-    if (snapshot_copy.valid) {
-        const auto& header = display_target.header;
+    int a_n = target_msg.armors_num;
+    assert(a_n == 4 || a_n == 3);
 
-        display_target          = snapshot_copy.target;
-        display_target.header   = header;
-        display_target.tracking = true;
-    }
+    position_marker_.action          = visualization_msgs::msg::Marker::ADD;
+    position_marker_.header           = hdr;
+    position_marker_.pose.position   = target_msg.position;
+    position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
 
-    // 公共 header
-    position_marker_.header  = display_target.header;
-    linear_v_marker_.header  = display_target.header;
-    angular_v_marker_.header = display_target.header;
-    armors_marker_.header    = display_target.header;
-    selection_marker_.header = display_target.header;
+    armors_marker_.action  = visualization_msgs::msg::Marker::ADD;
+    armors_marker_.header  = hdr;
+    armors_marker_.scale.y = target_msg.id == "1" || target_msg.id == "Bb" ? 0.23 : 0.135;
+    geometry_msgs::msg::Point point_armor;
+    for (int i = 0; i < a_n; i++) {
+        double tmp_yaw = target_msg.yaw + i * (2 * M_PI / a_n);
+        double radius;
+        if (a_n == 4) {
+            bool is_another_pair = (i == 1 || i == 3);
+            radius               = is_another_pair ? target_msg.radius0 : target_msg.radius1;
+            point_armor.z        = is_another_pair ? target_msg.z1 : target_msg.position.z;
+        } else if (a_n == 3) {
 
-    visualization_msgs::msg::MarkerArray marker_array;
-
-    if (display_target.tracking || true) {
-        // 位置球
-        double xc = display_target.position.x;
-        double yc = display_target.position.y;
-        double zc = display_target.position.z;
-
-        double vx = display_target.velocity.x;
-        double vy = display_target.velocity.y;
-        double vz = display_target.velocity.z;
-
-        position_marker_.action          = visualization_msgs::msg::Marker::ADD;
-        position_marker_.pose.position.x = xc;
-        position_marker_.pose.position.y = yc;
-        position_marker_.pose.position.z = (zc + display_target.h + zc) / 2.0;
-
-        // 线速度箭头
-        linear_v_marker_.action = visualization_msgs::msg::Marker::ADD;
-        linear_v_marker_.points.clear();
-        linear_v_marker_.points.emplace_back(position_marker_.pose.position);
-        geometry_msgs::msg::Point arrow_end = position_marker_.pose.position;
-        arrow_end.x += vx;
-        arrow_end.y += vy;
-        arrow_end.z += vz;
-        linear_v_marker_.points.emplace_back(arrow_end);
-
-        // 角速度箭头
-        angular_v_marker_.action = visualization_msgs::msg::Marker::ADD;
-        angular_v_marker_.points.clear();
-        angular_v_marker_.points.emplace_back(position_marker_.pose.position);
-        arrow_end = position_marker_.pose.position;
-        arrow_end.z += display_target.v_yaw / M_PI;
-        angular_v_marker_.points.emplace_back(arrow_end);
-
-        // 装甲板 Marker
-        armors_marker_.action = visualization_msgs::msg::Marker::ADD;
-        if (snapshot_copy.valid && snapshot_copy.target.id == "1") {
-            armors_marker_.scale.y = 0.23;
         } else {
-            armors_marker_.scale.y = 0.135;
+            RCLCPP_ERROR(get_logger(), "Invalid armors num");
         }
+        point_armor.x                = target_msg.position.x - radius * std::cos(tmp_yaw);
+        point_armor.y                = target_msg.position.y - radius * std::sin(tmp_yaw);
+        armors_marker_.id            = i;
+        armors_marker_.pose.position = point_armor;
+        tf2::Quaternion q;
+        q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
+        armors_marker_.pose.orientation = tf2::toMsg(q);
+        marry.markers.emplace_back(armors_marker_);
+    }
+    marry.markers.emplace_back(position_marker_);
 
-        auto vec_xyza   = util::getRoboArmorPose(display_target);
+    Marker m_vel;
+    m_vel.type   = Marker::ARROW;
+    m_vel.header = hdr;
+    m_vel.ns     = "cv3d";
+    m_vel.id     = 1;
+    m_vel.type   = Marker::ARROW;
+    m_vel.action = Marker::ADD;
 
-        // 重新 ADD 当前帧装甲板及其 ID 文本
-        int id = 0;
-        for (const auto& armor : vec_xyza) {
-            armors_marker_.id = id;
-            auto& pos         = armors_marker_.pose.position;
+    geometry_msgs::msg::Point p0, p1;
+    p0 = target_msg.position;
+    marker_pub_->publish(marry);
+}
 
-            pos.x = armor.x();
-            pos.y = armor.y();
-            pos.z = armor.z();
+void ArmorSolverNode::publish_cv_3d_markers(const rm_interfaces::msg::Target& target) noexcept {
+    using visualization_msgs::msg::Marker;
+    using visualization_msgs::msg::MarkerArray;
 
-            tf2::Quaternion q;
-            q.setRPY(0, display_target.id == "outpost" ? -0.2618 : 0.2618, armor.w());
-            armors_marker_.pose.orientation = tf2::toMsg(q);
-            armors_marker_.action           = visualization_msgs::msg::Marker::ADD;
-            marker_array.markers.emplace_back(armors_marker_);
+    MarkerArray marr;
+    marr.markers.reserve(3);
 
-            // Armor ID label above the cube
-            armor_id_marker_.header = display_target.header;
-            armor_id_marker_.id     = armors_marker_.id + 100; // 避免和 cube 冲突
-            armor_id_marker_.pose   = armors_marker_.pose;
-            armor_id_marker_.pose.position.z += 0.15;
-            armor_id_marker_.text   = std::to_string(armors_marker_.id);
-            armor_id_marker_.action = visualization_msgs::msg::Marker::ADD;
-            marker_array.markers.emplace_back(armor_id_marker_);
+    // 通用 header
+    std_msgs::msg::Header hdr = target.header;
+    hdr.frame_id              = "odom";
 
-            ++id;
-        }
+    // ========== 位置：球 ==========
+    Marker m_pos;
+    m_pos.header = hdr;
+    m_pos.ns     = "cv3d";
+    m_pos.id     = 0;
+    m_pos.type   = Marker::SPHERE;
+    m_pos.action = Marker::ADD;
 
-        // 选择点（弹道落点）
-        selection_marker_.action = visualization_msgs::msg::Marker::ADD;
-        selection_marker_.pose.position.y =
-            gimbal_cmd.distance * std::sin(gimbal_cmd.yaw * M_PI / 180.0);
-        selection_marker_.pose.position.x =
-            gimbal_cmd.distance * std::cos(gimbal_cmd.yaw * M_PI / 180.0);
-        selection_marker_.pose.position.z =
-            gimbal_cmd.distance * std::sin(gimbal_cmd.pitch * M_PI / 180.0);
+    m_pos.pose.position      = target.position;
+    m_pos.pose.orientation.w = 1.0;
 
-        // 轨迹点：注意顺序，先 clear 再填，再 ADD
-        trajectory_marker_.header.frame_id = "muzzle_link";
-        trajectory_marker_.action          = visualization_msgs::msg::Marker::ADD;
-        trajectory_marker_.points.clear();
-        for (const auto& point : solver_->getTrajectory()) {
-            geometry_msgs::msg::Point p;
-            p.x = point.first;
-            p.y = 0.0; // 只用 x-z，y 设为 0
-            p.z = point.second;
-            trajectory_marker_.points.emplace_back(p);
-        }
+    m_pos.scale.x = 0.12;
+    m_pos.scale.y = 0.12;
+    m_pos.scale.z = 0.12;
 
-        if (gimbal_cmd.fire_advice) {
-            trajectory_marker_.color.r = 0;
-            trajectory_marker_.color.g = 1;
-            trajectory_marker_.color.b = 0;
-        } else {
-            trajectory_marker_.color.r = 1;
-            trajectory_marker_.color.g = 1;
-            trajectory_marker_.color.b = 1;
-        }
+    m_pos.color.r = 0.1f;
+    m_pos.color.g = 0.9f;
+    m_pos.color.b = 0.1f;
+    m_pos.color.a = 0.3f;
 
+    // ========== 速度：箭头 ==========
+    Marker m_vel;
+    m_vel.header = hdr;
+    m_vel.ns     = "cv3d";
+    m_vel.id     = 1;
+    m_vel.type   = Marker::ARROW;
+    m_vel.action = Marker::ADD;
+
+    geometry_msgs::msg::Point p0, p1;
+    p0 = target.position;
+
+    auto& vel   = target.velocity;
+    double norm = std::sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+
+    // 速度方向 & 长度
+    double len = 0.0;
+    if (norm > 1e-6) {
+        // 可按需缩放，以免太长/太短
+        double scale_len = 0.2; // 自己调
+        len              = norm * scale_len;
+
+        p1.x = p0.x + vel.x / norm * len;
+        p1.y = p0.y + vel.y / norm * len;
+        p1.z = p0.z + vel.z / norm * len;
     } else {
-        // 目标丢失：删除所有 marker，包括装甲板 cube + 文本 + 轨迹
-        position_marker_.action   = visualization_msgs::msg::Marker::DELETE;
-        linear_v_marker_.action   = visualization_msgs::msg::Marker::DELETE;
-        angular_v_marker_.action  = visualization_msgs::msg::Marker::DELETE;
-        armors_marker_.action     = visualization_msgs::msg::Marker::DELETE;
-        selection_marker_.action  = visualization_msgs::msg::Marker::DELETE;
-        trajectory_marker_.action = visualization_msgs::msg::Marker::DELETE;
-        trajectory_marker_.points.clear();
-
-        for (int i = 0; i < target_msg.armors_num; ++i) {
-            armors_marker_.id = i;
-            marker_array.markers.emplace_back(armors_marker_);
-
-            armor_id_marker_.header = display_target.header;
-            armor_id_marker_.id     = i + 100;
-            armor_id_marker_.action = visualization_msgs::msg::Marker::DELETE;
-            marker_array.markers.emplace_back(armor_id_marker_);
-        }
+        // 速度很小时就画个几乎看不见的短箭头
+        p1 = p0;
     }
 
-    // 公共 marker（装甲板和文本已经在上面 emplace_back 过了）
-    marker_array.markers.emplace_back(position_marker_);
-    marker_array.markers.emplace_back(trajectory_marker_);
-    marker_array.markers.emplace_back(linear_v_marker_);
-    marker_array.markers.emplace_back(angular_v_marker_);
-    marker_array.markers.emplace_back(selection_marker_);
+    m_vel.points.clear();
+    m_vel.points.push_back(p0);
+    m_vel.points.push_back(p1);
 
-    marker_pub_->publish(marker_array);
+    // 箭头粗细
+    m_vel.scale.x = 0.03;                      // shaft 直径
+    m_vel.scale.y = 0.06;                      // head 直径
+    m_vel.scale.z = std::max(0.05, len * 0.3); // head 长度，给个最小值
+
+    m_vel.color.r = 1.0f;
+    m_vel.color.g = 0.1f;
+    m_vel.color.b = 0.1f;
+    m_vel.color.a = 0.95f;
+
+    // ========== yaw 速度：箭头（示例：竖直向上） ==========
+    Marker m_yaw_vel;
+    m_yaw_vel.header = hdr;
+    m_yaw_vel.ns     = "cv3d";
+    m_yaw_vel.id     = 2;
+    m_yaw_vel.type   = Marker::ARROW;
+    m_yaw_vel.action = Marker::ADD;
+
+    geometry_msgs::msg::Point yaw_p0, yaw_p1;
+    yaw_p0 = target.position;
+    yaw_p1 = yaw_p0;
+
+    // 用 v_yaw 控制 z 方向长度，按需缩放
+    double yaw_len = target.v_yaw * 0.2; // 自己调比例
+    yaw_p1.z += yaw_len;
+
+    m_yaw_vel.points.clear();
+    m_yaw_vel.points.push_back(yaw_p0);
+    m_yaw_vel.points.push_back(yaw_p1);
+
+    m_yaw_vel.scale.x = 0.02;
+    m_yaw_vel.scale.y = 0.04;
+    m_yaw_vel.scale.z = std::max(0.03, std::abs(yaw_len) * 0.4);
+
+    m_yaw_vel.color.r = 0.1f;
+    m_yaw_vel.color.g = 0.1f;
+    m_yaw_vel.color.b = 1.0f;
+    m_yaw_vel.color.a = 0.9f;
+
+    marr.markers.push_back(std::move(m_pos));
+    marr.markers.push_back(std::move(m_vel));
+    marr.markers.push_back(std::move(m_yaw_vel));
+
+    if (marker_pub_) {
+        marker_pub_->publish(marr);
+    }
 }
 
 } // namespace fyt::auto_aim

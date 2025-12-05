@@ -35,14 +35,13 @@
 #include <vector>
 // project
 #include "armor_solver/armor_solver.hpp"
-#include "armor_solver/armor_tracker.hpp"
-#include "matcher.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/measurement.hpp"
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_interfaces/srv/set_mode.hpp"
 #include "rm_utils/heartbeat.hpp"
 #include "rm_utils/logger/log.hpp"
+#include "target.hpp"
 
 namespace fyt::auto_aim {
 using tf2_filter = tf2_ros::MessageFilter<rm_interfaces::msg::Armors>;
@@ -55,16 +54,17 @@ private:
 
     void initMarkers() noexcept;
 
-    void initKF();
-
     void publishMarkers(
         const rm_interfaces::msg::Target& target_msg,
         const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
+    // demo
+    void publish_cv_3d_markers(const rm_interfaces::msg::Target& target) noexcept;
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     bool debug_mode_;
 
+    armor_tracker::Tracker target;
     // The time when the last message was received
     rclcpp::Time last_time_;
     double dt_;
@@ -73,11 +73,9 @@ private:
     double s2qxyz_, s2qyaw_, s2qr_, s2qd_zc_;
     double r_x_, r_y_, r_z_, r_yaw_;
     double lost_time_thres_;
-    std::unique_ptr<Tracker> tracker_;
 
     // Armor Solver
     std::unique_ptr<Solver> solver_;
-    armor_tracker::Matcher matcher_;
     std::mutex target_mutex_;
 
     // Subscriber with tf2 message_filter
@@ -96,7 +94,6 @@ private:
     rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_pub_;
     rclcpp::TimerBase::SharedPtr pub_timer_;
     void timerCallback();
-    rclcpp::CallbackGroup::SharedPtr armors_callback_group_;
     rclcpp::CallbackGroup::SharedPtr timer_callback_group_;
 
     struct TrackerSnapshot {
@@ -112,7 +109,7 @@ private:
     visualization_msgs::msg::Marker armors_marker_;
     visualization_msgs::msg::Marker selection_marker_;
     visualization_msgs::msg::Marker armor_id_marker_;
-    
+
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
     TrackerSnapshot tracker_snapshot_;
