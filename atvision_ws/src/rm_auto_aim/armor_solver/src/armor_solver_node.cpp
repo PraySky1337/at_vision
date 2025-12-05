@@ -195,8 +195,11 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
     // Init message
     // Update tracker
     std::string number;
-    auto n = now();
-    target.predict((n - armors_msg->header.stamp).seconds());
+    auto n     = now();
+    double dts = (n - armors_msg->header.stamp).seconds();
+    if (target.state != armor_tracker::Tracker::IDLE) {
+        target.predict(dts);
+    }
     if (target.state == armor_tracker::Tracker::IDLE) {
         number = target.first_meet_u(*armors_msg);
     } else {
@@ -229,46 +232,92 @@ void ArmorSolverNode::publishMarkers(
 
     int a_n = target_msg.armors_num;
     assert(a_n == 4 || a_n == 3);
+    if (target_msg.tracking) {
 
-    position_marker_.action          = visualization_msgs::msg::Marker::ADD;
-    position_marker_.header           = hdr;
-    position_marker_.pose.position   = target_msg.position;
-    position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
+        linear_v_marker_.header  = hdr;
+        angular_v_marker_.header = hdr;
+        position_marker_.header  = hdr;
 
-    armors_marker_.action  = visualization_msgs::msg::Marker::ADD;
-    armors_marker_.header  = hdr;
-    armors_marker_.scale.y = target_msg.id == "1" || target_msg.id == "Bb" ? 0.23 : 0.135;
-    geometry_msgs::msg::Point point_armor;
-    for (int i = 0; i < a_n; i++) {
-        double tmp_yaw = target_msg.yaw + i * (2 * M_PI / a_n);
-        double radius;
-        if (a_n == 4) {
-            bool is_another_pair = (i == 1 || i == 3);
-            radius               = is_another_pair ? target_msg.radius0 : target_msg.radius1;
-            point_armor.z        = is_another_pair ? target_msg.z1 : target_msg.position.z;
-        } else if (a_n == 3) {
+        position_marker_.action          = visualization_msgs::msg::Marker::ADD;
+        position_marker_.pose.position   = target_msg.position;
+        position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
 
-        } else {
-            RCLCPP_ERROR(get_logger(), "Invalid armors num");
+        linear_v_marker_.action = visualization_msgs::msg::Marker::ADD;
+        linear_v_marker_.points.clear();
+        linear_v_marker_.points.emplace_back(position_marker_.pose.position);
+        geometry_msgs::msg::Point arrow_end = position_marker_.pose.position;
+        arrow_end.x += target_msg.velocity.x;
+        arrow_end.y += target_msg.velocity.y;
+        arrow_end.z += target_msg.velocity.z;
+        linear_v_marker_.points.emplace_back(arrow_end);
+        angular_v_marker_.action = visualization_msgs::msg::Marker::ADD;
+        angular_v_marker_.points.clear();
+        angular_v_marker_.points.emplace_back(position_marker_.pose.position);
+        arrow_end = position_marker_.pose.position;
+        arrow_end.z += target_msg.v_yaw / M_PI;
+        angular_v_marker_.points.emplace_back(arrow_end);
+
+        armors_marker_.action  = visualization_msgs::msg::Marker::ADD;
+        armors_marker_.header  = hdr;
+        armors_marker_.scale.y = target_msg.id == "1" || target_msg.id == "Bb" ? 0.23 : 0.135;
+        geometry_msgs::msg::Point point_armor;
+        for (int i = 0; i < a_n; i++) {
+            double tmp_yaw = target_msg.yaw + i * (2 * M_PI / a_n);
+            double radius;
+            if (a_n == 4) {
+                bool is_another_pair = (i == 1 || i == 3);
+                radius               = is_another_pair ? target_msg.radius1 : target_msg.radius0;
+                point_armor.z        = is_another_pair ? target_msg.z1 : target_msg.position.z;
+            } else if (a_n == 3) {
+                // TODO: 3 装甲逻辑
+            } else {
+                RCLCPP_ERROR(get_logger(), "Invalid armors num");
+            }
+
+            point_armor.x                = target_msg.position.x - radius * std::cos(tmp_yaw);
+            point_armor.y                = target_msg.position.y - radius * std::sin(tmp_yaw);
+            armors_marker_.id            = i;
+            armors_marker_.pose.position = point_armor;
+            tf2::Quaternion q;
+            q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
+            armors_marker_.pose.orientation = tf2::toMsg(q);
+            marry.markers.emplace_back(armors_marker_);
+
+            // ===== 在装甲板头顶加文字 =====
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header = hdr;
+            text_marker.ns     = "armor_id_text";
+            text_marker.id     = 100 + i; // 确保和 armors_marker_.id 不重复
+            text_marker.type   = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+
+            // 文字高度
+            text_marker.scale.z = 0.2; // 根据实际需求调
+
+            // 颜色（白色、不透明）
+            text_marker.color.r = 1.0;
+            text_marker.color.g = 1.0;
+            text_marker.color.b = 1.0;
+            text_marker.color.a = 1.0;
+
+            // 位置：和装甲板一样，但 z 往上抬一点
+            text_marker.pose = armors_marker_.pose;
+            text_marker.pose.position.z += 0.15; // 抬高一点避免和模型重叠
+
+            // 显示的文字内容：对应 i
+            text_marker.text = std::to_string(i);
+
+            marry.markers.emplace_back(text_marker);
         }
-        point_armor.x                = target_msg.position.x - radius * std::cos(tmp_yaw);
-        point_armor.y                = target_msg.position.y - radius * std::sin(tmp_yaw);
-        armors_marker_.id            = i;
-        armors_marker_.pose.position = point_armor;
-        tf2::Quaternion q;
-        q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
-        armors_marker_.pose.orientation = tf2::toMsg(q);
-        marry.markers.emplace_back(armors_marker_);
+    } else {
+        position_marker_.action  = Marker::DELETE;
+        armors_marker_.action    = Marker::DELETE;
+        linear_v_marker_.action  = Marker::DELETE;
+        selection_marker_.action = Marker::DELETE;
+        angular_v_marker_.action = Marker::DELETE;
     }
+    marry.markers.emplace_back(angular_v_marker_);
     marry.markers.emplace_back(position_marker_);
-
-    Marker m_vel;
-    m_vel.type   = Marker::ARROW;
-    m_vel.header = hdr;
-    m_vel.ns     = "cv3d";
-    m_vel.id     = 1;
-    m_vel.type   = Marker::ARROW;
-    m_vel.action = Marker::ADD;
 
     geometry_msgs::msg::Point p0, p1;
     p0 = target_msg.position;

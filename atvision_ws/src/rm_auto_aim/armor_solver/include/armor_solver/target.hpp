@@ -22,7 +22,7 @@ struct Tracker {
     std::string first_meet_u(const rm_interfaces::msg::Armors& armor);
     void step(double dts, const rm_interfaces::msg::Armors& armors);
     void predict(double dts);
-    void update(const rm_interfaces::msg::Armors& armors);
+    bool update(const rm_interfaces::msg::Armors& armors);
     rm_interfaces::msg::Target get_target();
 
     std::string name;

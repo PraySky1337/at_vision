@@ -8,8 +8,7 @@ namespace srukf {
 
 template <typename Scalar>
 struct SigmaPointConfig {
-    // alpha 太小会导致 lambda 逼近 -n，权重爆炸；默认取 1 更稳健
-    Scalar alpha{static_cast<Scalar>(1.0)};
+    Scalar alpha{static_cast<Scalar>(0.518)}; // 0.517 - 1.932
     Scalar beta{static_cast<Scalar>(2.0)};
     Scalar kappa{static_cast<Scalar>(0.0)};
 };
@@ -242,6 +241,7 @@ public:
     }
 
     const VecX& x() const noexcept { return x_; }
+    VecX* x_raw_ptr() noexcept { return &x_; }
     MatXX P() const { return Sx_ * Sx_.transpose(); }
     const MatXX& Sx() const noexcept { return Sx_; }
 

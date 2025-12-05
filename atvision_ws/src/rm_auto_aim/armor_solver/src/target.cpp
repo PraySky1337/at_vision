@@ -4,18 +4,16 @@
 
 namespace armor_tracker {
 
-void Tracker::update(const rm_interfaces::msg::Armors& armors) {
+bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
     if (!ukf.has_value()) {
-        // 外面自己先调用 first_meet_u 初始化
-        return;
+        return false;
     }
-
     std::vector<int> idx;
     auto matched = match_all(armors, idx, ukf->x());
     if (matched.empty()) {
-        // 没有任何通过门控的观测，这一帧可以只做 predict（在外面根据时间戳调用）
+        // 没有任何通过门控的观测，这一帧只做 predict
         state_machine(false);
-        return;
+        return false;
     }
 
     // 有观测，就认为 found = true
@@ -32,12 +30,15 @@ void Tracker::update(const rm_interfaces::msg::Armors& armors) {
         z[1] = ia.pose.position.y;
         z[2] = ia.pose.position.z;
         double yaw;
-        yaw  = util::orientation2yaw(ia.pose.orientation);
-        z[3] = util::unwrap_rad(ukf->x()[util::YAW] + idx[i] * 2 * M_PI / armor_num, yaw); // -pi - pi
+        yaw = util::orientation2yaw(ia.pose.orientation);
+        z[3] =
+            util::unwrap_rad(ukf->x()[util::YAW] + idx[i] * 2 * M_PI / armor_num, yaw); // -pi - pi
 
         cv3d_model_.armor_id = idx[i];
+        cv3d_model_.armors_num = armor_num;
         ukf->update(z);
     }
+    return true;
 }
 
 void Tracker::step(double dts, const rm_interfaces::msg::Armors& armors) {
@@ -46,8 +47,14 @@ void Tracker::step(double dts, const rm_interfaces::msg::Armors& armors) {
 }
 
 void Tracker::predict(double dts) {
-    if (ukf.has_value())
+    if (ukf.has_value()) {
         ukf->predict(dts);
+        auto& x = *ukf->x_raw_ptr();
+        // 比较粗鲁的防止发散的策略
+        // x[util::R_0] = std::clamp(x[util::R_0], 0.13, 0.3);
+        // x[util::R_1] = std::clamp(x[util::R_1], 0.13, 0.3);
+        // x[util::H]= std::clamp(x[util::H], -0.2, 0.2);
+    }
 }
 
 rm_interfaces::msg::Target Tracker::get_target() {
@@ -70,6 +77,7 @@ rm_interfaces::msg::Target Tracker::get_target() {
     msg.z1         = x[Z0] + x[H];
     msg.radius0    = x[R_0];
     msg.radius1    = x[R_1];
+    msg.tracking   = state == TRACKING;
     return msg;
 }
 
@@ -95,7 +103,8 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
     auto& tgt      = armors.armors[min_distance_idx];
     auto& pos      = tgt.pose.position;
     name           = tgt.number;
-    armor_num = tgt.number == "outpost" ? 3 : 4;
+    armor_num      = tgt.number == "outpost" ? 3 : 4;
+    cv3d_model_.armors_num = armor_num;
     double x0      = pos.x;
     double y0      = pos.y;
     double z0      = pos.z;
@@ -115,21 +124,12 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
 std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
     const rm_interfaces::msg::Armors& armors, std::vector<int>& idx, const ImplUKF::VecX& x_pre) {
 
+    cv3d_model_.armors_num = armor_num;
+
     std::vector<rm_interfaces::msg::Armor> matched;
     idx.clear();
-    if (state == DETECTING) {
-        for (int i = 0; i < armors.armors.size(); i++) {
-            auto& ia = armors.armors[i];
-            if (ia.number == name) {
-                idx.push_back(i);
-                break;
-            } else {
-                continue;
-            }
-        }
-    }
 
-    // 没观测，直接返回空
+  
     if (armors.armors.empty()) {
         return matched;
     }
@@ -137,7 +137,7 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
     const int n_obs      = static_cast<int>(armors.armors.size());
     const int armors_num = (name == "outpost") ? 3 : 4;
 
-    // 简单门控阈值（可以后面自己调）
+    // 门控阈值
     constexpr double GATE = 25.0;
 
     // 代价矩阵：观测 j 与 armor_id k 的匹配代价
@@ -151,37 +151,34 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
     for (int j = 0; j < n_obs; ++j) {
         const auto& a = armors.armors[j];
         VecZ z;
-        z[0]         = a.pose.position.x;
-        z[1]         = a.pose.position.y;
-        z[2]         = a.pose.position.z;
-        z[3]         = util::orientation2yaw(a.pose.orientation);
+        z[0] = a.pose.position.x;
+        z[1] = a.pose.position.y;
+        z[2] = a.pose.position.z;
+        z[3] = util::orientation2yaw(a.pose.orientation);
+
         meas_list[j] = z;
     }
 
     // 给每个 (观测, armor_id) 计算残差 + 代价
     for (int j = 0; j < n_obs; ++j) {
+        if (armors.armors[j].number != name)
+            continue; // 只匹配目标编号一致的装甲板
         for (int id = 0; id < armors_num; ++id) {
-            CV3D mdl     = cv3d_model_; // 拷贝一份，避免改到成员
-            mdl.armor_id = id;
-
             // 预测该 armor_id 对应的量测
-            VecZ z_pred = mdl.h(x_pre);
+            VecZ z_pred = cv3d_model_.h(x_pre, id);
 
             VecZ nu = meas_list[j] - z_pred;
 
             // yaw 残差归一化到 [-pi, pi]
-            while (nu[3] > M_PI)
-                nu[3] -= 2.0 * M_PI;
-            while (nu[3] < -M_PI)
-                nu[3] += 2.0 * M_PI;
+            nu[3] = util::normalize_rad(nu[3]);
 
             // 这里用量测噪声协方差 R 近似创新协方差 S
-            auto R = mdl.R_sqrt(z_pred); // 实际上返回的是对角协方差
+            auto R = cv3d_model_.R_sqrt(z_pred); // 实际上返回的是对角协方差
             Eigen::Matrix<double, CV3D::NZ, CV3D::NZ> Rinv = R.inverse();
 
             double d2 = (nu.transpose() * Rinv * nu)(0, 0);
 
-            // 门控：太离谱的直接忽略
+            // 门控
             if (std::isfinite(d2) && d2 < GATE) {
                 cost[j][id] = d2;
             }
@@ -234,6 +231,8 @@ void Tracker::state_machine(bool found) {
                 state = DETECTING;
             }
         } else {
+            auto& x = *ukf->x_raw_ptr();
+            x.setZero();
             detecting_count = 0;
         }
         break;

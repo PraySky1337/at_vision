@@ -21,13 +21,7 @@ enum State : uint8_t {
     STATE_MAX,
 };
 
-enum Measure : uint8_t {
-    ARMOR_X,
-    ARMOR_Y,
-    ARMOR_Z,
-    ARMOR_YAW,
-    MEASURE_MAX
-};
+enum Measure : uint8_t { ARMOR_X, ARMOR_Y, ARMOR_Z, ARMOR_YAW, MEASURE_MAX };
 
 // 根据目标中心、yaw、半径等参数，计算各装甲板中心位置
 std::vector<Eigen::Vector4d> get_robo_armor_poses(
@@ -38,6 +32,7 @@ std::vector<Eigen::Vector4d> get_robo_armor_poses(
 std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target);
 
 // 熵权法，输入：样本矩阵 X（行：样本，列：指标），输出：各指标权重
+// discard
 std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X);
 
 rm_interfaces::msg::Target state2target(const Eigen::MatrixXd& state);

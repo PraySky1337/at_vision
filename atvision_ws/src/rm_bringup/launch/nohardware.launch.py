@@ -37,7 +37,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            common.armor_detector_ov_node(node_params)
+            common.armor_detector_node(node_params)
         ],
         output='both',
         emulate_tty=True,

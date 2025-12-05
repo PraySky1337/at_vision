@@ -17,7 +17,7 @@
     armor.max_small_center_distance: 3.5
     armor.min_large_center_distance: 3.5
     armor.max_large_center_distance: 8.0
-    armor.max_angle: 100.
+    armor.max_angle: 1000.
 
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
