@@ -107,7 +107,7 @@ ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     armor_marker_.type     = visualization_msgs::msg::Marker::CUBE;
     armor_marker_.scale.x  = 0.03;
     armor_marker_.scale.y  = 0.15;
-    armor_marker_.scale.z  = 0.12;
+    armor_marker_.scale.z  = 0.125;
     armor_marker_.color.a  = 0.25;
     armor_marker_.color.r  = 1.0;
     armor_marker_.lifetime = rclcpp::Duration::from_seconds(0.1);
@@ -299,19 +299,40 @@ rcl_interfaces::msg::SetParametersResult
 }
 
 void ArmorDetectorOVNode::publishMarkers(const rm_interfaces::msg::Armors& armors_msg) noexcept {
-    using Marker = visualization_msgs::msg::Marker;
+    using visualization_msgs::msg::Marker;
+
+    // 每次先清空，否则 markers 会越堆越多
+    marker_array_.markers.clear();
+
+    // 没有装甲板时，发一个 DELETEALL 清空 RViz 里的旧标记
     if (armors_msg.armors.empty()) {
-        visualization_msgs::msg::MarkerArray clear;
-        auto m   = armor_marker_;
-        m.action = Marker::DELETEALL;
-        m.header = armors_msg.header;
-        clear.markers.emplace_back(m);
-        marker_pub_->publish(clear);
+        Marker clear_marker;
+        clear_marker.header = armors_msg.header;
+        clear_marker.ns     = "armors";
+        clear_marker.id     = 0;
+        clear_marker.action = Marker::DELETEALL;
+        marker_array_.markers.emplace_back(std::move(clear_marker));
+
+        marker_pub_->publish(marker_array_);
         return;
     }
+
+    // 有装甲板时，基于模板 marker（armor_marker_）生成
+    int id = 0;
+    for (const auto& a : armors_msg.armors) {
+        Marker marker = armor_marker_;     // armor_marker_ 里预先配置好 type/scale/color 等
+        marker.header = armors_msg.header; // 保证时间戳和坐标系正确
+        marker.id     = id++;              // RViz 要求 (ns,id) 唯一
+        marker.pose   = a.pose;
+
+        // 如果有想显示的额外信息，可以在这里设置 text / color 等
+        // marker.text = std::to_string(a.id);  // 示例
+
+        marker_array_.markers.emplace_back(std::move(marker));
+    }
+
     marker_pub_->publish(marker_array_);
 }
-
 // ============ 可视化 ============
 void ArmorDetectorOVNode::drawResults(
     cv::Mat& src, const std::vector<ArmorObject>& armor_objects, const cv::Rect& roi) noexcept {

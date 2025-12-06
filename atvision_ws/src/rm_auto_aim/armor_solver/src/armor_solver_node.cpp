@@ -71,6 +71,16 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         std::chrono::milliseconds(10), std::bind(&ArmorSolverNode::timerCallback, this),
         timer_callback_group_);
 
+    tracker_params_.lost_thres = (int)declare_parameter("tracker.lost_threshold", 60);
+    tracker_params_.tracking_thres   = (int)declare_parameter("tracker.tracking_threshold", 5);
+    tracker_params_.sigma_a_xy       = declare_parameter("tracker.sigma_a_xy", 10.);
+    tracker_params_.sigma_a_z        = declare_parameter("tracker.sigma_a_z", 1.);
+    tracker_params_.sigma_h          = declare_parameter("tracker.sigma_h", 0.5);
+    tracker_params_.sigma_r0         = declare_parameter("tracker.sigma_r", 1.);
+    tracker_params_.meas_dist_k      = declare_parameter("tracker.measure_distance_k", 0.43);
+    tracker_params_.yaw_log_k        = declare_parameter("tracker.yaw_log_k", 0.005);
+    tracker_.set_params(tracker_params_);
+
     initMarkers();
 }
 
@@ -146,13 +156,6 @@ void ArmorSolverNode::initMarkers() noexcept {
     angular_v_marker_.color.a = 0.3;
     angular_v_marker_.color.b = 1.0;
     angular_v_marker_.color.g = 1.0;
-    armor_id_marker_.ns       = "armor_id";
-    armor_id_marker_.type     = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-    armor_id_marker_.scale.z  = 0.08;
-    armor_id_marker_.color.a  = 1.0;
-    armor_id_marker_.color.r  = 1.0;
-    armor_id_marker_.color.g  = 1.0;
-    armor_id_marker_.color.b  = 1.0;
     armors_marker_.ns         = "filtered_armors";
     armors_marker_.type       = visualization_msgs::msg::Marker::CUBE;
     armors_marker_.scale.x    = 0.03;
@@ -197,15 +200,26 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
     std::string number;
     auto n     = now();
     double dts = (n - armors_msg->header.stamp).seconds();
-    if (target.state != armor_tracker::Tracker::IDLE) {
-        target.predict(dts);
+    if (tracker_.state != armor_tracker::Tracker::IDLE) {
+        tracker_.predict(dts);
     }
-    if (target.state == armor_tracker::Tracker::IDLE) {
-        number = target.first_meet_u(*armors_msg);
+    if (tracker_.state == armor_tracker::Tracker::IDLE) {
+        number = tracker_.first_meet_u(*armors_msg);
     } else {
-        target.update(*armors_msg);
+        tracker_.update(*armors_msg);
+        rm_interfaces::msg::Measurement measurement_msg;
+        const auto& z        = tracker_.get_measurement();
+        measurement_msg.x1   = z[0];
+        measurement_msg.y1   = z[1];
+        measurement_msg.z1   = z[2];
+        measurement_msg.yaw1 = z[3];
+        measurement_msg.x2   = z[4];
+        measurement_msg.y2   = z[5];
+        measurement_msg.z2   = z[6];
+        measurement_msg.yaw2 = z[7];
+        measure_pub_->publish(measurement_msg);
     }
-    rm_interfaces::msg::Target target_msg = target.get_target();
+    rm_interfaces::msg::Target target_msg = tracker_.get_target();
 
     target_msg.header.stamp    = n;
     target_msg.header.frame_id = target_frame_;
@@ -228,6 +242,8 @@ void ArmorSolverNode::publishMarkers(
     using visualization_msgs::msg::Marker;
     using visualization_msgs::msg::MarkerArray;
     MarkerArray marry;
+    int id = 0;
+
     const std_msgs::msg::Header hdr = target_msg.header;
 
     int a_n = target_msg.armors_num;
@@ -239,10 +255,12 @@ void ArmorSolverNode::publishMarkers(
         position_marker_.header  = hdr;
 
         position_marker_.action          = visualization_msgs::msg::Marker::ADD;
+        position_marker_.id              = id++;
         position_marker_.pose.position   = target_msg.position;
         position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
 
         linear_v_marker_.action = visualization_msgs::msg::Marker::ADD;
+        linear_v_marker_.id     = id++;
         linear_v_marker_.points.clear();
         linear_v_marker_.points.emplace_back(position_marker_.pose.position);
         geometry_msgs::msg::Point arrow_end = position_marker_.pose.position;
@@ -251,6 +269,7 @@ void ArmorSolverNode::publishMarkers(
         arrow_end.z += target_msg.velocity.z;
         linear_v_marker_.points.emplace_back(arrow_end);
         angular_v_marker_.action = visualization_msgs::msg::Marker::ADD;
+        angular_v_marker_.id     = id++;
         angular_v_marker_.points.clear();
         angular_v_marker_.points.emplace_back(position_marker_.pose.position);
         arrow_end = position_marker_.pose.position;
@@ -276,7 +295,7 @@ void ArmorSolverNode::publishMarkers(
 
             point_armor.x                = target_msg.position.x - radius * std::cos(tmp_yaw);
             point_armor.y                = target_msg.position.y - radius * std::sin(tmp_yaw);
-            armors_marker_.id            = i;
+            armors_marker_.id            = id++;
             armors_marker_.pose.position = point_armor;
             tf2::Quaternion q;
             q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
@@ -287,12 +306,12 @@ void ArmorSolverNode::publishMarkers(
             visualization_msgs::msg::Marker text_marker;
             text_marker.header = hdr;
             text_marker.ns     = "armor_id_text";
-            text_marker.id     = 100 + i; // 确保和 armors_marker_.id 不重复
+            text_marker.id     = 100 + id; // 确保和 armors_marker_.id 不重复
             text_marker.type   = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             text_marker.action = visualization_msgs::msg::Marker::ADD;
 
             // 文字高度
-            text_marker.scale.z = 0.2; // 根据实际需求调
+            text_marker.scale.z = 0.2;
 
             // 颜色（白色、不透明）
             text_marker.color.r = 1.0;
@@ -302,7 +321,7 @@ void ArmorSolverNode::publishMarkers(
 
             // 位置：和装甲板一样，但 z 往上抬一点
             text_marker.pose = armors_marker_.pose;
-            text_marker.pose.position.z += 0.15; // 抬高一点避免和模型重叠
+            text_marker.pose.position.z += 0.20;
 
             // 显示的文字内容：对应 i
             text_marker.text = std::to_string(i);

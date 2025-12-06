@@ -1,3 +1,15 @@
-#! /usr/bin/env bash
-cd /home/developer/ws
-colcon build --executor sequential --symlink-install
+#!/usr/bin/env bash
+set -e
+
+WS_DIR=/home/developer/ws
+cd "$WS_DIR"
+
+# 如果第一个参数是 clean / --clean / -c，就先清理
+if [[ "$1" == "clean" || "$1" == "--clean" || "$1" == "-c" ]]; then
+    echo "[colcon] clean build/ install/ log/"
+    rm -rf build/ install/ log/
+    shift  # 把 clean 这个参数弹掉，后面的参数原样传给 colcon
+fi
+
+# 其它参数透传给 colcon（比如 --packages-select 等）
+colcon build --executor sequential --symlink-install "$@"

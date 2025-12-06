@@ -1,4 +1,4 @@
-#include "armor_solver/target.hpp"
+#include "armor_solver/tracker.hpp"
 #include "armor_solver/util.hpp"
 #include <cmath>
 
@@ -34,8 +34,10 @@ bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
         z[3] =
             util::unwrap_rad(ukf->x()[util::YAW] + idx[i] * 2 * M_PI / armor_num, yaw); // -pi - pi
 
-        cv3d_model_.armor_id = idx[i];
-        cv3d_model_.armors_num = armor_num;
+        motion_model_.armor_id = idx[i];
+        bool is_another_pair   = (idx[i] == 1 || idx[i] == 3);
+        this->set_measurement(z, is_another_pair);
+        motion_model_.armors_num = armor_num;
         ukf->update(z);
     }
     return true;
@@ -46,14 +48,28 @@ void Tracker::step(double dts, const rm_interfaces::msg::Armors& armors) {
     this->update(armors);
 }
 
+void Tracker::set_measurement(const ImplUKF::VecZ& z, bool is_another_pair) {
+    if (is_another_pair) {
+        measurement_[4] = z[0];
+        measurement_[5] = z[1];
+        measurement_[6] = z[2];
+        measurement_[7] = z[3];
+    } else {
+        measurement_[0] = z[0];
+        measurement_[1] = z[1];
+        measurement_[2] = z[2];
+        measurement_[3] = z[3];
+    }
+}
+
 void Tracker::predict(double dts) {
     if (ukf.has_value()) {
         ukf->predict(dts);
         auto& x = *ukf->x_raw_ptr();
         // 比较粗鲁的防止发散的策略
-        // x[util::R_0] = std::clamp(x[util::R_0], 0.13, 0.3);
-        // x[util::R_1] = std::clamp(x[util::R_1], 0.13, 0.3);
-        // x[util::H]= std::clamp(x[util::H], -0.2, 0.2);
+        x[util::R_0] = std::clamp(x[util::R_0], 0.18, 0.25);
+        x[util::R_1] = std::clamp(x[util::R_1], 0.18, 0.25);
+        x[util::H]   = std::clamp(x[util::H], -0.2, 0.2);
     }
 }
 
@@ -100,23 +116,25 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
         state_machine(false);
         return {};
     }
-    auto& tgt      = armors.armors[min_distance_idx];
-    auto& pos      = tgt.pose.position;
-    name           = tgt.number;
-    armor_num      = tgt.number == "outpost" ? 3 : 4;
-    cv3d_model_.armors_num = armor_num;
-    double x0      = pos.x;
-    double y0      = pos.y;
-    double z0      = pos.z;
-    double v0      = 0;
-    double yaw     = util::orientation2yaw(tgt.pose.orientation);
-    double radius1 = 0.26;
-    double radius2 = 0.26;
-    double h       = 0;
+    auto& tgt = armors.armors[min_distance_idx];
+
+    auto& pos = tgt.pose.position;
+
+    name                     = tgt.number;
+    armor_num                = tgt.number == "outpost" ? 3 : 4;
+    motion_model_.armors_num = armor_num;
+    double x0                = pos.x;
+    double y0                = pos.y;
+    double z0                = pos.z;
+    double v0                = 0;
+    double yaw               = util::orientation2yaw(tgt.pose.orientation);
+    double radius1           = 0.23;
+    double radius2           = 0.23;
+    double h                 = 0;
     ImplUKF::VecX xp0{x0, v0, y0, v0, z0, v0, yaw, v0, radius1, radius2, h};
     ImplUKF::MatXX P0 = ImplUKF::MatXX::Identity();
 
-    ukf.emplace(cv3d_model_, xp0, P0);
+    ukf.emplace(motion_model_, xp0, P0);
     state_machine(true);
     return tgt.number;
 }
@@ -124,12 +142,11 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
 std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
     const rm_interfaces::msg::Armors& armors, std::vector<int>& idx, const ImplUKF::VecX& x_pre) {
 
-    cv3d_model_.armors_num = armor_num;
+    motion_model_.armors_num = armor_num;
 
     std::vector<rm_interfaces::msg::Armor> matched;
     idx.clear();
 
-  
     if (armors.armors.empty()) {
         return matched;
     }
@@ -144,7 +161,7 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
     std::vector<std::vector<double>> cost(
         n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
 
-    using VecZ = CV3D::VecZ;
+    using VecZ = RobotModel::VecZ;
 
     // 预计算每个观测的量测向量
     std::vector<VecZ> meas_list(n_obs);
@@ -165,7 +182,7 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
             continue; // 只匹配目标编号一致的装甲板
         for (int id = 0; id < armors_num; ++id) {
             // 预测该 armor_id 对应的量测
-            VecZ z_pred = cv3d_model_.h(x_pre, id);
+            VecZ z_pred = motion_model_.h(x_pre, id);
 
             VecZ nu = meas_list[j] - z_pred;
 
@@ -173,8 +190,8 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
             nu[3] = util::normalize_rad(nu[3]);
 
             // 这里用量测噪声协方差 R 近似创新协方差 S
-            auto R = cv3d_model_.R_sqrt(z_pred); // 实际上返回的是对角协方差
-            Eigen::Matrix<double, CV3D::NZ, CV3D::NZ> Rinv = R.inverse();
+            auto R = motion_model_.R_sqrt(z_pred); // 实际上返回的是对角协方差
+            Eigen::Matrix<double, RobotModel::NZ, RobotModel::NZ> Rinv = R.inverse();
 
             double d2 = (nu.transpose() * Rinv * nu)(0, 0);
 
@@ -209,7 +226,7 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
         }
 
         if (best_j < 0 || best_id < 0) {
-            break;                      // 没有更多合格的匹配
+            break;                       // 没有更多合格的匹配
         }
 
         used_obs[best_j] = true;
@@ -226,48 +243,51 @@ void Tracker::state_machine(bool found) {
     switch (state) {
     case IDLE:
         if (found) {
-            detecting_count++;
-            if (detecting_count > 0) {  // 第一次见到就进 DETECTING
+            detecting_count_++;
+            if (detecting_count_ > 0) {  // 第一次见到就进 DETECTING
                 state = DETECTING;
             }
         } else {
             auto& x = *ukf->x_raw_ptr();
             x.setZero();
-            detecting_count = 0;
+            detecting_count_ = 0;
         }
         break;
 
     case DETECTING:
         if (found) {
-            detecting_count++;
-            if (detecting_count > 10) { // 连续多帧都能看到
-                state           = TRACKING;
-                detecting_count = 0;
+            detecting_count_++;
+            if (detecting_count_ > params.tracking_thres) { // 连续多帧都能看到
+                state            = TRACKING;
+                detecting_count_ = 0;
             }
         } else {
             // 检测中丢了，说明不稳定，回到 IDLE 重新来
-            detecting_count = 0;
-            state           = IDLE;
+            detecting_count_ = 0;
+
+            auto& x = *ukf->x_raw_ptr();
+            x.setZero();
+            state = IDLE;
         }
         break;
 
     case TRACKING:
         if (!found) {
-            state      = TEMP_LOST;
-            lost_count = 1;        // 刚丢一帧
+            state       = TEMP_LOST;
+            lost_count_ = 1;        // 刚丢一帧
         }
         break;
 
     case TEMP_LOST:
         if (found) {
-            lost_count = 0;
-            state      = TRACKING; // 找回来了
+            lost_count_ = 0;
+            state       = TRACKING; // 找回来了
         } else {
-            lost_count++;
-            if (lost_count > 20) { // 丢太久，放弃
-                lost_count      = 0;
-                detecting_count = 0;
-                state           = IDLE;
+            lost_count_++;
+            if (lost_count_ > params.lost_thres) { // 丢太久，放弃
+                lost_count_      = 0;
+                detecting_count_ = 0;
+                state            = IDLE;
             }
         }
         break;
