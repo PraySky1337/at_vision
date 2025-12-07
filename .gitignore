@@ -9,3 +9,4 @@ third_party
 *.tar
 *.mp4
 *.mkv
+pose_*.onnx

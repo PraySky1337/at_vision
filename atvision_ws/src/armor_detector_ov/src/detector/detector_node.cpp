@@ -14,7 +14,8 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
-#include "ov_armor_tup.hpp"
+#include "inference/ov_armor_tup.hpp"
+#include "inference/ov_armor_at.hpp"
 
 namespace {
 inline std::string resolve_pkg_url(const std::string& url) {
@@ -192,6 +193,8 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
     std::vector<ArmorObject> dets;
     if (auto* armor_ov_tup = dynamic_cast<OVArmorTUP*>(model_.get())) {
         armor_ov_tup->detect(img, dets);
+    } else if (auto* armor_ov_at = dynamic_cast<OVArmorAT*>(model_.get())) {
+        armor_ov_at->detect(img, dets);
     } else
         (void)model_->run(img);
 

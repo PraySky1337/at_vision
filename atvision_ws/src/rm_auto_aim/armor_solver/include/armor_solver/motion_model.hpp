@@ -16,7 +16,7 @@ struct RobotModel {
         // 过程噪声
         Scalar sigma_a_xy  = 10.0;
         Scalar sigma_a_z   = 1.0;
-        Scalar sigma_a_yaw = 5.0;
+        Scalar sigma_a_yaw = 1.0;
 
         Scalar sigma_r0 = 1.0; // 半径 R0 每秒变化标准差
         Scalar sigma_h  = 0.5; // 高度 H

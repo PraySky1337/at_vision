@@ -75,6 +75,7 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     tracker_params_.tracking_thres   = (int)declare_parameter("tracker.tracking_threshold", 5);
     tracker_params_.sigma_a_xy       = declare_parameter("tracker.sigma_a_xy", 10.);
     tracker_params_.sigma_a_z        = declare_parameter("tracker.sigma_a_z", 1.);
+    tracker_params_.sigma_a_yaw        = declare_parameter("tracker.sigma_a_yaw", 1.);
     tracker_params_.sigma_h          = declare_parameter("tracker.sigma_h", 0.5);
     tracker_params_.sigma_r0         = declare_parameter("tracker.sigma_r", 1.);
     tracker_params_.meas_dist_k      = declare_parameter("tracker.measure_distance_k", 0.43);
