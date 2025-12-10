@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""
+Wrapper that proxies commands to a remote host via SSH, using workspace
+`.config/ssh.cfg` (TOML) for connection settings.
+
+Example:
+    runtime ros2 launch pkg node
+"""
+
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+
+def load_toml(path: Path):
+    try:
+        import tomllib  # Python 3.11+
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except ModuleNotFoundError:
+        try:
+            import tomli  # type: ignore
+            with path.open("rb") as f:
+                return tomli.load(f)
+        except ModuleNotFoundError:
+            # Minimal fallback parser for simple key/value TOML
+            data = {}
+            current = data
+            for raw in path.read_text().splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("[") and line.endswith("]"):
+                    section = line[1:-1].strip()
+                    current = data.setdefault(section, {})
+                    continue
+                if "=" not in line:
+                    continue
+                key, val = [p.strip() for p in line.split("=", 1)]
+                if val.startswith(("'", '"')) and val.endswith(("'", '"')):
+                    val = val[1:-1]
+                else:
+                    try:
+                        val = int(val)
+                    except ValueError:
+                        try:
+                            val = float(val)
+                        except ValueError:
+                            if val.lower() in ("true", "false"):
+                                val = val.lower() == "true"
+                current[key] = val
+            return data
+
+
+def main():
+    ws_root = Path(__file__).resolve().parents[2]
+    cfg_path = ws_root / ".config" / "ssh.cfg"
+
+    if not cfg_path.exists():
+        print(f"[runtime] config not found: {cfg_path}")
+        print(
+            "Create a TOML file like:\n"
+            '[ssh]\n'
+            'host = "developer@192.168.0.10"\n'
+            "port = 22\n"
+            'workdir = "/home/developer/ws"\n'
+        )
+        return 1
+
+    try:
+        cfg = load_toml(cfg_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[runtime] failed to read {cfg_path}: {exc}")
+        return 1
+
+    ssh_cfg = cfg.get("ssh", cfg)
+    host = ssh_cfg.get("host")
+    port = ssh_cfg.get("port", 22)
+    workdir = ssh_cfg.get("workdir")
+
+    if not host:
+        print(f"[runtime] missing 'host' in {cfg_path}")
+        return 1
+    if len(sys.argv) <= 1:
+        print("Usage: runtime <command...>")
+        return 1
+
+    remote_cmd = shlex.join(sys.argv[1:])
+    if workdir:
+        remote_cmd = f"cd {shlex.quote(workdir)} && {remote_cmd}"
+
+    ssh_cmd = ["ssh", "-p", str(port), host, remote_cmd]
+    return subprocess.call(ssh_cmd)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

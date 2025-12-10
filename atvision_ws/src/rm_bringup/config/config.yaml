@@ -52,15 +52,15 @@
       measure_distance_k: 0.43
       outpost:
         measure_distance_k: 0.43
-        sigma_a_yaw: 7.07
+        sigma_a_yaw: 1.5
         sigma_q_xy: 9.1
         sigma_q_z: 1.
         yaw_log_k: 0.005
-      sigma_a_xy: 10.0
-      sigma_a_yaw: 2.5
+      sigma_a_xy: 9.1
+      sigma_a_yaw: 0.7
       sigma_a_z: 2.0
       sigma_h: 0.8
-      sigma_r: 2.2
+      sigma_r: 1.0
       tracking_threshold: 5
       yaw_log_k: 0.005
     use_sim_time: false
@@ -125,7 +125,7 @@
           reliability: reliable
       /tf:
         publisher:
-          depth: 100
+          depth: 1000
           durability: volatile
           history: keep_last
           reliability: reliable
