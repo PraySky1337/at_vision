@@ -2,9 +2,8 @@
 #include "MvCameraControl.h"
 
 #include <chrono>
+#include <cinttypes>
 #include <csignal>
-
-#include <image_transport/image_transport.hpp>
 
 namespace hik_camera {
 
@@ -24,13 +23,13 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
         // 如果第一次失败也可以选择阻塞等待重连，或直接继续并等待 capture 线程调用 reconnectLoop
     }
 
-    // image_msg_ 预分配（如果在 openCamera 成功会在内部设置）
-    image_msg_.header.frame_id = "camera_optical_frame";
-    image_msg_.encoding        = "rgb8";
-
     bool use_sensor_data_qos = this->declare_parameter("use_sensor_data_qos", true);
-    auto qos    = use_sensor_data_qos ? rmw_qos_profile_sensor_data : rmw_qos_profile_default;
-    camera_pub_ = image_transport::create_camera_publisher(this, "image_raw", qos);
+    rmw_qos_profile_t image_profile =
+        use_sensor_data_qos ? rmw_qos_profile_sensor_data : rmw_qos_profile_default;
+    auto image_qos = rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_profile), image_profile);
+    image_pub_     = this->create_publisher<sensor_msgs::msg::Image>("image_raw", image_qos);
+    camera_info_pub_ =
+        this->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", image_qos);
 
     declareParameters();
 
@@ -42,10 +41,12 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
         this->declare_parameter("camera_info_url", "package://rm_auto_aim/config/camera_info.yaml");
     if (camera_info_manager_->validateURL(camera_info_url)) {
         camera_info_manager_->loadCameraInfo(camera_info_url);
-        camera_info_msg_ = camera_info_manager_->getCameraInfo();
+        camera_info_template_ = camera_info_manager_->getCameraInfo();
     } else {
         RCLCPP_WARN(this->get_logger(), "Invalid camera info URL: %s", camera_info_url.c_str());
+        camera_info_template_ = sensor_msgs::msg::CameraInfo{};
     }
+    prepareCameraInfoMessage();
 
     params_callback_handle_ = this->add_on_set_parameters_callback(
         std::bind(&HikCameraNode::parametersCallback, this, std::placeholders::_1));
@@ -54,21 +55,28 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     capture_thread_ = std::thread{[this]() -> void {
         MV_FRAME_OUT out_frame;
 
-        RCLCPP_INFO(this->get_logger(), "Publishing image!");
-
         while (rclcpp::ok() && !exit_flag_.load()) {
+            if (!image_msg_) {
+                prepareImageMessage();
+            }
+            if (!camera_info_msg_) {
+                prepareCameraInfoMessage();
+            }
+
             {
-                std::scoped_lock lk(camera_mutex_);
+                std::unique_lock lk(camera_mutex_);
                 if (!camera_handle_) {
                     // 如果 handle 为空，先尝试重连（会阻塞直到成功或退出）
                     RCLCPP_WARN(this->get_logger(), "Camera handle is null, trying reconnect...");
+                    lk.unlock();
                     if (!reconnectLoop()) {
                         // 如果 reconnectLoop 返回 false 说明程序要退出
                         break;
                     }
+                    continue;
                 }
                 // 此处 camera_handle_ 非空，尝试抓帧
-                image_msg_.header.stamp = this->now();
+                image_msg_->header.stamp = this->now();
 
                 nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
             } // unlock camera_mutex_ while processing buffer conversion to reduce hold time
@@ -77,8 +85,8 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                 // Convert & publish （注意 convert 时仍需保护 camera_handle_）
                 {
                     std::scoped_lock lk(camera_mutex_);
-                    convert_param_.pDstBuffer     = image_msg_.data.data();
-                    convert_param_.nDstBufferSize = image_msg_.data.size();
+                    convert_param_.pDstBuffer     = image_msg_->data.data();
+                    convert_param_.nDstBufferSize = image_msg_->data.size();
                     convert_param_.pSrcData       = out_frame.pBufAddr;
                     convert_param_.nSrcDataLen    = out_frame.stFrameInfo.nFrameLen;
                     convert_param_.enSrcPixelType = out_frame.stFrameInfo.enPixelType;
@@ -86,18 +94,27 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                     MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
                 }
 
-                image_msg_.height = out_frame.stFrameInfo.nHeight;
-                image_msg_.width  = out_frame.stFrameInfo.nWidth;
-                image_msg_.step   = out_frame.stFrameInfo.nWidth * 3;
-                image_msg_.data.resize(image_msg_.width * image_msg_.height * 3);
+                image_msg_->height = out_frame.stFrameInfo.nHeight;
+                image_msg_->width  = out_frame.stFrameInfo.nWidth;
+                image_msg_->step   = out_frame.stFrameInfo.nWidth * 3;
+                image_msg_->data.resize(image_msg_->width * image_msg_->height * 3);
 
-                camera_info_msg_.header = image_msg_.header;
-                camera_pub_.publish(image_msg_, camera_info_msg_);
+                camera_info_msg_->header = image_msg_->header;
+                RCLCPP_INFO_SKIPFIRST_THROTTLE(
+                    this->get_logger(), *get_clock(), 1000,
+                    "Publishing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR
+                    " camera_info ptr=0x%" PRIXPTR,
+                    reinterpret_cast<std::uintptr_t>(image_msg_.get()),
+                    reinterpret_cast<std::uintptr_t>(image_msg_->data.data()),
+                    reinterpret_cast<std::uintptr_t>(camera_info_msg_.get()));
+                image_pub_->publish(std::move(image_msg_));
+                camera_info_pub_->publish(*camera_info_msg_);
 
                 {
                     std::scoped_lock lk(camera_mutex_);
                     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
                 }
+                prepareImageMessage();
                 fail_count = 0;
             } else {
                 RCLCPP_WARN(this->get_logger(), "Get buffer failed! nRet: [%x]", nRet);
@@ -209,6 +226,19 @@ rcl_interfaces::msg::SetParametersResult
     return result;
 }
 
+void HikCameraNode::prepareImageMessage() {
+    image_msg_                  = std::make_unique<sensor_msgs::msg::Image>();
+    image_msg_->header.frame_id = "camera_optical_frame";
+    image_msg_->encoding        = "rgb8";
+    if (image_capacity_ > 0) {
+        image_msg_->data.resize(image_capacity_);
+    }
+}
+
+void HikCameraNode::prepareCameraInfoMessage() {
+    camera_info_msg_ = std::make_unique<sensor_msgs::msg::CameraInfo>(camera_info_template_);
+}
+
 // ---------------------- camera helper impl ----------------------
 bool HikCameraNode::openCamera() {
     std::scoped_lock lk(camera_mutex_);
@@ -254,7 +284,9 @@ bool HikCameraNode::openCamera() {
         return false;
     }
 
-    image_msg_.data.resize(img_info_.nHeightMax * img_info_.nWidthMax * 3);
+    image_capacity_ = static_cast<std::size_t>(img_info_.nHeightMax)
+                    * static_cast<std::size_t>(img_info_.nWidthMax) * 3;
+    prepareImageMessage();
 
     convert_param_.nWidth         = img_info_.nWidthValue;
     convert_param_.nHeight        = img_info_.nHeightValue;

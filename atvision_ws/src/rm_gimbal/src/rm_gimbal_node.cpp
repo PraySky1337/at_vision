@@ -15,7 +15,8 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     , tf_broadcaster_(*this)
     , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN)) {
     tf_buffer_       = std::make_shared<tf2_ros::Buffer>(get_clock());
-    detector_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, "armor_detector");
+    std::string target_component_name = declare_parameter("target_component_name", "armor_detector");
+    detector_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, target_component_name);
     this->init_parser();
     try {
         if (device_.open(0x0483)) {

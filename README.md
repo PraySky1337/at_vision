@@ -84,6 +84,20 @@ rm -rf ~/neo
 cd /home/developer/ws
 ```
 
+#### ROS2
+
+关于[日志系统](https://docs.ros.org/en/foxy/Tutorials/Demos/Logging-and-logger-configuration.html#id6)
+
+```bash
+# 控制台输出着色
+export RCUTILS_COLORIZED_OUTPUT=1  # 1 for forcing it
+# 控制台输出格式
+export RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity} {time}] [{name}]: {message} ({function_name}() at {file_name}:{line_number})"
+export RCUTILS_LOGGING_USE_STDOUT=0 # 在Jazzy及以上，默认为stderr流而不是stdout，这个可以不改
+export RCUTILS_LOGGING_BUFFERED_STREAM=0 # 不进行缓冲，不建议修改
+```
+
+
 ## 一些待完善的工作
 
 - [ ] 将Solver与状态估计器解耦，在rm_gimbal包中添加二次规划功能
@@ -104,8 +118,7 @@ cd /home/developer/ws
 
 - [ ] 补充开发/使用文档
 
-- [x] 仿真 
-    基于 Bevy(rust) 的 bevy_rm_simulator 非常感谢 
+- [x] 仿真 基于 Bevy(rust) 的 bevy_rm_simulator 非常感谢  Black Jack
 
 - [ ] 重新构建 Docker 镜像
 

@@ -53,12 +53,12 @@
 #include "rm_utils/math/pnp_solver.hpp"
 #include "rm_utils/math/utils.hpp"
 #include "rm_utils/url_resolver.hpp"
+#include <cinttypes>
 
 namespace fyt::auto_aim {
 ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
     : Node("armor_detector", options) {
     FYT_REGISTER_LOGGER("armor_detector", "~/fyt2024-log", INFO);
-    FYT_INFO("armor_detector", "Starting ArmorDetectorNode!");
     // Detector
     detector_ = initDetector();
 
@@ -81,7 +81,7 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
     armor_marker_.scale.x  = 0.03;
     armor_marker_.scale.y  = 0.15;
     armor_marker_.scale.z  = 0.12;
-    armor_marker_.color.a  = 1.0;
+    armor_marker_.color.a  = 0.3;
     armor_marker_.color.r  = 1.0;
     armor_marker_.lifetime = rclcpp::Duration::from_seconds(0.1);
 
@@ -137,11 +137,9 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
         this->get_node_base_interface(), this->get_node_timers_interface());
     tf2_buffer_->setCreateTimerInterface(timer_interface);
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
-
-    heartbeat_ = HeartBeatPublisher::create(this);
 }
 
-void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg) {
+void ArmorDetectorNode::imageCallback(sensor_msgs::msg::Image::UniquePtr img_msg) {
     // Get the transform from odom to gimbal
     try {
         rclcpp::Time target_time = img_msg->header.stamp;
@@ -159,6 +157,12 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
         FYT_ERROR("armor_detector", "Something Wrong when lookUpTransform");
         return;
     }
+
+    RCLCPP_INFO_SKIPFIRST_THROTTLE(
+        this->get_logger(), *get_clock(), 1000,
+        "Subscribing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR,
+        reinterpret_cast<std::uintptr_t>(img_msg.get()),
+        reinterpret_cast<std::uintptr_t>(img_msg->data.data()));
 
     // Detect armors
     auto armors = detectArmors(img_msg);
@@ -225,7 +229,7 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         .max_large_center_distance = declare_parameter("armor.max_large_center_distance", 5.0),
         .max_angle                 = declare_parameter("armor.max_angle", 35.0)};
 
-    auto color = declare_parameter("detect_color", "BLUE");
+    auto color    = declare_parameter("detect_color", "BLUE");
     EnemyColor ec = color == "BLUE" ? EnemyColor::BLUE : EnemyColor::RED;
     auto detector = std::make_unique<Detector>(binary_thres, ec, l_params, a_params);
 
@@ -258,9 +262,9 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
 }
 
 std::vector<Armor>
-    ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg) {
+    ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::UniquePtr& img_msg) {
     // Convert ROS img to cv::Mat
-    auto img = cv_bridge::toCvShare(img_msg, "rgb8")->image;
+    auto img = cv_bridge::toCvCopy(*img_msg, "rgb8")->image;
 
     auto armors = detector_->detect(img);
 

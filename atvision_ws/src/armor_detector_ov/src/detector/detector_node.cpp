@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <image_transport/image_transport.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/create_timer_ros.hpp>
 
 // C++/OpenCV
@@ -14,8 +15,8 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
-#include "inference/ov_armor_tup.hpp"
 #include "inference/ov_armor_at.hpp"
+#include "inference/ov_armor_tup.hpp"
 
 namespace {
 inline std::string resolve_pkg_url(const std::string& url) {
@@ -77,22 +78,28 @@ ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     model_name_   = this->declare_parameter<std::string>("model_name", "armor_tup");
     const auto mp = this->declare_parameter<std::string>(
         "model_path", "package://armor_detector_ov/model/armor_tup.xml");
-    auto model_path = resolve_pkg_url(mp);
-    debug_          = this->declare_parameter<bool>("debug", true);
-    detect_color_   = this->declare_parameter<std::string>("detect_color", "RED"); // RED/BLUE
-    odom_frame_     = this->declare_parameter<std::string>("target_frame", "odom");
-    use_ba_         = this->declare_parameter<bool>("use_ba", false);
+    model_path_   = resolve_pkg_url(mp);
+    debug_        = this->declare_parameter<bool>("debug", true);
+    detect_color_ = this->declare_parameter<std::string>("detect_color", "RED"); // RED/BLUE
+    odom_frame_   = this->declare_parameter<std::string>("target_frame", "odom");
+    use_ba_       = this->declare_parameter<bool>("use_ba", true);
+    const bool use_gpu =
+        this->declare_parameter<bool>("use_gpu", false); // true: GPU, false: CPU (default)
+    enable_multi_thread_ =
+        this->declare_parameter<bool>("enable_multi_thread", false); // OpenVINO throughput mode
+    device_name_ = use_gpu ? "GPU" : "CPU";
 
     model_ = OVModelManager::instance().create(model_name_);
     if (!model_) {
         RCLCPP_ERROR(get_logger(), "Create model '%s' failed.", model_name_.c_str());
-    } else if (!model_->load(model_path, "CPU", false)) {
-        RCLCPP_ERROR(get_logger(), "Load OpenVINO model failed: %s", model_path.c_str());
+    } else if (!model_->load(model_path_, device_name_, false, enable_multi_thread_)) {
+        RCLCPP_ERROR(get_logger(), "Load OpenVINO model failed: %s", model_path_.c_str());
         model_.reset();
     } else {
         RCLCPP_INFO(
-            get_logger(), "OpenVINO model loaded: %s (%s)", model_path.c_str(),
-            model_name_.c_str());
+            get_logger(), "OpenVINO model loaded: %s (%s) on %s (multi_thread=%s)",
+            model_path_.c_str(), model_name_.c_str(), device_name_.c_str(),
+            enable_multi_thread_ ? "on" : "off");
     }
 
     // —— 发布者 ——
@@ -173,8 +180,24 @@ std::string ArmorDetectorOVNode::color_letter_(int color) {
 }
 
 void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg) {
+    try {
+        rclcpp::Time target_time = img_msg->header.stamp;
+        auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
+            odom_frame_, img_msg->header.frame_id, target_time,
+            rclcpp::Duration::from_seconds(0.01));
+        auto msg_q = odom_to_gimbal.transform.rotation;
+        tf2::Quaternion tf_q;
+        tf2::fromMsg(msg_q, tf_q);
+        tf2::Matrix3x3 tf2_matrix = tf2::Matrix3x3(tf_q);
+        imu_to_camera_ << tf2_matrix.getRow(0)[0], tf2_matrix.getRow(0)[1], tf2_matrix.getRow(0)[2],
+            tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1], tf2_matrix.getRow(1)[2],
+            tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1], tf2_matrix.getRow(2)[2];
+    } catch (...) {
+        return;
+    }
+
     if (!model_) {
-        RCLCPP_WARN(get_logger(), "Model not initialized");
+        RCLCPP_ERROR(get_logger(), "Model not initialized");
         return;
     }
 
@@ -244,8 +267,16 @@ rm_interfaces::msg::Armors ArmorDetectorOVNode::handleDets(std::vector<ArmorObje
     }
     cv::Mat rvec, tvec;
     for (const auto& a : armors) {
-        if (!pnp_solver_->solvePnP(a, rvec, tvec)) {
-            RCLCPP_ERROR(get_logger(), "PnP failed for armor cls=%d, check armor model.", a.cls);
+        if (use_ba_) {
+            if (!pnp_solver_->solvePnPWithBA(a, imu_to_camera_, rvec, tvec)) {
+                RCLCPP_ERROR(
+                    get_logger(), "PnP failed for armor cls = %d, check armor model.", a.cls);
+            }
+        } else {
+            if (!pnp_solver_->solvePnP(a, rvec, tvec)) {
+                RCLCPP_ERROR(
+                    get_logger(), "PnP failed for armor cls=%d, check armor model.", a.cls);
+            }
         }
         cv::Mat Rcv; // 3x3 CV_64F
         cv::Rodrigues(rvec, Rcv);
@@ -296,6 +327,10 @@ rcl_interfaces::msg::SetParametersResult
             RCLCPP_WARN(get_logger(), "Changing model_path at runtime is not supported.");
         } else if (p.get_name() == "model_name") {
             RCLCPP_WARN(get_logger(), "Changing model_name at runtime is not supported.");
+        } else if (p.get_name() == "use_gpu" || p.get_name() == "enable_multi_thread") {
+            res.successful = false;
+            res.reason =
+                "Changing inference device/threading at runtime is not supported. Restart node.";
         }
     }
     return res;

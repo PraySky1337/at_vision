@@ -11,9 +11,9 @@
 #include <vector>
 
 #include <camera_info_manager/camera_info_manager.hpp>
-#include <image_transport/image_transport.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/qos.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -29,17 +29,24 @@ private:
     rcl_interfaces::msg::SetParametersResult
         parametersCallback(const std::vector<rclcpp::Parameter>& parameters);
 
+    void prepareImageMessage();
+    void prepareCameraInfoMessage();
+
     // camera control helpers (重连相关)
     bool openCamera();    // 尝试打开相机（建立 handle、OpenDevice、GetImageInfo、StartGrabbing）
     void closeCamera();   // 优雅关闭相机（StopGrabbing/Close/Destroy）
     bool reconnectLoop(); // 循环重连，直到成功或 exit_flag_
 
     // ROS msgs / pubs
-    sensor_msgs::msg::Image image_msg_;
-    image_transport::CameraPublisher camera_pub_;
+    sensor_msgs::msg::Image::UniquePtr image_msg_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;
+    sensor_msgs::msg::CameraInfo::UniquePtr camera_info_msg_;
+    sensor_msgs::msg::CameraInfo camera_info_template_;
 
     double timestamp_offset_ms_{};
     int bayer_cvt_quality_ = 1;
+    std::size_t image_capacity_ = 0;
 
     // Hikvision SDK
     int nRet = MV_OK;
@@ -50,7 +57,6 @@ private:
     // Camera info manager
     std::string camera_name_;
     std::unique_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
-    sensor_msgs::msg::CameraInfo camera_info_msg_;
 
     // Threading / state
     std::atomic_bool exit_flag_{false};

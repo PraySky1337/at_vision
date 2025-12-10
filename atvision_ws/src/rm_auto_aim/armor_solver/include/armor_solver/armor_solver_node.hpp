@@ -39,8 +39,6 @@ private:
     void publishMarkers(
         const rm_interfaces::msg::Target& target_msg,
         const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
-    // demo
-    void publish_cv_3d_markers(const rm_interfaces::msg::Target& target) noexcept;
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -53,8 +51,6 @@ private:
     double dt_;
 
     // Armor tracker
-    double s2qxyz_, s2qyaw_, s2qr_, s2qd_zc_;
-    double r_x_, r_y_, r_z_, r_yaw_;
     double lost_time_thres_;
 
     // Armor Solver

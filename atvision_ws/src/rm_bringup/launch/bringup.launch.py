@@ -23,7 +23,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container_mt',
         composable_node_descriptions=[
-            # common.rsp_component,
+            common.rsp_component,
             common.gimbal_node(node_params),
             common.armor_solver_node(node_params),
         ],
@@ -39,11 +39,11 @@ def generate_launch_description():
         executable='component_container_mt',
         composable_node_descriptions=[
             common.camera_node(node_params),
-            common.armor_detector_node(node_params)
+            common.armor_detector_ov_node(node_params),
         ],
         output='both',
         emulate_tty=True,
-        on_exit=Shutdown()
+        on_exit=Shutdown(),
     )
 
     return LaunchDescription([

@@ -25,7 +25,7 @@ public:
     // 加载模型
     virtual bool load(
         const std::string& model_path, const std::string& device = "CPU",
-        bool enable_profiling = false) {
+        bool enable_profiling = false, bool enable_multi_thread = false) {
         try {
             if (enable_profiling)
                 core_.set_property(device, ov::enable_profiling(true));
@@ -38,8 +38,18 @@ public:
             ppp.output().tensor().set_element_type(ov::element::f32);
             model_ = ppp.build();
 
-            compiled_ = core_.compile_model(
-                model_, device, ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+            ov::AnyMap compile_opts;
+            compile_opts.emplace(
+                ov::hint::performance_mode.name(),
+                enable_multi_thread ? ov::hint::PerformanceMode::THROUGHPUT
+                                    : ov::hint::PerformanceMode::LATENCY);
+            if (enable_multi_thread) {
+                compile_opts.emplace(ov::num_streams.name(), ov::streams::AUTO);
+            } else {
+                compile_opts.emplace(ov::num_streams.name(), 1);
+            }
+
+            compiled_ = core_.compile_model(model_, device, compile_opts);
             request_ = compiled_.create_infer_request();
             return true;
         } catch (const std::exception& e) {

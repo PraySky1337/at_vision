@@ -1,17 +1,22 @@
 #pragma once
+#include "motion_model.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
-#include "motion_model.hpp"
 #include "srukf.hpp"
+#include <array>
 #include <optional>
 #include <rclcpp/time.hpp>
 
 namespace armor_tracker {
 
 struct Tracker {
-    struct Params : public RobotModel::Params {
+    struct Params {
         int lost_thres;
         int tracking_thres;
+        double matcher_gate;
+        double outpost_matcher_gate;
+        RobotModel::Params robot_params;
+        OutpostModel::Params outpost_params;
     } params;
     enum State : uint8_t {
         IDLE,
@@ -29,14 +34,18 @@ struct Tracker {
     }
 
     void set_params(const Params& p) {
-        params = p;
-        motion_model_.params = static_cast<const decltype(motion_model_.params)&>(p);
+        params                = p;
+        robot_model_.params   = params.robot_params;
+        outpost_model_.params = params.outpost_params;
     }
 
     std::string name;
     int armor_num;
-    using ImplUKF = srukf::SRUKF<RobotModel, RobotModel::NX, RobotModel::NZ>;
-    std::optional<ImplUKF> ukf;
+    using RoboUKF    = srukf::SRUKF<RobotModel, RobotModel::NX, RobotModel::NZ>;
+    using OutpostUKF = srukf::SRUKF<OutpostModel, OutpostModel::NX, OutpostModel::NZ>;
+
+    std::optional<RoboUKF> robot_ukf;
+    std::optional<OutpostUKF> outpost_ukf;
 
     rm_interfaces::msg::Target get_target();
     const auto& get_measurement() const noexcept { return measurement_; }
@@ -49,12 +58,19 @@ struct Tracker {
 private:
     std::vector<rm_interfaces::msg::Armor> match_all(
         const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
-        const ImplUKF::VecX& x_pre);
+        const RoboUKF::VecX& x_pre);
+    std::vector<rm_interfaces::msg::Armor> match_all_outpost(
+        const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
+        const OutpostUKF::VecX& x_pre);
     void state_machine(bool found);
-    void set_measurement(const ImplUKF::VecZ& z, bool another_pair);
+    void set_measurement(const RoboUKF::VecZ& z, bool another_pair);
     std::array<double, RobotModel::NZ * 2> measurement_;
-    RobotModel motion_model_;
+
+    // motion_model
+    RobotModel robot_model_;
+    OutpostModel outpost_model_;
     int detecting_count_;
+    std::map<int, std::string> voter_;
     int lost_count_;
 };
 

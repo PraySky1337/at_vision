@@ -48,8 +48,11 @@ private:
     std::unique_ptr<OVModelBase> model_;
     std::unique_ptr<PnPSolver> pnp_solver_;
     std::string model_name_;
-    bool debug_  = true;
-    bool use_ba_ = false;
+    std::string model_path_;
+    std::string device_name_  = "CPU";
+    bool debug_               = true;
+    bool use_ba_              = false;
+    bool enable_multi_thread_ = false;
 
     std::string detect_color_ = "RED";
 

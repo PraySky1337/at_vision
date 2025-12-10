@@ -68,18 +68,30 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         this->create_publisher<visualization_msgs::msg::MarkerArray>("armor_solver/marker", 10);
     // Timer 250 Hz
     pub_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10), std::bind(&ArmorSolverNode::timerCallback, this),
+        std::chrono::milliseconds(4), std::bind(&ArmorSolverNode::timerCallback, this),
         timer_callback_group_);
 
-    tracker_params_.lost_thres = (int)declare_parameter("tracker.lost_threshold", 60);
-    tracker_params_.tracking_thres   = (int)declare_parameter("tracker.tracking_threshold", 5);
-    tracker_params_.sigma_a_xy       = declare_parameter("tracker.sigma_a_xy", 10.);
-    tracker_params_.sigma_a_z        = declare_parameter("tracker.sigma_a_z", 1.);
-    tracker_params_.sigma_a_yaw        = declare_parameter("tracker.sigma_a_yaw", 1.);
-    tracker_params_.sigma_h          = declare_parameter("tracker.sigma_h", 0.5);
-    tracker_params_.sigma_r0         = declare_parameter("tracker.sigma_r", 1.);
-    tracker_params_.meas_dist_k      = declare_parameter("tracker.measure_distance_k", 0.43);
-    tracker_params_.yaw_log_k        = declare_parameter("tracker.yaw_log_k", 0.005);
+    auto& rbp = tracker_params_.robot_params;
+    auto& opp = tracker_params_.outpost_params;
+
+    tracker_params_.lost_thres     = (int)declare_parameter("tracker.lost_threshold", 60);
+    tracker_params_.tracking_thres = (int)declare_parameter("tracker.tracking_threshold", 5);
+    tracker_params_.matcher_gate   = declare_parameter("tracker.matcher_gate", 30.);
+
+    rbp.sigma_a_xy  = declare_parameter("tracker.sigma_a_xy", 10.);
+    rbp.sigma_a_z   = declare_parameter("tracker.sigma_a_z", 1.);
+    rbp.sigma_a_yaw = declare_parameter("tracker.sigma_a_yaw", 1.);
+    rbp.sigma_h     = declare_parameter("tracker.sigma_h", 0.5);
+    rbp.sigma_r0    = declare_parameter("tracker.sigma_r", 1.);
+    rbp.meas_dist_k = declare_parameter("tracker.measure_distance_k", 0.43);
+    rbp.yaw_log_k   = declare_parameter("tracker.yaw_log_k", 0.005);
+
+    opp.sigma_a_yaw = declare_parameter("tracker.outpost.sigma_a_yaw", 1.0);
+    opp.sigma_q_xy  = declare_parameter("tracker.outpost.sigma_q_xy", 1.0);
+    opp.sigma_q_z   = declare_parameter("tracker.outpost.sigma_q_z", 1.0);
+    opp.meas_dist_k = declare_parameter("tracker.outpost.measure_distance_k", 0.43);
+    opp.yaw_log_k   = declare_parameter("tracker.outpost.yaw_log_k", 0.005);
+
     tracker_.set_params(tracker_params_);
 
     initMarkers();
@@ -224,7 +236,9 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
 
     target_msg.header.stamp    = n;
     target_msg.header.frame_id = target_frame_;
-    target_msg.id              = number;
+    if (!number.empty()) {
+        target_msg.id = number;
+    }
     // Store and Publish the target_msg
     {
         std::lock_guard<std::mutex> lock(target_mutex_);
@@ -254,11 +268,19 @@ void ArmorSolverNode::publishMarkers(
         linear_v_marker_.header  = hdr;
         angular_v_marker_.header = hdr;
         position_marker_.header  = hdr;
+        selection_marker_.header = hdr;
+        trajectory_marker_.header = hdr;
 
-        position_marker_.action          = visualization_msgs::msg::Marker::ADD;
-        position_marker_.id              = id++;
-        position_marker_.pose.position   = target_msg.position;
-        position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
+        position_marker_.action        = visualization_msgs::msg::Marker::ADD;
+        position_marker_.id            = id++;
+        position_marker_.pose.position = target_msg.position;
+        bool is_outpost                = target_msg.id == "outpost";
+        if (is_outpost) {
+            position_marker_.pose.position.z =
+                (target_msg.position.z + target_msg.z1 + target_msg.z2) / 3;
+        } else {
+            position_marker_.pose.position.z = (target_msg.position.z + target_msg.z1) / 2;
+        }
 
         linear_v_marker_.action = visualization_msgs::msg::Marker::ADD;
         linear_v_marker_.id     = id++;
@@ -289,7 +311,14 @@ void ArmorSolverNode::publishMarkers(
                 radius               = is_another_pair ? target_msg.radius1 : target_msg.radius0;
                 point_armor.z        = is_another_pair ? target_msg.z1 : target_msg.position.z;
             } else if (a_n == 3) {
-                // TODO: 3 装甲逻辑
+                radius = OutpostModel::OUTPOST_RADIUS;
+                if (i == 0) {
+                    point_armor.z = target_msg.position.z;
+                } else if (i == 1) {
+                    point_armor.z = target_msg.z1;
+                } else if (i == 2) {
+                    point_armor.z = target_msg.z2;
+                }
             } else {
                 RCLCPP_ERROR(get_logger(), "Invalid armors num");
             }
@@ -299,7 +328,7 @@ void ArmorSolverNode::publishMarkers(
             armors_marker_.id            = id++;
             armors_marker_.pose.position = point_armor;
             tf2::Quaternion q;
-            q.setRPY(0, target_msg.id == "outpost" ? -0.2618 : 0.2618, tmp_yaw);
+            q.setRPY(0, is_outpost ? -0.2618 : 0.2618, tmp_yaw);
             armors_marker_.pose.orientation = tf2::toMsg(q);
             marry.markers.emplace_back(armors_marker_);
 
@@ -314,146 +343,63 @@ void ArmorSolverNode::publishMarkers(
             // 文字高度
             text_marker.scale.z = 0.2;
 
-            // 颜色（白色、不透明）
+            // 颜色白色，透明一些
             text_marker.color.r = 1.0;
             text_marker.color.g = 1.0;
             text_marker.color.b = 1.0;
-            text_marker.color.a = 1.0;
+            text_marker.color.a = 0.5;
 
             // 位置：和装甲板一样，但 z 往上抬一点
             text_marker.pose = armors_marker_.pose;
-            text_marker.pose.position.z += 0.20;
+            text_marker.pose.position.z += 0.30;
 
             // 显示的文字内容：对应 i
             text_marker.text = std::to_string(i);
 
             marry.markers.emplace_back(text_marker);
         }
+        selection_marker_.action = visualization_msgs::msg::Marker::ADD;
+        selection_marker_.points.clear();
+        selection_marker_.pose.position.y = gimbal_cmd.distance * sin(gimbal_cmd.yaw * M_PI / 180);
+        selection_marker_.pose.position.x = gimbal_cmd.distance * cos(gimbal_cmd.yaw * M_PI / 180);
+        selection_marker_.pose.position.z =
+            gimbal_cmd.distance * sin(gimbal_cmd.pitch * M_PI / 180);
+
+        trajectory_marker_.action = visualization_msgs::msg::Marker::ADD;
+        trajectory_marker_.points.clear();
+        trajectory_marker_.header.frame_id = "muzzle_link";
+        for (const auto& point : solver_->getTrajectory()) {
+            geometry_msgs::msg::Point p;
+            p.x = point.first;
+            p.z = point.second;
+            trajectory_marker_.points.emplace_back(p);
+        }
+        if (gimbal_cmd.fire_advice) {
+            trajectory_marker_.color.r = 0;
+            trajectory_marker_.color.g = 1;
+            trajectory_marker_.color.b = 0;
+        } else {
+            trajectory_marker_.color.r = 1;
+            trajectory_marker_.color.g = 1;
+            trajectory_marker_.color.b = 1;
+        }
     } else {
-        position_marker_.action  = Marker::DELETE;
-        armors_marker_.action    = Marker::DELETE;
-        linear_v_marker_.action  = Marker::DELETE;
-        selection_marker_.action = Marker::DELETE;
-        angular_v_marker_.action = Marker::DELETE;
+        position_marker_.action   = Marker::DELETE;
+        armors_marker_.action     = Marker::DELETE;
+        linear_v_marker_.action   = Marker::DELETE;
+        selection_marker_.action  = Marker::DELETE;
+        trajectory_marker_.action = Marker::DELETE;
+        angular_v_marker_.action  = Marker::DELETE;
     }
+    marry.markers.emplace_back(linear_v_marker_);
     marry.markers.emplace_back(angular_v_marker_);
     marry.markers.emplace_back(position_marker_);
+    marry.markers.emplace_back(trajectory_marker_);
+    marry.markers.emplace_back(selection_marker_);
 
     geometry_msgs::msg::Point p0, p1;
     p0 = target_msg.position;
     marker_pub_->publish(marry);
-}
-
-void ArmorSolverNode::publish_cv_3d_markers(const rm_interfaces::msg::Target& target) noexcept {
-    using visualization_msgs::msg::Marker;
-    using visualization_msgs::msg::MarkerArray;
-
-    MarkerArray marr;
-    marr.markers.reserve(3);
-
-    // 通用 header
-    std_msgs::msg::Header hdr = target.header;
-    hdr.frame_id              = "odom";
-
-    // ========== 位置：球 ==========
-    Marker m_pos;
-    m_pos.header = hdr;
-    m_pos.ns     = "cv3d";
-    m_pos.id     = 0;
-    m_pos.type   = Marker::SPHERE;
-    m_pos.action = Marker::ADD;
-
-    m_pos.pose.position      = target.position;
-    m_pos.pose.orientation.w = 1.0;
-
-    m_pos.scale.x = 0.12;
-    m_pos.scale.y = 0.12;
-    m_pos.scale.z = 0.12;
-
-    m_pos.color.r = 0.1f;
-    m_pos.color.g = 0.9f;
-    m_pos.color.b = 0.1f;
-    m_pos.color.a = 0.3f;
-
-    // ========== 速度：箭头 ==========
-    Marker m_vel;
-    m_vel.header = hdr;
-    m_vel.ns     = "cv3d";
-    m_vel.id     = 1;
-    m_vel.type   = Marker::ARROW;
-    m_vel.action = Marker::ADD;
-
-    geometry_msgs::msg::Point p0, p1;
-    p0 = target.position;
-
-    auto& vel   = target.velocity;
-    double norm = std::sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
-
-    // 速度方向 & 长度
-    double len = 0.0;
-    if (norm > 1e-6) {
-        // 可按需缩放，以免太长/太短
-        double scale_len = 0.2; // 自己调
-        len              = norm * scale_len;
-
-        p1.x = p0.x + vel.x / norm * len;
-        p1.y = p0.y + vel.y / norm * len;
-        p1.z = p0.z + vel.z / norm * len;
-    } else {
-        // 速度很小时就画个几乎看不见的短箭头
-        p1 = p0;
-    }
-
-    m_vel.points.clear();
-    m_vel.points.push_back(p0);
-    m_vel.points.push_back(p1);
-
-    // 箭头粗细
-    m_vel.scale.x = 0.03;                      // shaft 直径
-    m_vel.scale.y = 0.06;                      // head 直径
-    m_vel.scale.z = std::max(0.05, len * 0.3); // head 长度，给个最小值
-
-    m_vel.color.r = 1.0f;
-    m_vel.color.g = 0.1f;
-    m_vel.color.b = 0.1f;
-    m_vel.color.a = 0.95f;
-
-    // ========== yaw 速度：箭头（示例：竖直向上） ==========
-    Marker m_yaw_vel;
-    m_yaw_vel.header = hdr;
-    m_yaw_vel.ns     = "cv3d";
-    m_yaw_vel.id     = 2;
-    m_yaw_vel.type   = Marker::ARROW;
-    m_yaw_vel.action = Marker::ADD;
-
-    geometry_msgs::msg::Point yaw_p0, yaw_p1;
-    yaw_p0 = target.position;
-    yaw_p1 = yaw_p0;
-
-    // 用 v_yaw 控制 z 方向长度，按需缩放
-    double yaw_len = target.v_yaw * 0.2; // 自己调比例
-    yaw_p1.z += yaw_len;
-
-    m_yaw_vel.points.clear();
-    m_yaw_vel.points.push_back(yaw_p0);
-    m_yaw_vel.points.push_back(yaw_p1);
-
-    m_yaw_vel.scale.x = 0.02;
-    m_yaw_vel.scale.y = 0.04;
-    m_yaw_vel.scale.z = std::max(0.03, std::abs(yaw_len) * 0.4);
-
-    m_yaw_vel.color.r = 0.1f;
-    m_yaw_vel.color.g = 0.1f;
-    m_yaw_vel.color.b = 1.0f;
-    m_yaw_vel.color.a = 0.9f;
-
-    marr.markers.push_back(std::move(m_pos));
-    marr.markers.push_back(std::move(m_vel));
-    marr.markers.push_back(std::move(m_yaw_vel));
-
-    if (marker_pub_) {
-        marker_pub_->publish(marr);
-    }
 }
 
 } // namespace fyt::auto_aim

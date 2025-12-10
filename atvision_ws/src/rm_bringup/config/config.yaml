@@ -10,14 +10,14 @@
 
     light.min_ratio: 0.0001
     light.max_ratio: 1.0
-    light.max_angle: 1000.
-    light.color_diff_thresh: 20
+    light.max_angle: 35.
+    light.color_diff_thresh: 30
     armor.min_light_ratio: 0.8
     armor.min_small_center_distance: 0.8
     armor.max_small_center_distance: 3.5
     armor.min_large_center_distance: 3.5
     armor.max_large_center_distance: 8.0
-    armor.max_angle: 1000.
+    armor.max_angle: 40.
 
     classifier_threshold: 0.5
     ignore_classes: ["negative"]
@@ -27,9 +27,12 @@
     debug: true
     target_frame: odom
     detect_color: "BLUE"
-    # model_path: package://armor_detector_ov/model/opt-1208-001.onnx
-    model_name: armor_at
-    model_path: package://armor_detector_ov/model/pose_simplified.onnx
+    model_path: package://armor_detector_ov/model/opt-1208-001.onnx
+    model_name: armor_tup
+    # model_name: armor_at
+    # model_path: package://armor_detector_ov/model/pose_simplified.onnx
+    use_gpu: false
+    enable_multi_thread: true
 
 /armor_solver:
   ros__parameters:
@@ -43,16 +46,25 @@
           reliability: reliable
     target_frame: odom
     tracker:
-      lost_threshold: 60
-      measure_distance_k: 0.43 # 尽量不要改
-      sigma_a_xy: 20.0
-      sigma_a_yaw: 1.5
+      lost_threshold: 40
+      matcher_gate: 10.0
+      outpost_matcher_gate: 0.4
+      measure_distance_k: 0.43
+      outpost:
+        measure_distance_k: 0.43
+        sigma_a_yaw: 7.07
+        sigma_q_xy: 9.1
+        sigma_q_z: 1.
+        yaw_log_k: 0.005
+      sigma_a_xy: 10.0
+      sigma_a_yaw: 2.5
       sigma_a_z: 2.0
-      sigma_h: 0.5
-      sigma_r: 2.0
+      sigma_h: 0.8
+      sigma_r: 2.2
       tracking_threshold: 5
-      yaw_log_k: 0.005 # 这个可以改
+      yaw_log_k: 0.005
     use_sim_time: false
+
 
 /camera_node:
   ros__parameters:
@@ -100,6 +112,7 @@
       r_pitch_acc: 1.0
       r_yaw_acc: 1.0
     timestamp_offset: 0.006
+    target_component_name: armor_detector
     use_planner: true
     use_roll: false
     use_sim_time: false

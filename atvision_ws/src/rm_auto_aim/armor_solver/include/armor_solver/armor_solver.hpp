@@ -30,7 +30,6 @@
 // project
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
 #include "rm_interfaces/msg/target.hpp"
-#include "rm_utils/math/manual_compensator.hpp"
 #include "rm_utils/math/trajectory_compensator.hpp"
 #include "util.hpp"
 
@@ -68,7 +67,6 @@ private:
         double distance) const noexcept;
 
     std::unique_ptr<TrajectoryCompensator> trajectory_compensator_;
-    std::unique_ptr<ManualCompensator> manual_compensator_;
 
     Eigen::Vector3d rpy_;
     Eigen::Vector4d xyza_;

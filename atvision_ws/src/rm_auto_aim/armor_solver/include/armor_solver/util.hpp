@@ -6,7 +6,8 @@
 #include <vector>
 
 namespace util {
-enum State : uint8_t {
+
+enum RoboState : uint8_t {
     XC,
     VX,
     YC,
@@ -21,12 +22,27 @@ enum State : uint8_t {
     STATE_MAX,
 };
 
+enum OutpostState : uint8_t {
+    O_XC,
+    O_YC,
+    O_YAW,
+    O_VYAW,
+    O_Z0,
+    O_Z1,
+    O_Z2,
+    O_STATE_MAX,
+};
+
 enum Measure : uint8_t { ARMOR_X, ARMOR_Y, ARMOR_Z, ARMOR_YAW, MEASURE_MAX };
+
+inline int armors_num(const std::string& id) {
+    return id == "outpost" ? 3 : 4;
+}
 
 // 根据目标中心、yaw、半径等参数，计算各装甲板中心位置
 std::vector<Eigen::Vector4d> get_robo_armor_poses(
-    const Eigen::Vector3d& target_center, double target_yaw, double radius, double l, double z0,
-    double h, size_t armors_num);
+    const Eigen::Vector3d& target_center, double target_yaw, double radius0, double radius1,
+    double z1, double z2, size_t armors_num);
 
 // 从 Target 消息中直接计算装甲板中心位置
 std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target);

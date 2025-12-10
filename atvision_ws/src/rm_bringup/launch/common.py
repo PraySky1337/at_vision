@@ -29,7 +29,7 @@ rsp_component = ComposableNode(
 def camera_node(node_params):
     return ComposableNode(
         package='hik_camera',
-        plugin='hik_camera::hikcameranode',
+        plugin='hik_camera::HikCameraNode',
         name='camera_node',
         parameters=[node_params],
         extra_arguments=[{'use_intra_process_comms': True}]

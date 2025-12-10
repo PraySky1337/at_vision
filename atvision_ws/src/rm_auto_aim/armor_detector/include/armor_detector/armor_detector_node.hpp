@@ -57,16 +57,16 @@ namespace fyt::auto_aim {
 // the detected armors
 class ArmorDetectorNode : public rclcpp::Node {
 public:
-    ArmorDetectorNode(const rclcpp::NodeOptions& options);
+    explicit ArmorDetectorNode(const rclcpp::NodeOptions& options);
 
 private:
-    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr img_msg);
+    void imageCallback(sensor_msgs::msg::Image::UniquePtr img_msg);
     // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
     // target_msg);
 
     std::unique_ptr<Detector> initDetector();
 
-    std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::ConstSharedPtr& img_msg);
+    std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::UniquePtr& img_msg);
 
     void createDebugPublishers() noexcept;
     void destroyDebugPublishers() noexcept;
@@ -78,8 +78,6 @@ private:
         onSetParameters(std::vector<rclcpp::Parameter> parameters);
     rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_handle_;
 
-    // Heartbeat
-    HeartBeatPublisher::SharedPtr heartbeat_;
 
     // Armor Detector
     std::unique_ptr<Detector> detector_;

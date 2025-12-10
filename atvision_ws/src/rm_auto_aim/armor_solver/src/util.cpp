@@ -2,13 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 namespace util {
 
 std::vector<Eigen::Vector4d> get_robo_armor_poses(
     const Eigen::Vector3d& target_pos, const double yaw, const double radius0, const double radius1,
-    const double z1, const size_t armors_num) {
+    const double z1, const double z2, const size_t armors_num) {
     std::vector<Eigen::Vector4d> poses(armors_num);
     const double angle_step = 2.0 * M_PI / static_cast<double>(armors_num);
     const double cx         = target_pos.x();
@@ -21,8 +22,16 @@ std::vector<Eigen::Vector4d> get_robo_armor_poses(
         const double angle      = normalize_rad(yaw + angle_step * static_cast<double>(i));
         poses[i].x()            = cx - r * std::cos(angle);
         poses[i].y()            = cy - r * std::sin(angle);
-        poses[i].z()            = another_pair ? z1 : z0;
-        poses[i].w()            = angle;
+
+        if (armors_num == 3) {
+            // Outpost: three plates stacked vertically
+            poses[i].z() = (i == 0) ? z0 : (i == 1) ? z1 : z2;
+        } else if (armors_num == 4) {
+            poses[i].z() = another_pair ? z1 : z0;
+        } else {
+            throw std::runtime_error("invalid armors num");
+        }
+        poses[i].w() = angle;
     }
 
     return poses;
@@ -31,7 +40,8 @@ std::vector<Eigen::Vector4d> get_robo_armor_poses(
 std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target) {
     Eigen::Vector3d target_center(target.position.x, target.position.y, target.position.z);
     return get_robo_armor_poses(
-        target_center, target.yaw, target.radius0, target.radius1, target.z1, target.armors_num);
+        target_center, target.yaw, target.radius0, target.radius1, target.z1, target.z2,
+        target.armors_num);
 }
 
 std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X) {
@@ -84,18 +94,7 @@ std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X) {
 
 rm_interfaces::msg::Target state2target(const Eigen::MatrixXd& state) {
     rm_interfaces::msg::Target target;
-    // target.position.x = state(XC);
-    // target.position.y = state(YC);
-    // target.position.z = state(ZC);
-    // target.velocity.x = state(VX);
-    // target.velocity.y = state(VY);
-    // target.velocity.z = state(VZ);
-    // target.z0         = state(ZC);
-    // target.yaw        = state(YAW);
-    // target.v_yaw      = state(V_YAW);
-    // target.radius0    = state(R);
-    // target.l          = state(L);
-    // target.h          = state(H);
+    // todo
     return target;
 }
 

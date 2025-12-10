@@ -9,3 +9,4 @@ float64 v_yaw
 float64 radius0
 float64 radius1
 float64 z1
+float64 z2

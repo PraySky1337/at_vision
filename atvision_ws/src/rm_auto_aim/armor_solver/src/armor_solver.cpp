@@ -45,13 +45,7 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
     trajectory_compensator_->gravity    = node->declare_parameter("solver.gravity", 9.8);
     trajectory_compensator_->resistance = node->declare_parameter("solver.resistance", 0.001);
 
-    manual_compensator_ = std::make_unique<ManualCompensator>();
     auto angle_offset = node->declare_parameter("solver.angle_offset", std::vector<std::string>{});
-    if (!manual_compensator_->updateMapFlow(angle_offset)) {
-        FYT_WARN("armor_solver", "Manual compensator update failed!");
-    }
-
-    state            = State::TRACKING_ARMOR;
     overflow_count_  = 0;
     transfer_thresh_ = 5;
 
@@ -96,8 +90,10 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     }
 
     // Use flying time to approximately predict the position of target
-    Eigen::Vector3d target_position(
-        target.position.x, target.position.y, (target.position.z + target.z1) / 2);
+    double target_z = target.armors_num == 3
+                          ? (target.position.z + target.z1 + target.z2) / 3.0
+                          : (target.position.z + target.z1) / 2;
+    Eigen::Vector3d target_position(target.position.x, target.position.y, target_z);
     double target_yaw  = target.yaw;
     double flying_time = trajectory_compensator_->getFlyingTime(target_position);
     double dt          = (current_time - rclcpp::Time(target.header.stamp)).seconds() + flying_time
