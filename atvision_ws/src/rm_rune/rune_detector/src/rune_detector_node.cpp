@@ -1,20 +1,9 @@
-// Copyright (C) FYT Vision Group. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include "rune_detector/rune_detector_node.hpp"
 // ros2
 #include <cv_bridge/cv_bridge.h>
+#include <functional>
+#include <opencv2/highgui.hpp>
+#include <opencv4/opencv2/videoio.hpp>
 #include <rmw/qos_profiles.h>
 
 #include <rclcpp/qos.hpp>
@@ -25,315 +14,270 @@
 #include <numeric>
 #include <vector>
 // third party
-#include <opencv2/imgproc.hpp>
-// project
-#include "rm_utils/assert.hpp"
-#include "rm_utils/common.hpp"
-#include "rm_utils/logger/log.hpp"
-#include "rm_utils/url_resolver.hpp"
 #include "rune_detector/types.hpp"
+#include <opencv2/imgproc.hpp>
 
 namespace fyt::rune {
-RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions &options)
-: Node("rune_detector", options), is_rune_(false) {
-  FYT_REGISTER_LOGGER("rune_detector", "~/fyt2024-log", INFO);
-  FYT_INFO("rune_detector", "Starting RuneDetectorNode!");
 
-  frame_id_ = declare_parameter("frame_id", "camera_optical_frame");
-  detect_r_tag_ = declare_parameter("detect_r_tag", true);
-  binary_thresh_ = declare_parameter("min_lightness", 100);
-  requests_limit_ = declare_parameter("requests_limit", 5);
+RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions& options)
+    : Node("rune_detector", options)
+    , is_rune_(false)
+    , is_big_rune_(true)
+    , tf_buffer_(this->get_node_clock_interface()->get_clock())
+    , tf_listener_(tf_buffer_) {
+    std::cerr << "Starting RuneDetectorNode!" << std::endl;
 
-  // Detector
-  rune_detector_ = initDetector();
-  // Rune Publisher
-  rune_pub_ = this->create_publisher<rm_interfaces::msg::RuneTarget>("rune_detector/rune_target",
-                                                                     rclcpp::SensorDataQoS());
+    frame_id_ = declare_parameter("frame_id", "camera_optical_frame");
 
-  // Debug Publishers
-  this->debug_ = declare_parameter("debug", true);
-  if (this->debug_) {
-    createDebugPublishers();
-  }
-  auto qos = rclcpp::SensorDataQoS();
-  qos.keep_last(1);
-  img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-    "image_raw", qos, std::bind(&RuneDetectorNode::imageCallback, this, std::placeholders::_1));
-  set_rune_mode_srv_ = this->create_service<rm_interfaces::srv::SetMode>(
-    "rune_detector/set_mode",
-    std::bind(
-      &RuneDetectorNode::setModeCallback, this, std::placeholders::_1, std::placeholders::_2));
+    int detect_color_param = this->declare_parameter<int>("detect_color", 0);
 
-  // Heartbeat
-  heartbeat_ = HeartBeatPublisher::create(this);
+    if (detect_color_param == 0) {
+        detect_color_ = EnemyColor::RED;
+    } else if (detect_color_param == 1) {
+        detect_color_ = EnemyColor::BLUE;
+    } else {
+        detect_color_ = EnemyColor::WHITE;
+        std::cerr << "Invalid detect_color param, set to UNKNOWN" << std::endl;
+    }
+    // Detector
+    rune_detector_ = initDetector();
+    // Rune Publisher
+    rune_pub_ = this->create_publisher<rm_interfaces::msg::RuneTarget>(
+        "rune_detector/rune_target", rclcpp::SensorDataQoS());
+
+    // Debug参数
+    debug_ = declare_parameter("debug", true);
+    if (debug_) {
+        createDebugPublishers();
+    }
+
+    // 图像订阅
+    auto qos      = rclcpp::SensorDataQoS();
+    cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+        "camera_info", qos, [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info) {
+            cam_info_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*camera_info);
+
+            cameraMatrix_ =
+                cv::Mat(3, 3, CV_64F, const_cast<double*>(camera_info->k.data())).clone();
+            distCoeffs_ = cv::Mat(1, 5, CV_64F, const_cast<double*>(camera_info->d.data())).clone();
+            cam_info_sub_.reset();
+        });
+    img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+        "/image_raw", qos,
+        std::bind(&RuneDetectorNode::imageCallback, this, std::placeholders::_1));
+
+    marker_array_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "rune_detector/marker", rclcpp::SensorDataQoS());
+
+    // heartbeat_ = HeartBeatPublisher::create(this);
 }
 
+RuneDetectorNode::~RuneDetectorNode() { std::cerr << "Stopping video thread..." << std::endl; }
+
 std::unique_ptr<RuneDetector> RuneDetectorNode::initDetector() {
-  std::string model_path =
-    this->declare_parameter("detector.model", "package://rune_detector/model/yolox_rune_3.6m.onnx");
-  std::string device_type = this->declare_parameter("detector.device_type", "AUTO");
-  FYT_ASSERT(!model_path.empty());
-  FYT_INFO("rune_detector", "model : {}, device : {}", model_path, device_type);
 
-  float conf_threshold = this->declare_parameter("detector.confidence_threshold", 0.50);
-  int top_k = this->declare_parameter("detector.top_k", 128);
-  float nms_threshold = this->declare_parameter("detector.nms_threshold", 0.3);
+    arrow_threshold_   = this->declare_parameter("detector.arrow_threshold", 90);
+    target_threshold_  = this->declare_parameter("detector.target_threshold", 130);
+    rcenter_threshold_ = this->declare_parameter("detector.rcenter_threshold", 120);
+    // Set dynamic parameter callback
+    rcl_interfaces::msg::SetParametersResult onSetParameters(
+        std::vector<rclcpp::Parameter> parameters);
+    on_set_parameters_callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&RuneDetectorNode::onSetParameters, this, std::placeholders::_1));
 
-  namespace fs = std::filesystem;
-  fs::path resolved_path = utils::URLResolver::getResolvedPath(model_path);
-  FYT_ASSERT_MSG(fs::exists(resolved_path), resolved_path.string() + " Not Found");
+    // Create detector
+    auto rune_detector = std::make_unique<RuneDetector>(
+        detect_color_, arrow_threshold_, target_threshold_, rcenter_threshold_);
 
-  // Set dynamic parameter callback
-  rcl_interfaces::msg::SetParametersResult onSetParameters(
-    std::vector<rclcpp::Parameter> parameters);
-  on_set_parameters_callback_handle_ = this->add_on_set_parameters_callback(
-    std::bind(&RuneDetectorNode::onSetParameters, this, std::placeholders::_1));
-
-  // Create detector
-  auto rune_detector = std::make_unique<RuneDetector>(
-    resolved_path, device_type, conf_threshold, top_k, nms_threshold);
-  // Set detect callback
-  rune_detector->setCallback(std::bind(&RuneDetectorNode::inferResultCallback,
-                                       this,
-                                       std::placeholders::_1,
-                                       std::placeholders::_2,
-                                       std::placeholders::_3));
-  // init detector
-  rune_detector->init();
-  return rune_detector;
+    return rune_detector;
 }
 
 void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr msg) {
-  if (is_rune_ == false) {
-    return;
-  }
 
-  // Limits request size
-  while (detect_requests_.size() > static_cast<size_t>(requests_limit_)) {
-    detect_requests_.front().get();
-    detect_requests_.pop();
-  }
+    // 转换 ROS 图像为 OpenCV
+    cv::Mat src_img = cv_bridge::toCvCopy(msg, "bgr8")->image;
 
-  auto timestamp = rclcpp::Time(msg->header.stamp);
-  frame_id_ = msg->header.frame_id;
-  auto img = cv_bridge::toCvCopy(msg, "rgb8")->image;
+    int image_width  = msg->width;
+    int image_height = msg->height;
+    auto timestamp   = rclcpp::Time(msg->header.stamp);
+    frame_id_        = msg->header.frame_id;
 
-  // Push image to detector
-  detect_requests_.push(rune_detector_->pushInput(img, timestamp.nanoseconds()));
-};
+    // 检测
+    bool success = rune_detector_->detect(src_img, image_width, image_height);
 
-rcl_interfaces::msg::SetParametersResult RuneDetectorNode::onSetParameters(
-  std::vector<rclcpp::Parameter> parameters) {
-  rcl_interfaces::msg::SetParametersResult result;
-  for (const auto &param : parameters) {
-    if (param.get_name() == "binary_thresh") {
-      binary_thresh_ = param.as_int();
+    if (!rune_detector_->targets.empty()) {
+        rune_detector_->setKeyPoints();
     }
-  }
-  result.successful = true;
-  return result;
+
+    // Eigen::Matrix4d pose;
+    // if (rune_detector_->rcenter.center != cv::Point2f(0, 0) && !cameraMatrix_.empty()
+    //     && !distCoeffs_.empty()) {
+
+    //     pose = rune_detector_->solve(cameraMatrix_, distCoeffs_, timestamp, tf_buffer_);
+    // }
+
+    // Debug 可视化
+    if (debug_) {
+        cv::Mat debug_img = src_img.clone();
+
+        if (!rune_detector_->arrows.empty()) {
+            for (auto arrow : rune_detector_->arrows) {
+                cv::Point2f ves[4];
+                arrow.rotated.points(ves);
+                for (size_t i = 0; i < 4; i++) {
+                    cv::line(
+                        debug_img, ves[i] + rune_detector_->globalRoi.tl(),
+                        ves[(i + 1) % 4] + rune_detector_->globalRoi.tl(),
+                        cv::Scalar(255, 255, 255), 2);
+                }
+                cv::circle(debug_img, arrow.center, 3, cv::Scalar(255, 0, 255), -1);
+            }
+        }
+
+        if (!rune_detector_->targets.empty()) {
+            for (auto target : rune_detector_->targets) {
+             
+                cv::circle(debug_img, target.keypnt.ru, 3, cv::Scalar(255, 0, 0), -1);//蓝 右上
+                cv::line(
+                    debug_img, target.keypnt.ru, target.keypnt.rd, cv::Scalar(255, 255, 255), 2);
+                cv::circle(debug_img, target.keypnt.rd, 3, cv::Scalar(0, 255, 0), -1);//绿 右下
+                cv::line(
+                    debug_img, target.keypnt.rd, target.keypnt.ld, cv::Scalar(255, 255, 255), 2);
+                cv::circle(debug_img, target.keypnt.ld, 3, cv::Scalar(0, 0, 255), -1);//红 左下
+                cv::line(
+                    debug_img, target.keypnt.ld, target.keypnt.lu, cv::Scalar(255, 255, 255), 2);
+                cv::circle(debug_img, target.keypnt.lu, 3, cv::Scalar(0, 0, 0), -1);//黑 左上
+                cv::line(
+                    debug_img, target.keypnt.lu, target.keypnt.ru, cv::Scalar(255, 255, 255), 2);
+
+                cv::circle(debug_img, target.center, 3, cv::Scalar(0, 255, 255), -1);//黄 中心
+            }
+        }
+
+        if (rune_detector_->rcenter.center != cv::Point2f(0, 0)) {
+            cv::circle(debug_img, rune_detector_->rcenter.center, 3, cv::Scalar(255, 255, 0), -1);
+        }
+
+        auto&& result = cv_bridge::CvImage(msg->header, "bgr8", debug_img).toImageMsg();
+        result_img_pub_.publish(std::move(result));
+
+        // visualization_msgs::msg::MarkerArray marker_array;
+
+        // // 检查R标和靶体数据是否有效
+        // if (pose.isZero() || pose == Eigen::Matrix4d::Identity()) {
+        //     visualization_msgs::msg::Marker delete_marker;
+        //     delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        //     marker_array.markers.push_back(delete_marker);
+        //     marker_array_pub_->publish(marker_array);
+        //     return;
+        // }
+
+        // Eigen::Matrix3d R = pose.block<3, 3>(0, 0);
+        // Eigen::Quaterniond q(R);
+
+        // if (rune_detector_->targets.size() == 1) {
+
+        //     Eigen::Vector3d target_rel_rune(0.0, 0.0, -POWER_RUNE_RADIUS);
+        //     Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
+        //     Eigen::Vector3d target_center_world = r_center_world + R * target_rel_rune;
+
+        //     visualization_msgs::msg::Marker target_body = create_target_marker(
+        //         timestamp, target_center_world, q, 0.3, 0.3, 0.1, 1.0, 0.0, 0.0, 0.8, 0);
+        //     marker_array.markers.push_back(target_body);
+
+        //     visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp,
+        //     r_center_world); marker_array.markers.push_back(r_marker);
+        // } else if (rune_detector_->targets.size() == 2) {
+
+        //     const double distancetTargetToTarget =
+        //         cv::norm(rune_detector_->targets[0].center - rune_detector_->targets[1].center);
+        //     const double distanceTargetToRcenter =
+        //         cv::norm(rune_detector_->targets[0].center - rune_detector_->rcenter.center);
+        //     const double rad36  = 36.0 * CV_PI / 180.0;
+        //     const double rad54  = 54.0 * CV_PI / 180.0;
+        //     const double rad72  = 72.0 * CV_PI / 180.0;
+        //     const double sin36  = std::sin(rad36);
+        //     const double sin54  = std::sin(rad54);
+        //     const double sin72  = std::sin(rad72);
+        //     const double cos54  = std::cos(rad54);
+        //     const double cos72  = std::cos(rad72);
+        //     const double theo36 = 2.0 * distanceTargetToRcenter * sin36;
+        //     const double theo72 = 2.0 * distanceTargetToRcenter * sin72;
+        //     const double eps    = 50.0;
+
+        //     struct TargetPoints {
+        //         Eigen::Vector3d center;
+        //         Eigen::Vector3d down;
+        //         Eigen::Vector3d left;
+        //         Eigen::Vector3d up;
+        //         Eigen::Vector3d right;
+        //     } target1_rel, target2_rel;
+
+        //     target1_rel.center = Eigen::Vector3d(0.0, 0.0, (-POWER_RUNE_RADIUS));
+
+        //     if (std::abs(distancetTargetToTarget - theo36) < eps) {
+
+        //         target2_rel.center = Eigen::Vector3d(
+        //             0.0, (POWER_RUNE_RADIUS * sin72), (-(POWER_RUNE_RADIUS * cos72)));
+
+        //     } else if (std::abs(distancetTargetToTarget - theo72) < eps) {
+
+        //         target2_rel.center =
+        //             Eigen::Vector3d(0.0, (POWER_RUNE_RADIUS * cos54), (POWER_RUNE_RADIUS *
+        //             sin54));
+
+        //     } else {
+        //         return;
+        //     }
+
+        //     Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
+        //     Eigen::Vector3d target1_center = r_center_world + R * target1_rel.center;
+        //     Eigen::Vector3d target2_center = r_center_world + R * target2_rel.center;
+
+        //     visualization_msgs::msg::Marker target1_body = create_target_marker(
+        //         timestamp, target1_center, q, 2 * POWER_TARGET_RADIUS, 0.3, 2 *
+        //         POWER_TARGET_RADIUS, 1.0, 0.0, 0.0, 0.8, 0);
+        //     marker_array.markers.push_back(target1_body);
+        //     visualization_msgs::msg::Marker target2_body = create_target_marker(
+        //         timestamp, target2_center, q, 2 * POWER_TARGET_RADIUS, 0.3, 2 *
+        //         POWER_TARGET_RADIUS, 0.0, 0.0, 1.0, 0.8, 1);
+        //     marker_array.markers.push_back(target2_body);
+
+        //     visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp,
+        //     r_center_world); marker_array.markers.push_back(r_marker);
+        // }
+        // marker_array_pub_->publish(marker_array);
+    }
+    if (success) {
+        rune_detector_->setGlobalRoi();
+    }
 }
 
-void RuneDetectorNode::inferResultCallback(std::vector<RuneObject> &objs,
-                                           int64_t timestamp_nanosec,
-                                           const cv::Mat &src_img) {
-  auto timestamp = rclcpp::Time(timestamp_nanosec);
-  // Used to draw debug info
-  cv::Mat debug_img;
-  if (debug_) {
-    debug_img = src_img.clone();
-  }
-
-  rm_interfaces::msg::RuneTarget rune_msg;
-  rune_msg.header.frame_id = frame_id_;
-  rune_msg.header.stamp = timestamp;
-  rune_msg.is_big_rune = is_big_rune_;
-
-  // Erase all object that not match the color
-  objs.erase(
-    std::remove_if(objs.begin(),
-                   objs.end(),
-                   [c = detect_color_](const auto &obj) -> bool { return obj.color != c; }),
-    objs.end());
-
-  if (!objs.empty()) {
-    // Sort by probability
-    std::sort(objs.begin(), objs.end(), [](const RuneObject &a, const RuneObject &b) {
-      return a.prob > b.prob;
-    });
-
-    cv::Point2f r_tag;
-    cv::Mat binary_roi = cv::Mat::zeros(1, 1, CV_8UC3);
-    if (detect_r_tag_) {
-      // Detect R tag using traditional method
-      std::tie(r_tag, binary_roi) =
-        rune_detector_->detectRTag(src_img, binary_thresh_, objs.at(0).pts.r_center);
-    } else {
-      // Use the average center of all objects as the center of the R tag
-      r_tag = std::accumulate(objs.begin(),
-                              objs.end(),
-                              cv::Point2f(0, 0),
-                              [n = static_cast<float>(objs.size())](cv::Point2f p, auto &o) {
-                                return p + o.pts.r_center / n;
-                              });
+rcl_interfaces::msg::SetParametersResult
+    RuneDetectorNode::onSetParameters(std::vector<rclcpp::Parameter> parameters) {
+    rcl_interfaces::msg::SetParametersResult result;
+    for (const auto& param : parameters) {
+        if (param.get_name() == "arrow_threshold") {
+            arrow_threshold_ = param.as_int();
+        } else if (param.get_name() == "target_threshold") {
+            target_threshold_ = param.as_int();
+        } else if (param.get_name() == "rcenter_threshold") {
+            rcenter_threshold_ = param.as_int();
+        } else if (param.get_name() == "debug") {
+            debug_ = param.as_bool();
+        }
     }
-    // Assign the center of the R tag to all objects
-    std::for_each(objs.begin(), objs.end(), [r = r_tag](RuneObject &obj) { obj.pts.r_center = r; });
-
-    // Draw binary roi
-    if (debug_ && !debug_img.empty()) {
-      cv::Rect roi =
-        cv::Rect(debug_img.cols - binary_roi.cols, 0, binary_roi.cols, binary_roi.rows);
-      binary_roi.copyTo(debug_img(roi));
-      cv::rectangle(debug_img, roi, cv::Scalar(150, 150, 150), 2);
-    }
-
-    // The final target is the inactivated rune with the highest probability
-    auto result_it =
-      std::find_if(objs.begin(), objs.end(), [c = detect_color_](const auto &obj) -> bool {
-        return obj.type == RuneType::INACTIVATED && obj.color == c;
-      });
-
-    if (result_it != objs.end()) {
-      // FYT_DEBUG("rune_detector", "Detected!");
-      rune_msg.is_lost = false;
-      rune_msg.pts[0].x = result_it->pts.r_center.x;
-      rune_msg.pts[0].y = result_it->pts.r_center.y;
-      rune_msg.pts[1].x = result_it->pts.bottom_left.x;
-      rune_msg.pts[1].y = result_it->pts.bottom_left.y;
-      rune_msg.pts[2].x = result_it->pts.top_left.x;
-      rune_msg.pts[2].y = result_it->pts.top_left.y;
-      rune_msg.pts[3].x = result_it->pts.top_right.x;
-      rune_msg.pts[3].y = result_it->pts.top_right.y;
-      rune_msg.pts[4].x = result_it->pts.bottom_right.x;
-      rune_msg.pts[4].y = result_it->pts.bottom_right.y;
-    } else {
-      // All runes are activated
-      rune_msg.is_lost = true;
-    }
-  } else {
-    // All runes are not the target color
-    rune_msg.is_lost = true;
-  }
-
-  rune_pub_->publish(std::move(rune_msg));
-
-  if (debug_) {
-    if (debug_img.empty()) {
-      // Avoid debug_mode change in processing
-      return;
-    }
-
-    // Draw detection result
-    for (auto &obj : objs) {
-      auto pts = obj.pts.toVector2f();
-      cv::Point2f aim_point = std::accumulate(pts.begin() + 1, pts.end(), cv::Point2f(0, 0)) / 4;
-
-      cv::Scalar line_color =
-        obj.type == RuneType::INACTIVATED ? cv::Scalar(50, 255, 50) : cv::Scalar(255, 50, 255);
-      cv::putText(debug_img,
-                  fmt::format("{:.2f}", obj.prob),
-                  cv::Point2i(pts[1]),
-                  cv::FONT_HERSHEY_SIMPLEX,
-                  0.8,
-                  line_color,
-                  2);
-      cv::polylines(debug_img, obj.pts.toVector2i(), true, line_color, 2);
-      cv::circle(debug_img, aim_point, 5, line_color, -1);
-
-      std::string rune_type = obj.type == RuneType::INACTIVATED ? "_HIT" : "_OK";
-      std::string rune_color = enemyColorToString(obj.color);
-      cv::putText(debug_img,
-                  rune_color + rune_type,
-                  cv::Point2i(pts[2]),
-                  cv::FONT_HERSHEY_SIMPLEX,
-                  0.8,
-                  line_color,
-                  2);
-    }
-
-    auto end = this->get_clock()->now();
-    auto duration = end.seconds() - timestamp.seconds();
-    std::string letency = fmt::format("Latency: {:.3f}ms", duration * 1000);
-    cv::putText(debug_img,
-                letency,
-                cv::Point2i(10, 30),
-                cv::FONT_HERSHEY_SIMPLEX,
-                0.8,
-                cv::Scalar(0, 255, 255),
-                2);
-    result_img_pub_.publish(cv_bridge::CvImage(rune_msg.header, "rgb8", debug_img).toImageMsg());
-  }
-}
-
-void RuneDetectorNode::setModeCallback(
-  const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-  std::shared_ptr<rm_interfaces::srv::SetMode::Response> response) {
-  response->success = true;
-
-  VisionMode mode = static_cast<VisionMode>(request->mode);
-  std::string mode_name = visionModeToString(mode);
-  if (mode_name == "UNKNOWN") {
-    FYT_ERROR("rune_detector", "Invalid mode: {}", request->mode);
-    return;
-  }
-
-  auto createImageSub = [this]() {
-    if (img_sub_ == nullptr) {
-      img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "image_raw",
-        rclcpp::SensorDataQoS(),
-        std::bind(&RuneDetectorNode::imageCallback, this, std::placeholders::_1));
-    }
-  };
-
-  switch (mode) {
-    case VisionMode::SMALL_RUNE_RED: {
-      is_rune_ = true;
-      is_big_rune_ = false;
-      detect_color_ = EnemyColor::RED;
-      createImageSub();
-      break;
-    }
-    case VisionMode::SMALL_RUNE_BLUE: {
-      is_rune_ = true;
-      is_big_rune_ = false;
-      detect_color_ = EnemyColor::BLUE;
-      createImageSub();
-      break;
-    }
-    case VisionMode::BIG_RUNE_RED: {
-      is_rune_ = true;
-      is_big_rune_ = true;
-      detect_color_ = EnemyColor::RED;
-      createImageSub();
-      break;
-    }
-    case VisionMode::BIG_RUNE_BLUE: {
-      is_rune_ = true;
-      is_big_rune_ = true;
-      detect_color_ = EnemyColor::BLUE;
-      createImageSub();
-      break;
-    }
-    default: {
-      is_rune_ = false;
-      is_big_rune_ = false;
-      img_sub_.reset();
-      break;
-    }
-  }
-
-  FYT_WARN("rune_detector", "Set Rune Mode: {}", visionModeToString(mode));
+    result.successful = true;
+    return result;
 }
 
 void RuneDetectorNode::createDebugPublishers() {
-  result_img_pub_ = image_transport::create_publisher(this, "rune_detector/result_img");
+    result_img_pub_ = image_transport::create_publisher(this, "rune_detector/result_img");
 }
 
 void RuneDetectorNode::destroyDebugPublishers() { result_img_pub_.shutdown(); }
 
-}  // namespace fyt::rune
+} // namespace fyt::rune
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.

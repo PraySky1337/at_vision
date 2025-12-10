@@ -1,89 +1,107 @@
-// Copyright (C) FYT Vision Group. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #ifndef RUNE_DETECTOR_TYPES_HPP_
 #define RUNE_DETECTOR_TYPES_HPP_
 
 // 3rd party
+#include <opencv2/core/types.hpp>
 #include <opencv2/opencv.hpp>
-// project
-#include "rm_utils/common.hpp"
+#include <vector>
 
 namespace fyt::rune {
 
-enum class RuneType { INACTIVATED = 0, ACTIVATED };
+enum class Status {
+    SUCCESS,
+    ARROW_FAILURE,
+    ARMOR_FAILURE,
+    CENTER_FAILURE
+}; // 成功，箭头检测失败，装甲板检测失败，中心R检测失败
 
-struct FeaturePoints {
-  FeaturePoints() {
-    r_center = cv::Point2f(-1, -1);
-    bottom_right = cv::Point2f(-1, -1);
-    top_right = cv::Point2f(-1, -1);
-    top_left = cv::Point2f(-1, -1);
-    bottom_left = cv::Point2f(-1, -1);
-  }
-
-  void reset() {
-    r_center = cv::Point2f(-1, -1);
-    bottom_right = cv::Point2f(-1, -1);
-    top_right = cv::Point2f(-1, -1);
-    top_left = cv::Point2f(-1, -1);
-    bottom_left = cv::Point2f(-1, -1);
-  }
-
-  FeaturePoints operator+(const FeaturePoints &other) {
-    FeaturePoints res;
-    res.r_center = r_center + other.r_center;
-    res.bottom_right = bottom_right + other.bottom_right;
-    res.top_right = top_right + other.top_right;
-    res.top_left = top_left + other.top_left;
-    res.bottom_left = bottom_left + other.bottom_left;
-    return res;
-  }
-
-  FeaturePoints operator/(const float &other) {
-    FeaturePoints res;
-    res.r_center = r_center / other;
-    res.bottom_right = bottom_right / other;
-    res.top_right = top_right / other;
-    res.top_left = top_left / other;
-    res.bottom_left = bottom_left / other;
-    return res;
-  }
-
-  std::vector<cv::Point2f> toVector2f() const {
-    return {r_center, bottom_left, top_left, top_right, bottom_right};
-  }
-  std::vector<cv::Point> toVector2i() const {
-    return {r_center, bottom_left, top_left, top_right, bottom_right};
-  }
-
-  cv::Point2f r_center;
-  cv::Point2f bottom_right;
-  cv::Point2f top_right;
-  cv::Point2f top_left;
-  cv::Point2f bottom_left;
-
-  std::vector<FeaturePoints> children;
+enum class EnemyColor {
+    RED   = 0,
+    BLUE  = 1,
+    WHITE = 2,
 };
 
-struct RuneObject {
-  EnemyColor color;
-  RuneType type;
-  float prob;
-  FeaturePoints pts;
-  cv::Rect box;
+constexpr double MIN_ROUNDNESS                 = 0.6;            // 最小允许圆度
+constexpr double MAX_ROUNDNESS                 = 1.0;            // 最大允许圆度
+constexpr int MIN_ARROW_LIGHT_NUM              = 6;              // 流水灯小灯条最小数量
+constexpr int MAX_ARROW_LIGHT_NUM              = 15;             // 流水灯小灯条最大数量
+constexpr int MIN_ARROW_ASPECT_RATIO           = 2;              // 流水灯最小比例
+constexpr int MAX_ARROW_ASPECT_RATIO           = 12;             // 流水灯最大比例
+constexpr int MAX_ARROW_AREA                   = 5000;           // 流水灯最大面积
+constexpr double GLOBAL_ROI_LENGTH_RATIO       = 1.5;            // 全局裁剪能量机关比例
+constexpr double LOCAL_ROI_DISTANCE_RATIO      = 6.6;            // 局部裁剪能量机关比例
+constexpr int LOCAL_ROI_WIDTH                  = 200;            // 局部裁剪宽度
+constexpr double POWER_RUNE_RADIUS             = 700.0 / 1000.0; // 能量机关半径
+constexpr double POWER_TARGET_RADIUS           = 150.0 / 1000.0; // 靶半径
+constexpr double MAX_CENTER_ASPECT_RATIO       = 3;              // R中心最大比例
+constexpr int MIN_TARGET_LIGHT_AREA            = 400;            // 靶最小旋转矩形的最小面积
+constexpr int MAX_TARGET_LIGHT_AREA            = 30000;          // 靶最小旋转矩形的最大面积
+constexpr int MIN_TARGET_LIGHT_CONTOUR_AREA    = 300;            // 靶轮廓最小面积
+constexpr int MAX_TARGET_LIGHT_CONTOUR_AREA    = 10000;          // 靶轮廓最大面积
+constexpr double MIN_TARGET_LIGHT_ASPECT_RATIO = 0.5;            // 靶最小比例
+constexpr double MAX_TARGET_LIGHT_ASPECT_RATIO = 1.5;            // 靶最大比例
+constexpr double ARROW_WIDTH                   = 60;             // 流水灯的宽度
+constexpr int MIN_ARROW_LIGHT_AREA             = 20;             // 流水灯小灯条的最小面积
+constexpr int MAX_ARROW_LIGHT_AREA             = 250;            // 流水灯小灯条的最大面积
+constexpr double MAX_ARROW_LIGHT_ASPECT_RATIO  = 5;              // 流水灯小灯条最大比例
+constexpr double MAX_SAME_ARROW_AREA_RATIO     = 5;              // 最大箭头面积相似比例
+
+// 顺时针
+struct KeyPoint {
+    // cv::Point2f up;
+    // cv::Point2f right;
+    // cv::Point2f down;
+    // cv::Point2f left;
+
+    cv::Point2f lu; // 左上
+    cv::Point2f ru; // 右上
+    cv::Point2f rd; // 右下
+    cv::Point2f ld; // 左下
 };
 
-}  // namespace fyt::rune
-#endif  // RUNE_DETECTOR_TYPES_HPP_
+struct Light {
+    Light() = default;
+    Light(
+        const std::vector<cv::Point>& cnt, const cv::Rect2f& globalRoi, const cv::Rect2f& localRoi);
+
+    double roundness;
+    std::vector<cv::Point> contour;
+    cv::Point2f center;
+    cv::Size2f size;
+    float angle;
+    double contourArea;
+    double area;
+    cv::RotatedRect rotated;
+    double ratio;
+};
+
+struct CenterR {
+    CenterR() = default;
+    void set(const Light& light);
+    Light light;
+    cv::Point2f center;
+    cv::Rect boundingRect;
+};
+
+struct Target {
+    cv::Point2f center;
+    std::vector<cv::Point> contour;
+    void set(const Light& l);
+    KeyPoint keypnt;
+};
+
+struct Arrow {
+    Arrow() = default;
+    void set(const std::vector<Light>& points, const cv::Point2f& roi);
+    std::vector<cv::Point> contour;
+    cv::Point2f center;
+    cv::Size2f size;
+    double angle;
+    double area;
+    cv::RotatedRect rotated;
+    double ratio;
+    double fillratio;
+};
+
+} // namespace fyt::rune
+#endif // RUNE_DETECTOR_TYPES_HPP_

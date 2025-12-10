@@ -1,20 +1,3 @@
-// Copyright 2023 Yunlong Feng
-//
-// Additional modifications and features by Chengfu Zou, 2024.
-//
-// Copyright (C) FYT Vision Group. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 #ifndef RUNE_DETECTOR_RUNE_DETECTOR_HPP_
 #define RUNE_DETECTOR_RUNE_DETECTOR_HPP_
@@ -25,69 +8,67 @@
 #include <future>
 #include <memory>
 #include <string>
-#include <vector>
 #include <tuple>
+#include <vector>
 // third party
+#include "rm_interfaces/msg/gimbal_cmd.hpp"
+#include "rm_interfaces/msg/rune_target.hpp"
+// #include "rm_utils/math/pnp_solver.hpp"
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
 #include <openvino/openvino.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <visualization_msgs/msg/marker.hpp>
 // project
 #include "rune_detector/types.hpp"
 
 namespace fyt::rune {
-struct GridAndStride {
-  int grid0;
-  int grid1;
-  int stride;
-};
 
 class RuneDetector {
 public:
-  using CallbackType = std::function<void(std::vector<RuneObject> &, int64_t, const cv::Mat &)>;
+    RuneDetector();
+    RuneDetector(
+        EnemyColor detect_color, int arrow_threshold, int target_threshold, int rcenter_threshold);
 
-public:
-  // Construct a new OpenVINO Detector object
-  explicit RuneDetector(const std::filesystem::path &model_path,
-                        const std::string &device_name,
-                        float conf_threshold = 0.25,
-                        int top_k = 128,
-                        float nms_threshold = 0.3,
-                        bool auto_init = false);
+    bool detect(const cv::Mat& frame, int image_width, int image_height);
 
-  void init();
+    Eigen::Matrix4d solve(
+        const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs, const rclcpp::Time& stamp,
+        tf2_ros::Buffer& tf2_buffer);
 
-  // Push an inference request to the detector
-  std::future<bool> pushInput(const cv::Mat &rgb_img, int64_t timestamp_nanosec);
+    void setKeyPoints();
+    void setLocalRoi();
+    void setGlobalRoi();
 
-  void setCallback(CallbackType callback);
-
-  // Detect R tag using traditional method
-  // Return the center of the R tag and binary roi image (for debug)
-  std::tuple<cv::Point2f, cv::Mat> detectRTag(const cv::Mat &img,
-                                              int binary_thresh,
-                                              const cv::Point2f &prior);
-
-private:
-  // Do inference and call the infer_callback_ after inference
-  bool processCallback(const cv::Mat resized_img,
-                       Eigen::Matrix3f transform_matrix,
-                       int64_t timestamp_nanosec,
-                       const cv::Mat &src_img);
+    cv::Mat localMask;
+    cv::Rect2f globalRoi;
+    std::vector<cv::Rect2f> targetROIs;
+    cv::Rect2f centerRoi;
+    cv::Mat arrowImg;
+    cv::Mat targetImg;
+    cv::Mat rCenterImg;
+    CenterR rcenter;
+    std::vector<Target> targets;
+    std::vector<Arrow> arrows;
+    Status status;
+    rclcpp::Time timestamp;
 
 private:
-  std::string model_path_;
-  std::string device_name_;
-  float conf_threshold_;
-  int top_k_;
-  float nms_threshold_;
-  std::mutex mtx_;
-  std::vector<int> strides_;
-  std::vector<GridAndStride> grid_strides_;
+    cv::Mat processPictures(const cv::Mat& src);
 
-  CallbackType infer_callback_;
+    bool detectCenterR();
+    bool detectAllArrows();
+    bool detectAllTargets();
 
-  std::unique_ptr<ov::Core> ov_core_;
-  std::unique_ptr<ov::CompiledModel> compiled_model_;
+    EnemyColor detect_color_;
+    int arrow_threshold_;
+    int target_threshold_;
+    int rcenter_threshold_;
+
+    int image_width_;
+    int image_height_;
 };
-}  // namespace fyt::rune
-#endif  // RUNE_DETECTOR_RUNE_DETECTOR_HPP_
+} // namespace fyt::rune
+#endif // RUNE_DETECTOR_RUNE_DETECTOR_HPP_
