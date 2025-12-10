@@ -48,10 +48,6 @@ constexpr double MAX_SAME_ARROW_AREA_RATIO     = 5;              // 最大箭头
 
 // 顺时针
 struct KeyPoint {
-    // cv::Point2f up;
-    // cv::Point2f right;
-    // cv::Point2f down;
-    // cv::Point2f left;
 
     cv::Point2f lu; // 左上
     cv::Point2f ru; // 右上

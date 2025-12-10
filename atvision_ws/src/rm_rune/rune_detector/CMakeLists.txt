@@ -39,7 +39,6 @@ rclcpp_components_register_node(${PROJECT_NAME}
 set(USE_SCOPED_HEADER_INSTALL_DIR ON)
 ament_auto_package(
   INSTALL_TO_SHARE
-  model
   docs
 )
 

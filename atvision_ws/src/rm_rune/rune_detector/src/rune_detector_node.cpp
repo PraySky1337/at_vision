@@ -136,21 +136,27 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 
         if (!rune_detector_->targets.empty()) {
             for (auto target : rune_detector_->targets) {
-             
-                cv::circle(debug_img, target.keypnt.ru, 3, cv::Scalar(255, 0, 0), -1);//蓝 右上
-                cv::line(
-                    debug_img, target.keypnt.ru, target.keypnt.rd, cv::Scalar(255, 255, 255), 2);
-                cv::circle(debug_img, target.keypnt.rd, 3, cv::Scalar(0, 255, 0), -1);//绿 右下
-                cv::line(
-                    debug_img, target.keypnt.rd, target.keypnt.ld, cv::Scalar(255, 255, 255), 2);
-                cv::circle(debug_img, target.keypnt.ld, 3, cv::Scalar(0, 0, 255), -1);//红 左下
-                cv::line(
-                    debug_img, target.keypnt.ld, target.keypnt.lu, cv::Scalar(255, 255, 255), 2);
-                cv::circle(debug_img, target.keypnt.lu, 3, cv::Scalar(0, 0, 0), -1);//黑 左上
-                cv::line(
-                    debug_img, target.keypnt.lu, target.keypnt.ru, cv::Scalar(255, 255, 255), 2);
 
-                cv::circle(debug_img, target.center, 3, cv::Scalar(0, 255, 255), -1);//黄 中心
+                // 1. 绘制四个角点
+                cv::circle(debug_img, target.keypnt.ru, 3, cv::Scalar(255, 0, 0), -1); // 蓝 - 右上
+                cv::circle(debug_img, target.keypnt.rd, 3, cv::Scalar(0, 255, 0), -1); // 绿 - 右下
+                cv::circle(debug_img, target.keypnt.ld, 3, cv::Scalar(0, 0, 255), -1); // 红 - 左下
+                cv::circle(debug_img, target.keypnt.lu, 3, cv::Scalar(0, 0, 0), -1);   // 黑 - 左上
+                cv::circle(debug_img, target.center, 3, cv::Scalar(0, 255, 255), -1);  // 黄 - 中心
+
+                // 2. 绘制矩形边框（按「右上→右下→左下→左上→右上」闭环顺序）
+                cv::line(
+                    debug_img, target.keypnt.ru, target.keypnt.rd, cv::Scalar(255, 255, 255),
+                    2); // 右上→右下
+                cv::line(
+                    debug_img, target.keypnt.rd, target.keypnt.ld, cv::Scalar(255, 255, 255),
+                    2); // 右下→左下
+                cv::line(
+                    debug_img, target.keypnt.ld, target.keypnt.lu, cv::Scalar(255, 255, 255),
+                    2); // 左下→左上
+                cv::line(
+                    debug_img, target.keypnt.lu, target.keypnt.ru, cv::Scalar(255, 255, 255),
+                    2); // 左上→右上
             }
         }
 

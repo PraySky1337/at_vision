@@ -704,19 +704,6 @@ bool RuneDetector::detectAllTargets() {
     return true;
 }
 
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
 struct Points {
     cv::Point2f center;
     std::vector<cv::Point2f> corners;
@@ -753,7 +740,7 @@ bool sameTarget(const std::vector<cv::Point>& contour1, const std::vector<cv::Po
 }
 
 
-void addReferRuneCenter(const CenterR& rc, Points target) {
+void addReferRuneCenter(const CenterR& rc, Points& target) {
 
     if (target.corners.size() != 4)
         return;
@@ -844,8 +831,6 @@ void addReferRuneCenter(const CenterR& rc, Points target) {
 
     target.corners.assign(ordered.begin(), ordered.end());
 }
-
-
 
 
 inline Target markRuneTarget(
@@ -964,20 +949,7 @@ void RuneDetector::setKeyPoints() {
     }
 }
 
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
+
 bool RuneDetector::detect(const cv::Mat& frame, int image_width, int image_height) {
     image_width_  = image_width;
     image_height_ = image_height;
