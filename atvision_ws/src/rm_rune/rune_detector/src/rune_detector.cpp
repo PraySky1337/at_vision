@@ -739,13 +739,12 @@ bool sameTarget(const std::vector<cv::Point>& contour1, const std::vector<cv::Po
     return true;
 }
 
-
-void addReferRuneCenter(const CenterR& rc, Points& target) {
+void addReferRuneCenter(const cv::Point2f& rc, Points& target) {
 
     if (target.corners.size() != 4)
         return;
 
-    cv::Point2f down_vec = rc.center - target.center;
+    cv::Point2f down_vec = rc - target.center;
     float norm           = std::sqrt(down_vec.x * down_vec.x + down_vec.y * down_vec.y);
     if (norm < 1e-6f)
         return;
@@ -834,7 +833,7 @@ void addReferRuneCenter(const CenterR& rc, Points& target) {
 
 
 inline Target markRuneTarget(
-    std::vector<cv::Point> arrow, CenterR rc, Target target,
+    std::vector<cv::Point> arrow, cv::Point2f rc, cv::Point2f target,
     const std::vector<std::vector<cv::Point>>& contours, const std::vector<cv::Vec4i>& hierarchy) {
 
     Target result;
@@ -913,10 +912,10 @@ inline Target markRuneTarget(
         cv::Point2f center(m.m10 / m.m00, m.m01 / m.m00);
         points.corners.emplace_back(center);
     }
-    points.center = target.center;
+    points.center = target;
 
     addReferRuneCenter(rc, points);
- 
+
     result.keypnt.lu = points.corners[0];
     result.keypnt.ru = points.corners[1];
     result.keypnt.rd = points.corners[2];
@@ -939,8 +938,10 @@ void RuneDetector::setKeyPoints() {
             arrow_contour.emplace_back(pt);
         }
 
+        cv::Point2f target_center=targets[i].center-globalRoi.tl() - targetROIs[i].tl();
+        cv::Point2f r_center=rcenter.center-globalRoi.tl() - targetROIs[i].tl();
         Target rune_target =
-            markRuneTarget(arrow_contour, rcenter, targets[i], contours, hierarchy);
+            markRuneTarget(arrow_contour, r_center, target_center, contours, hierarchy);
 
         targets[i].keypnt.lu = rune_target.keypnt.lu + globalRoi.tl() + targetROIs[i].tl();
         targets[i].keypnt.ru = rune_target.keypnt.ru + globalRoi.tl() + targetROIs[i].tl();
@@ -948,7 +949,6 @@ void RuneDetector::setKeyPoints() {
         targets[i].keypnt.ld = rune_target.keypnt.ld + globalRoi.tl() + targetROIs[i].tl();
     }
 }
-
 
 bool RuneDetector::detect(const cv::Mat& frame, int image_width, int image_height) {
     image_width_  = image_width;
