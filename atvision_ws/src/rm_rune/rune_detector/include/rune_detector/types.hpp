@@ -31,8 +31,6 @@ constexpr int MAX_ARROW_AREA                   = 5000;           // 流水灯最
 constexpr double GLOBAL_ROI_LENGTH_RATIO       = 1.5;            // 全局裁剪能量机关比例
 constexpr double LOCAL_ROI_DISTANCE_RATIO      = 6.6;            // 局部裁剪能量机关比例
 constexpr int LOCAL_ROI_WIDTH                  = 200;            // 局部裁剪宽度
-constexpr double POWER_RUNE_RADIUS             = 700.0 / 1000.0; // 能量机关半径
-constexpr double POWER_TARGET_RADIUS           = 150.0 / 1000.0; // 靶半径
 constexpr double MAX_CENTER_ASPECT_RATIO       = 3;              // R中心最大比例
 constexpr int MIN_TARGET_LIGHT_AREA            = 400;            // 靶最小旋转矩形的最小面积
 constexpr int MAX_TARGET_LIGHT_AREA            = 30000;          // 靶最小旋转矩形的最大面积
@@ -46,13 +44,19 @@ constexpr int MAX_ARROW_LIGHT_AREA             = 250;            // 流水灯小
 constexpr double MAX_ARROW_LIGHT_ASPECT_RATIO  = 5;              // 流水灯小灯条最大比例
 constexpr double MAX_SAME_ARROW_AREA_RATIO     = 5;              // 最大箭头面积相似比例
 
-// 顺时针
-struct KeyPoint {
+constexpr double RUNE_PAN_REAL_DIS = 0.15;
+constexpr double RUNE_R2PANCENTER  = 0.7;
 
-    cv::Point2f lu; // 左上
-    cv::Point2f ru; // 右上
-    cv::Point2f rd; // 右下
-    cv::Point2f ld; // 左下
+struct Points {
+    cv::Point2f center;
+    std::vector<cv::Point2f> corners;
+};
+
+struct KeyPoint {
+    cv::Point2f lu;                                              // 左上
+    cv::Point2f ru;                                              // 右上
+    cv::Point2f rd;                                              // 右下
+    cv::Point2f ld;                                              // 左下
 };
 
 struct Light {
@@ -81,9 +85,19 @@ struct CenterR {
 
 struct Target {
     cv::Point2f center;
+    double roll=0;                                       // R中心
     std::vector<cv::Point> contour;
     void set(const Light& l);
     KeyPoint keypnt;
+
+    std::vector<cv::Point3f> points3d = {
+        {0.0f,                      0.0f,                                        0.0f}, // P0
+        {0.0f,  RUNE_PAN_REAL_DIS / 2.0f, RUNE_R2PANCENTER + RUNE_PAN_REAL_DIS / 2.0f}, // P1
+        {0.0f,  RUNE_PAN_REAL_DIS / 2.0f, RUNE_R2PANCENTER - RUNE_PAN_REAL_DIS / 2.0f}, // P2
+        {0.0f, -RUNE_PAN_REAL_DIS / 2.0f, RUNE_R2PANCENTER - RUNE_PAN_REAL_DIS / 2.0f}, // P3
+        {0.0f, -RUNE_PAN_REAL_DIS / 2.0f, RUNE_R2PANCENTER + RUNE_PAN_REAL_DIS / 2.0f}, // P4
+        {0.0f,                      0.0f,                            RUNE_R2PANCENTER}  // P5
+    };
 };
 
 struct Arrow {

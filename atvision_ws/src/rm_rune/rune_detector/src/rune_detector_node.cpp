@@ -22,7 +22,6 @@ namespace fyt::rune {
 RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions& options)
     : Node("rune_detector", options)
     , is_rune_(false)
-    , is_big_rune_(true)
     , tf_buffer_(this->get_node_clock_interface()->get_clock())
     , tf_listener_(tf_buffer_) {
     std::cerr << "Starting RuneDetectorNode!" << std::endl;
@@ -41,9 +40,6 @@ RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions& options)
     }
     // Detector
     rune_detector_ = initDetector();
-    // Rune Publisher
-    rune_pub_ = this->create_publisher<rm_interfaces::msg::RuneTarget>(
-        "rune_detector/rune_target", rclcpp::SensorDataQoS());
 
     // Debug参数
     debug_ = declare_parameter("debug", true);
@@ -62,14 +58,13 @@ RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions& options)
             distCoeffs_ = cv::Mat(1, 5, CV_64F, const_cast<double*>(camera_info->d.data())).clone();
             cam_info_sub_.reset();
         });
+
     img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
         "/image_raw", qos,
         std::bind(&RuneDetectorNode::imageCallback, this, std::placeholders::_1));
 
     marker_array_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "rune_detector/marker", rclcpp::SensorDataQoS());
-
-    // heartbeat_ = HeartBeatPublisher::create(this);
 }
 
 RuneDetectorNode::~RuneDetectorNode() { std::cerr << "Stopping video thread..." << std::endl; }
@@ -109,12 +104,12 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
         rune_detector_->setKeyPoints();
     }
 
-    // Eigen::Matrix4d pose;
-    // if (rune_detector_->rcenter.center != cv::Point2f(0, 0) && !cameraMatrix_.empty()
-    //     && !distCoeffs_.empty()) {
+    Eigen::Matrix4d pose;
+    if (rune_detector_->rcenter.center != cv::Point2f(0, 0) && !rune_detector_->targets.empty()
+        && !cameraMatrix_.empty() && !distCoeffs_.empty()) {
 
-    //     pose = rune_detector_->solve(cameraMatrix_, distCoeffs_, timestamp, tf_buffer_);
-    // }
+        pose = rune_detector_->solve(cameraMatrix_, distCoeffs_, timestamp, tf_buffer_);
+    }
 
     // Debug 可视化
     if (debug_) {
@@ -166,94 +161,62 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 
         auto&& result = cv_bridge::CvImage(msg->header, "bgr8", debug_img).toImageMsg();
         result_img_pub_.publish(std::move(result));
-
-        // visualization_msgs::msg::MarkerArray marker_array;
-
-        // // 检查R标和靶体数据是否有效
-        // if (pose.isZero() || pose == Eigen::Matrix4d::Identity()) {
-        //     visualization_msgs::msg::Marker delete_marker;
-        //     delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
-        //     marker_array.markers.push_back(delete_marker);
-        //     marker_array_pub_->publish(marker_array);
-        //     return;
-        // }
-
-        // Eigen::Matrix3d R = pose.block<3, 3>(0, 0);
-        // Eigen::Quaterniond q(R);
-
-        // if (rune_detector_->targets.size() == 1) {
-
-        //     Eigen::Vector3d target_rel_rune(0.0, 0.0, -POWER_RUNE_RADIUS);
-        //     Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
-        //     Eigen::Vector3d target_center_world = r_center_world + R * target_rel_rune;
-
-        //     visualization_msgs::msg::Marker target_body = create_target_marker(
-        //         timestamp, target_center_world, q, 0.3, 0.3, 0.1, 1.0, 0.0, 0.0, 0.8, 0);
-        //     marker_array.markers.push_back(target_body);
-
-        //     visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp,
-        //     r_center_world); marker_array.markers.push_back(r_marker);
-        // } else if (rune_detector_->targets.size() == 2) {
-
-        //     const double distancetTargetToTarget =
-        //         cv::norm(rune_detector_->targets[0].center - rune_detector_->targets[1].center);
-        //     const double distanceTargetToRcenter =
-        //         cv::norm(rune_detector_->targets[0].center - rune_detector_->rcenter.center);
-        //     const double rad36  = 36.0 * CV_PI / 180.0;
-        //     const double rad54  = 54.0 * CV_PI / 180.0;
-        //     const double rad72  = 72.0 * CV_PI / 180.0;
-        //     const double sin36  = std::sin(rad36);
-        //     const double sin54  = std::sin(rad54);
-        //     const double sin72  = std::sin(rad72);
-        //     const double cos54  = std::cos(rad54);
-        //     const double cos72  = std::cos(rad72);
-        //     const double theo36 = 2.0 * distanceTargetToRcenter * sin36;
-        //     const double theo72 = 2.0 * distanceTargetToRcenter * sin72;
-        //     const double eps    = 50.0;
-
-        //     struct TargetPoints {
-        //         Eigen::Vector3d center;
-        //         Eigen::Vector3d down;
-        //         Eigen::Vector3d left;
-        //         Eigen::Vector3d up;
-        //         Eigen::Vector3d right;
-        //     } target1_rel, target2_rel;
-
-        //     target1_rel.center = Eigen::Vector3d(0.0, 0.0, (-POWER_RUNE_RADIUS));
-
-        //     if (std::abs(distancetTargetToTarget - theo36) < eps) {
-
-        //         target2_rel.center = Eigen::Vector3d(
-        //             0.0, (POWER_RUNE_RADIUS * sin72), (-(POWER_RUNE_RADIUS * cos72)));
-
-        //     } else if (std::abs(distancetTargetToTarget - theo72) < eps) {
-
-        //         target2_rel.center =
-        //             Eigen::Vector3d(0.0, (POWER_RUNE_RADIUS * cos54), (POWER_RUNE_RADIUS *
-        //             sin54));
-
-        //     } else {
-        //         return;
-        //     }
-
-        //     Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
-        //     Eigen::Vector3d target1_center = r_center_world + R * target1_rel.center;
-        //     Eigen::Vector3d target2_center = r_center_world + R * target2_rel.center;
-
-        //     visualization_msgs::msg::Marker target1_body = create_target_marker(
-        //         timestamp, target1_center, q, 2 * POWER_TARGET_RADIUS, 0.3, 2 *
-        //         POWER_TARGET_RADIUS, 1.0, 0.0, 0.0, 0.8, 0);
-        //     marker_array.markers.push_back(target1_body);
-        //     visualization_msgs::msg::Marker target2_body = create_target_marker(
-        //         timestamp, target2_center, q, 2 * POWER_TARGET_RADIUS, 0.3, 2 *
-        //         POWER_TARGET_RADIUS, 0.0, 0.0, 1.0, 0.8, 1);
-        //     marker_array.markers.push_back(target2_body);
-
-        //     visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp,
-        //     r_center_world); marker_array.markers.push_back(r_marker);
-        // }
-        // marker_array_pub_->publish(marker_array);
     }
+    visualization_msgs::msg::MarkerArray marker_array;
+
+    // 检查R标和靶体数据是否有效
+    if (pose.isZero() || pose == Eigen::Matrix4d::Identity()) {
+        visualization_msgs::msg::Marker delete_marker;
+        delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        marker_array.markers.push_back(delete_marker);
+        marker_array_pub_->publish(marker_array);
+        return;
+    }
+
+    Eigen::Matrix3d R = pose.block<3, 3>(0, 0);
+    Eigen::Quaterniond q(R);
+
+    if (rune_detector_->targets.size() == 1) {
+
+        Eigen::Vector3d target_rel_rune(0.0f, 0.0f, RUNE_R2PANCENTER);
+        Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
+        Eigen::Vector3d target_center_world = r_center_world + R * target_rel_rune;
+
+        visualization_msgs::msg::Marker target_body = create_target_marker(
+            timestamp, target_center_world, q, 0.3, 0.3, 0.1, 1.0, 0.0, 0.0, 0.8, 0);
+        marker_array.markers.push_back(target_body);
+
+        visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp, r_center_world);
+        marker_array.markers.push_back(r_marker);
+    } else if (rune_detector_->targets.size() == 2) {
+
+        // 第一个目标（同单目标逻辑，ID=0）
+        Eigen::Vector3d r_center_world(pose(0, 3), pose(1, 3), pose(2, 3));
+        Eigen::Vector3d target_rel_rune0(0.0f, 0.0f, RUNE_R2PANCENTER);
+        Eigen::Vector3d target_center0_world = r_center_world + R * target_rel_rune0;
+
+        visualization_msgs::msg::Marker target_body0 = create_target_marker(
+            timestamp, target_center0_world, q, 0.3, 0.3, 0.1, 1.0, 0.0, 0.0, 0.8, 0);
+        marker_array.markers.push_back(target_body0);
+
+        // 第二个目标（ID=1）
+        // 计算第二个目标的R中心世界坐标（基于roll旋转后的相对位置）
+        double roll = rune_detector_->targets[0].roll; // id来自addOther逻辑，需保证可访问
+        Eigen::Vector3d target_rel_rune1(0.0f, 0.0f, RUNE_R2PANCENTER);
+        // 应用roll旋转（X轴）
+        Eigen::AngleAxisd roll_angle(roll, Eigen::Vector3d::UnitX());
+        Eigen::Vector3d target_center1_world = r_center_world + R * (roll_angle * target_rel_rune1);
+
+        visualization_msgs::msg::Marker target_body1 = create_target_marker(
+            timestamp, target_center1_world, q, 0.3, 0.3, 0.1, 0.0, 1.0, 0.0, 0.8,
+            1);                                       // 绿色区分，ID=1
+        marker_array.markers.push_back(target_body1);
+
+        visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp, r_center_world);
+        marker_array.markers.push_back(r_marker);
+    }
+    marker_array_pub_->publish(marker_array);
+
     if (success) {
         rune_detector_->setGlobalRoi();
     }

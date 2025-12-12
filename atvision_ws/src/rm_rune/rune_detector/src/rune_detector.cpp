@@ -13,6 +13,7 @@
 #include <unordered_map>
 // third party
 #include <angles/angles.h>
+#include <opencv2/core/eigen.hpp>
 #include <opencv2/imgproc.hpp>
 #include <vector>
 // project
@@ -444,13 +445,6 @@ bool RuneDetector::detectAllArrows() {
 
 bool findCenterR(
     CenterR& center, const std::vector<Light>& lights, const Arrow& arrow, const Target& target) {
-    // 设置中心 R 到靶中心的距离范围
-    // const double distanceRTarget{arrow.size.width / ARROW_WIDTH * POWER_RUNE_RADIUS};
-    // const double ratio = 0.5;
-    // const double maxDistanceRTarget{distanceRTarget / ratio};
-    // const double minDistanceRTarget{distanceRTarget * ratio};
-    // // 设置中心 R 到箭头所在直线的最大距离
-    // const double maxDistanceRArrow{arrow.size.width * 5};
 
     std::vector<Light> filteredLights;
     for (auto iter = lights.begin(); iter != lights.end(); ++iter) {
@@ -466,15 +460,6 @@ bool findCenterR(
             }
         }
 
-        // double p2p{cv::norm(target.center - iter->center)};
-        // double p2l{pointLineDistance(iter->center, target.center, arrow.center)};
-        // if ((p2p >= minDistanceRTarget && p2p <= maxDistanceRTarget) == false) {
-        //     continue;
-        // }
-
-        // if (p2l > maxDistanceRArrow) {
-        //     continue;
-        // }
         filteredLights.push_back(*iter);
     }
     if (filteredLights.empty()) {
@@ -565,7 +550,6 @@ bool RuneDetector::detectCenterR() {
     // 寻找中心灯条，可能是多个
     std::vector<Light> lights;
     if (findCenterLights(imageCenter, lights, globalRoi, centerRoi) == false) {
-
         return false;
     }
 
@@ -575,6 +559,244 @@ bool RuneDetector::detectCenterR() {
     }
 
     return true;
+}
+
+bool sameTarget(const std::vector<cv::Point>& contour1, const std::vector<cv::Point>& contour2) {
+    // 判断面积比
+    double areaRatio{cv::contourArea(contour1) / cv::contourArea(contour2)};
+    if ((areaRatio >= 0.75 && areaRatio <= 1.25) == false) {
+        return false;
+    }
+    cv::RotatedRect rotated1 = cv::minAreaRect(contour1);
+    cv::RotatedRect rotated2 = cv::minAreaRect(contour2);
+    // 判断距离
+    double distance{cv::norm(rotated1.center - rotated2.center)};
+    double maxDistance{1.5 * (rotated1.size.width + rotated2.size.width)};
+    if (distance > maxDistance) {
+        return false;
+    }
+
+    // 判断轮廓旋转矩形的长宽
+    if (rotated1.size.height < rotated1.size.width) {
+        cv::swap(rotated1.size.height, rotated1.size.width);
+    }
+    if (rotated2.size.height < rotated2.size.width) {
+        cv::swap(rotated2.size.height, rotated2.size.width);
+    }
+
+    if (rotated1.size.width - rotated2.size.width > 5
+        || rotated1.size.height - rotated2.size.height > 5) {
+        return false;
+    }
+    return true;
+}
+
+void addReferRuneCenter(const cv::Point2f& rc, Points& target) {
+
+    if (target.corners.size() != 4)
+        return;
+
+    cv::Point2f down_vec = rc - target.center;
+    float norm           = std::sqrt(down_vec.x * down_vec.x + down_vec.y * down_vec.y);
+    if (norm < 1e-6f)
+        return;
+
+    float angle_ref = std::atan2(down_vec.y, down_vec.x);
+
+    // 获取4个点在旋转后的角度
+    struct Node {
+        float ang;
+        cv::Point2f p;
+    };
+    std::vector<Node> arr;
+    arr.reserve(4);
+
+    for (auto& p : target.corners) {
+        cv::Point2f v = p - target.center;
+
+        // 旋转坐标，使 down_vec 对齐 angle=0
+        float ang = std::atan2(v.y, v.x) - angle_ref;
+
+        // 归一化到 (-π, π]
+        while (ang <= -CV_PI)
+            ang += 2 * CV_PI;
+        while (ang > CV_PI)
+            ang -= 2 * CV_PI;
+
+        arr.push_back({ang, p});
+    }
+
+    // 按角度排序（从 -π 到 π）
+    std::sort(arr.begin(), arr.end(), [](const Node& a, const Node& b) { return a.ang < b.ang; });
+
+    // 准备象限变量并标记
+    cv::Point2f lu(0, 0), ru(0, 0), rd(0, 0), ld(0, 0);
+    bool has_lu = false, has_ru = false, has_rd = false, has_ld = false;
+
+    for (const auto& n : arr) {
+        float a = n.ang;
+
+        if (a > CV_PI / 2 && a <= CV_PI) {
+            lu     = n.p;
+            has_lu = true;
+        } else if (a > 0 && a <= CV_PI / 2) {
+            ru     = n.p;
+            has_ru = true;
+        } else if (a > -CV_PI / 2 && a <= 0) {
+            rd     = n.p;
+            has_rd = true;
+        } else {                           // a > -CV_PI && a <= -CV_PI/2
+            ld     = n.p;
+            has_ld = true;
+        }
+    }
+
+    std::array<cv::Point2f, 4> ordered;
+
+    if (has_lu && has_ru && has_rd && has_ld) {
+        ordered[0] = lu;
+        ordered[1] = ru;
+        ordered[2] = rd;
+        ordered[3] = ld;
+        target.corners.assign(ordered.begin(), ordered.end());
+        return;
+    }
+
+    float angle     = 3.0f * CV_PI / 4.0f; // 135°
+    int best_idx    = 0;
+    float best_diff = std::numeric_limits<float>::max();
+    for (int i = 0; i < (int)arr.size(); ++i) {
+        float d = std::fabs(angles::shortest_angular_distance(angle, arr[i].ang));
+        if (d < best_diff) {
+            best_diff = d;
+            best_idx  = i;
+        }
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        int idx    = (best_idx + i) % 4;
+        ordered[i] = arr[idx].p;
+    }
+
+    target.corners.assign(ordered.begin(), ordered.end());
+}
+
+inline Target markRuneTarget(
+    std::vector<cv::Point> arrow, cv::Point2f rc, cv::Point2f target,
+    const std::vector<std::vector<cv::Point>>& contours, const std::vector<cv::Vec4i>& hierarchy) {
+
+    Target result;
+    if (hierarchy.empty()) {
+        std::cerr << "hierarch empty" << std::endl;
+        return result;
+    }
+
+    std::vector<std::vector<cv::Point>> c;
+    for (size_t k = 0; k < contours.size(); k++) {
+        if (hierarchy[k][3] == -1 || (hierarchy[k][0] == -1 && hierarchy[k][1] == -1)) {
+            continue;
+        }
+        cv::RotatedRect rotate = cv::minAreaRect(contours[k]);
+        cv::Point2f ves[4];
+        bool including = false;
+        rotate.points(ves);
+        for (int i = 0; i < 4; i++) {
+            int j = cv::pointPolygonTest(arrow, ves[i], false);
+            if (j > 0) {
+                including = true;
+                break;
+            }
+        }
+        if (!including) {
+            c.emplace_back(contours[k]);
+        }
+    }
+
+    std::vector<int> labels;
+    cv::partition(c, labels, sameTarget);
+
+    // data 记录了标识号和其对应次数
+    std::vector<std::pair<int, int>> datas;
+    for (auto label : labels) {
+        // 对每个 label，从已记录的数据中寻找是否有这个条目，有则对应计数项
+        // +1，否则新增一个条目
+        auto iter =
+            std::find_if(datas.begin(), datas.end(), [label](const std::pair<int, int>& unit) {
+                return unit.first == label;
+            });
+        if (iter == datas.end()) {
+            datas.emplace_back(label, 1);
+        } else {
+            iter->second += 1;
+        }
+    }
+    if (datas.empty() == true) {
+        return result;
+    }
+
+    std::vector<std::vector<cv::Point>> res;
+    for (auto data : datas) {
+        int num = data.second;
+        if ((num > 3 && num < 7) == false) {
+            continue;
+        }
+
+        for (size_t i = 0; i < c.size(); i++)
+            if (labels[i] == data.first) {
+                res.emplace_back(c[i]);
+            }
+    }
+
+    Points points;
+
+    for (auto cnt : res) {
+
+        cv::Moments m = cv::moments(cnt);
+        if (m.m00 == 0) {
+            std::cerr << "m.m00 == 0" << std::endl;
+            continue;
+        }
+
+        // 质心
+        cv::Point2f center(m.m10 / m.m00, m.m01 / m.m00);
+        points.corners.emplace_back(center);
+    }
+    points.center = target;
+
+    addReferRuneCenter(rc, points);
+
+    result.keypnt.lu = points.corners[0];
+    result.keypnt.ru = points.corners[1];
+    result.keypnt.rd = points.corners[2];
+    result.keypnt.ld = points.corners[3];
+
+    return result;
+}
+
+void RuneDetector::setKeyPoints() {
+    for (size_t i = 0; i < targets.size(); i++) {
+
+        cv::Mat detect = (targetImg & localMask)(targetROIs[i]);
+        std::vector<std::vector<cv::Point>> contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(detect, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
+
+        std::vector<cv::Point> arrow_contour;
+        for (auto cnt_pt : arrows[i].contour) {
+            cv::Point pt = cnt_pt - cv::Point(globalRoi.tl()) - cv::Point(targetROIs[i].tl());
+            arrow_contour.emplace_back(pt);
+        }
+
+        cv::Point2f target_center = targets[i].center - globalRoi.tl() - targetROIs[i].tl();
+        cv::Point2f r_center      = rcenter.center - globalRoi.tl() - targetROIs[i].tl();
+        Target rune_target =
+            markRuneTarget(arrow_contour, r_center, target_center, contours, hierarchy);
+
+        targets[i].keypnt.lu = rune_target.keypnt.lu + globalRoi.tl() + targetROIs[i].tl();
+        targets[i].keypnt.ru = rune_target.keypnt.ru + globalRoi.tl() + targetROIs[i].tl();
+        targets[i].keypnt.rd = rune_target.keypnt.rd + globalRoi.tl() + targetROIs[i].tl();
+        targets[i].keypnt.ld = rune_target.keypnt.ld + globalRoi.tl() + targetROIs[i].tl();
+    }
 }
 
 /*通过面积，轮廓面积，长宽比，判断目标是否符合*/
@@ -704,252 +926,6 @@ bool RuneDetector::detectAllTargets() {
     return true;
 }
 
-struct Points {
-    cv::Point2f center;
-    std::vector<cv::Point2f> corners;
-};
-
-bool sameTarget(const std::vector<cv::Point>& contour1, const std::vector<cv::Point>& contour2) {
-    // 判断面积比
-    double areaRatio{cv::contourArea(contour1) / cv::contourArea(contour2)};
-    if ((areaRatio >= 0.75 && areaRatio <= 1.25) == false) {
-        return false;
-    }
-    cv::RotatedRect rotated1 = cv::minAreaRect(contour1);
-    cv::RotatedRect rotated2 = cv::minAreaRect(contour2);
-    // 判断距离
-    double distance{cv::norm(rotated1.center - rotated2.center)};
-    double maxDistance{1.5 * (rotated1.size.width + rotated2.size.width)};
-    if (distance > maxDistance) {
-        return false;
-    }
-
-    // 判断轮廓旋转矩形的长宽
-    if (rotated1.size.height < rotated1.size.width) {
-        cv::swap(rotated1.size.height, rotated1.size.width);
-    }
-    if (rotated2.size.height < rotated2.size.width) {
-        cv::swap(rotated2.size.height, rotated2.size.width);
-    }
-
-    if (rotated1.size.width - rotated2.size.width > 5
-        || rotated1.size.height - rotated2.size.height > 5) {
-        return false;
-    }
-    return true;
-}
-
-void addReferRuneCenter(const cv::Point2f& rc, Points& target) {
-
-    if (target.corners.size() != 4)
-        return;
-
-    cv::Point2f down_vec = rc - target.center;
-    float norm           = std::sqrt(down_vec.x * down_vec.x + down_vec.y * down_vec.y);
-    if (norm < 1e-6f)
-        return;
-    
-    float angle_ref = std::atan2(down_vec.y, down_vec.x);
-
-    // 获取4个点在旋转后的角度
-    struct Node {
-        float ang;
-        cv::Point2f p;
-    };
-    std::vector<Node> arr;
-    arr.reserve(4);
-
-    for (auto& p : target.corners) {
-        cv::Point2f v = p - target.center;
-
-        // 旋转坐标，使 down_vec 对齐 angle=0
-        float ang = std::atan2(v.y, v.x) - angle_ref;
-
-        // 归一化到 (-π, π]
-        while (ang <= -CV_PI)
-            ang += 2 * CV_PI;
-        while (ang > CV_PI)
-            ang -= 2 * CV_PI;
-
-        arr.push_back({ang, p});
-    }
-
-    // 按角度排序（从 -π 到 π）
-    std::sort(arr.begin(), arr.end(), [](const Node& a, const Node& b) { return a.ang < b.ang; });
-
-    // 准备象限变量并标记
-    cv::Point2f lu(0, 0), ru(0, 0), rd(0, 0), ld(0, 0);
-    bool has_lu = false, has_ru = false, has_rd = false, has_ld = false;
-
-    for (const auto& n : arr) {
-        float a = n.ang;
-
-        if (a > CV_PI / 2 && a <= CV_PI) {
-            lu     = n.p;
-            has_lu = true;
-        } else if (a > 0 && a <= CV_PI / 2) {
-            ru     = n.p;
-            has_ru = true;
-        } else if (a > -CV_PI / 2 && a <= 0) {
-            rd     = n.p;
-            has_rd = true;
-        } else {                           // a > -CV_PI && a <= -CV_PI/2
-            ld     = n.p;
-            has_ld = true;
-        }
-    }
-
-    std::array<cv::Point2f, 4> ordered;
-
-    if (has_lu && has_ru && has_rd && has_ld) {
-        ordered[0] = lu;
-        ordered[1] = ru;
-        ordered[2] = rd;
-        ordered[3] = ld;
-        target.corners.assign(ordered.begin(), ordered.end());
-        return;
-    }
-
-    float angle     = 3.0f * CV_PI / 4.0f; // 135°
-    int best_idx    = 0;
-    float best_diff = std::numeric_limits<float>::max();
-    for (int i = 0; i < (int)arr.size(); ++i) {
-        float d = std::fabs(
-            angles::shortest_angular_distance(
-                angle, arr[i].ang)); 
-        if (d < best_diff) {
-            best_diff = d;
-            best_idx  = i;
-        }
-    }
-
-    for (int i = 0; i < 4; ++i) {
-        int idx    = (best_idx + i) % 4;
-        ordered[i] = arr[idx].p;
-    }
-
-    target.corners.assign(ordered.begin(), ordered.end());
-}
-
-
-inline Target markRuneTarget(
-    std::vector<cv::Point> arrow, cv::Point2f rc, cv::Point2f target,
-    const std::vector<std::vector<cv::Point>>& contours, const std::vector<cv::Vec4i>& hierarchy) {
-
-    Target result;
-    if (hierarchy.empty()) {
-        std::cerr << "hierarch empty" << std::endl;
-        return result;
-    }
-
-    std::vector<std::vector<cv::Point>> c;
-    for (size_t k = 0; k < contours.size(); k++) {
-        if (hierarchy[k][3] == -1 || (hierarchy[k][0] == -1 && hierarchy[k][1] == -1)) {
-            continue;
-        }
-        cv::RotatedRect rotate = cv::minAreaRect(contours[k]);
-        cv::Point2f ves[4];
-        bool including = false;
-        rotate.points(ves);
-        for (int i = 0; i < 4; i++) {
-            int j = cv::pointPolygonTest(arrow, ves[i], false);
-            if (j > 0) {
-                including = true;
-                break;
-            }
-        }
-        if (!including) {
-            c.emplace_back(contours[k]);
-        }
-    }
-
-    std::vector<int> labels;
-    cv::partition(c, labels, sameTarget);
-
-    // data 记录了标识号和其对应次数
-    std::vector<std::pair<int, int>> datas;
-    for (auto label : labels) {
-        // 对每个 label，从已记录的数据中寻找是否有这个条目，有则对应计数项
-        // +1，否则新增一个条目
-        auto iter =
-            std::find_if(datas.begin(), datas.end(), [label](const std::pair<int, int>& unit) {
-                return unit.first == label;
-            });
-        if (iter == datas.end()) {
-            datas.emplace_back(label, 1);
-        } else {
-            iter->second += 1;
-        }
-    }
-    if (datas.empty() == true) {
-        return result;
-    }
-
-    std::vector<std::vector<cv::Point>> res;
-    for (auto data : datas) {
-        int num = data.second;
-        if ((num > 3 && num < 7) == false) {
-            continue;
-        }
-
-        for (size_t i = 0; i < c.size(); i++)
-            if (labels[i] == data.first) {
-                res.emplace_back(c[i]);
-            }
-    }
-
-    Points points;
-
-    for (auto cnt : res) {
-
-        cv::Moments m = cv::moments(cnt);
-        if (m.m00 == 0) {
-            std::cerr << "m.m00 == 0" << std::endl;
-            continue;
-        }
-
-        // 质心
-        cv::Point2f center(m.m10 / m.m00, m.m01 / m.m00);
-        points.corners.emplace_back(center);
-    }
-    points.center = target;
-
-    addReferRuneCenter(rc, points);
-
-    result.keypnt.lu = points.corners[0];
-    result.keypnt.ru = points.corners[1];
-    result.keypnt.rd = points.corners[2];
-    result.keypnt.ld = points.corners[3];
-
-    return result;
-}
-
-void RuneDetector::setKeyPoints() {
-    for (size_t i = 0; i < targets.size(); i++) {
-
-        cv::Mat detect = (targetImg & localMask)(targetROIs[i]);
-        std::vector<std::vector<cv::Point>> contours;
-        std::vector<cv::Vec4i> hierarchy;
-        cv::findContours(detect, contours, hierarchy, cv::RETR_CCOMP, cv::CHAIN_APPROX_SIMPLE);
-
-        std::vector<cv::Point> arrow_contour;
-        for (auto cnt_pt : arrows[i].contour) {
-            cv::Point pt = cnt_pt - cv::Point(globalRoi.tl()) - cv::Point(targetROIs[i].tl());
-            arrow_contour.emplace_back(pt);
-        }
-
-        cv::Point2f target_center=targets[i].center-globalRoi.tl() - targetROIs[i].tl();
-        cv::Point2f r_center=rcenter.center-globalRoi.tl() - targetROIs[i].tl();
-        Target rune_target =
-            markRuneTarget(arrow_contour, r_center, target_center, contours, hierarchy);
-
-        targets[i].keypnt.lu = rune_target.keypnt.lu + globalRoi.tl() + targetROIs[i].tl();
-        targets[i].keypnt.ru = rune_target.keypnt.ru + globalRoi.tl() + targetROIs[i].tl();
-        targets[i].keypnt.rd = rune_target.keypnt.rd + globalRoi.tl() + targetROIs[i].tl();
-        targets[i].keypnt.ld = rune_target.keypnt.ld + globalRoi.tl() + targetROIs[i].tl();
-    }
-}
-
 bool RuneDetector::detect(const cv::Mat& frame, int image_width, int image_height) {
     image_width_  = image_width;
     image_height_ = image_height;
@@ -999,13 +975,10 @@ RESTART:
     }
 
     status = Status::SUCCESS;
-    // setGlobalRoi();
 
     return true;
 FAIL:
 
-    // 如果检测失败，则将全局 roi 设为和原图片一样大小
-    // globalRoi     = {0, 0, static_cast<float>(frame.cols), static_cast<float>(frame.rows)};
     return false;
 }
 
@@ -1018,54 +991,116 @@ RuneDetector::RuneDetector(
 
 RuneDetector::RuneDetector() {}
 
+inline double normalizeAngle0to2pi(double a) {
+    a = std::fmod(a, 2 * M_PI);
+    if (a < 0)
+        a += 2 * M_PI;
+    return a;
+}
+
+std::vector<double> angle_diffs = {
+    0, 2 * M_PI / 5, 2 * M_PI / 5 * 2, 2 * M_PI / 5 * 3, 2 * M_PI / 5 * 4};
+
+inline cv::Point3f rotateX(const cv::Point3f& p, double roll) {
+    double c = std::cos(roll);
+    double s = std::sin(roll);
+    return {p.x, float(p.y * c - p.z * s), float(p.y * s + p.z * c)};
+}
+
+void addOther(
+    cv::Point2f center, Target& one, const Target& other, std::vector<cv::Point2f>& points2d,
+    std::vector<cv::Point3f>& points3d) {
+
+    auto l1 = center - one.center;
+    auto l2 = center - other.center;
+
+    float a1 = std::atan2(l1.y, l1.x);
+    float a2 = std::atan2(l2.y, l2.x);
+
+    float d = a1 - a2;
+    d       = normalizeAngle0to2pi(d);
+
+    int id         = 0;
+    double min_err = 1e9;
+    for (size_t i = 0; i < angle_diffs.size(); i++) {
+        double err = std::abs(angle_diffs[i] - d);
+        if (err < min_err) {
+            min_err = err;
+            id      = i;
+        }
+    }
+
+    if (id < 1) {
+        std::cerr << "id : " << id << std::endl;
+        return;
+    }
+
+    points2d.push_back(center);
+    points2d.push_back(one.keypnt.lu);
+    points2d.push_back(one.keypnt.ru);
+    points2d.push_back(one.keypnt.rd);
+    points2d.push_back(one.keypnt.ld);
+    points2d.push_back(one.center);
+    points2d.push_back(other.keypnt.lu);
+    points2d.push_back(other.keypnt.ru);
+    points2d.push_back(other.keypnt.rd);
+    points2d.push_back(other.keypnt.ld);
+    points2d.push_back(other.center);
+    // ---------- 计算 roll 差 ----------
+    double roll = -angle_diffs[id];
+    one.roll    = roll;
+
+    points3d.push_back(one.points3d[0]);
+    points3d.push_back(one.points3d[1]);
+    points3d.push_back(one.points3d[2]);
+    points3d.push_back(one.points3d[3]);
+    points3d.push_back(one.points3d[4]);
+    points3d.push_back(one.points3d[5]);
+    // ---------- 旋转后的 3D 点加入 ----------
+    points3d.push_back(rotateX(one.points3d[1], roll));
+    points3d.push_back(rotateX(one.points3d[2], roll));
+    points3d.push_back(rotateX(one.points3d[3], roll));
+    points3d.push_back(rotateX(one.points3d[4], roll));
+    points3d.push_back(rotateX(one.points3d[5], roll));
+}
+
 Eigen::Matrix4d RuneDetector::solve(
     const cv::Mat& cameraMatrix, const cv::Mat& distCoeffs, const rclcpp::Time& stamp,
     tf2_ros::Buffer& tf2_buffer) {
     if (targets.empty()) {
         return Eigen::Matrix4d::Identity();
     }
-    std::vector<cv::Point3f> object_points;
-    std::vector<cv::Point2f> image_points;
-
-    object_points.clear();
-    image_points.clear();
 
     Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
     cv::Mat rvec, tvec;
 
     if (targets.size() == 1) {
 
-        object_points = {
-            {0.0,                           0.0,                                               0.0},
-            {0.0,                           0.0,                       (float)(-POWER_RUNE_RADIUS)},
-            {0.0,                           0.0, (float)(-POWER_RUNE_RADIUS + POWER_TARGET_RADIUS)},
-            {0.0,    (float)POWER_TARGET_RADIUS,                       (float)(-POWER_RUNE_RADIUS)},
-            {0.0,                           0.0, (float)(-POWER_RUNE_RADIUS - POWER_TARGET_RADIUS)},
-            {0.0, (float)(-POWER_TARGET_RADIUS),                       (float)(-POWER_RUNE_RADIUS)}
-        };
+        std::vector<cv::Point2f> image_points;
 
         image_points.emplace_back(rcenter.center);
+        image_points.emplace_back(targets[0].keypnt.lu); // 左上
+        image_points.emplace_back(targets[0].keypnt.ru); // 右上
+        image_points.emplace_back(targets[0].keypnt.rd); // 右下
+        image_points.emplace_back(targets[0].keypnt.ld); // 左下
         image_points.emplace_back(targets[0].center);
-        // image_points.emplace_back(targets[0].keypnt.down);  // 下
-        // image_points.emplace_back(targets[0].keypnt.left);  // 左
-        // image_points.emplace_back(targets[0].keypnt.up);    // 上
-        // image_points.emplace_back(targets[0].keypnt.right); // 右
 
         // 校验数量匹配
-        if (object_points.size() != image_points.size()) {
+        if (targets[0].points3d.size() != image_points.size()) {
             std::cerr << "3D point number not equals 2D point number" << std::endl;
             return Eigen::Matrix4d::Identity();
         }
 
         // 2. 点数数量校验（至少4个点，满足solvePnP要求）
-        if (object_points.size() < 4) {
+        if (targets[0].points3d.size() < 4) {
             std::cerr << "pnp point number less 4" << std::endl;
             return Eigen::Matrix4d::Identity();
         }
 
         bool success = cv::solvePnP(
-            object_points, image_points, cameraMatrix, distCoeffs, rvec, tvec, false,
-            cv::SOLVEPNP_SQPNP);
+            targets[0].points3d, image_points, cameraMatrix, distCoeffs, rvec, tvec, false,
+            cv::SOLVEPNP_ITERATIVE);
+
         if (!success) {
             std::cerr << "R点PnP解算失败" << std::endl;
             return Eigen::Matrix4d::Identity();
@@ -1076,108 +1111,29 @@ Eigen::Matrix4d RuneDetector::solve(
             std::swap(targets[0], targets[1]);
             std::swap(arrows[0], arrows[1]);
         }
+        std::vector<cv::Point2f> image_points;
+        std::vector<cv::Point3f> object_points;
+        addOther(rcenter.center, targets[0], targets[1], image_points, object_points);
 
-        double distancetTargetToTarget = cv::norm(targets[0].center - targets[1].center);
-        double distanceTargetToRcenter = cv::norm(targets[0].center - rcenter.center);
-        double sin36                   = std::sin(36.0 * CV_PI / 180.0);
-        double sin72                   = std::sin(72.0 * CV_PI / 180.0);
-        double cos72                   = std::cos(72.0 * CV_PI / 180.0);
-        double sin54                   = std::sin(54.0 * CV_PI / 180.0);
-        double cos54                   = std::cos(54.0 * CV_PI / 180.0);
+        // 校验数量匹配
+        if (object_points.size() != image_points.size()) {
+            std::cerr << "3D point number : " << object_points.size()
+                      << " not equals 2D point number : " << image_points.size() << std::endl;
+            return Eigen::Matrix4d::Identity();
+        }
 
-        double theo36 = 2.0 * distanceTargetToRcenter * sin36;
-        double theo72 = 2.0 * distanceTargetToRcenter * sin72;
-        double eps    = 50.0;
+        // 2. 点数数量校验（至少4个点，满足solvePnP要求）
+        if (object_points.size() < 4) {
+            std::cerr << "pnp point number less 4: " << object_points.size() << std::endl;
+            return Eigen::Matrix4d::Identity();
+        }
 
-        image_points.emplace_back(rcenter.center);
-        image_points.emplace_back(targets[0].center);
-        // image_points.emplace_back(targets[0].keypnt.down);  // 下
-        // image_points.emplace_back(targets[0].keypnt.left);  // 左
-        // image_points.emplace_back(targets[0].keypnt.up);    // 上
-        // image_points.emplace_back(targets[0].keypnt.right); // 右
-        // image_points.emplace_back(targets[1].center);
-        // image_points.emplace_back(targets[1].keypnt.down);  // 下
-        // image_points.emplace_back(targets[1].keypnt.left);  // 左
-        // image_points.emplace_back(targets[1].keypnt.up);    // 上
-        // image_points.emplace_back(targets[1].keypnt.right); // 右
-
-        if (std::abs(distancetTargetToTarget - theo36) < eps) {
-            object_points = {
-                {0.0,                                                              0.0,0.0                                                                                       },
-                {0.0,                                                              0.0,                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                                                              0.0, (float)(-POWER_RUNE_RADIUS + POWER_TARGET_RADIUS)},
-                {0.0,                                       (float)POWER_TARGET_RADIUS,                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                                                              0.0, (float)(-POWER_RUNE_RADIUS - POWER_TARGET_RADIUS)},
-                {0.0,                                    (float)(-POWER_TARGET_RADIUS),                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                               (float)(POWER_RUNE_RADIUS * sin72),             (float)(-(POWER_RUNE_RADIUS * cos72))},
-                {0.0,       (float)((POWER_RUNE_RADIUS - POWER_TARGET_RADIUS) * sin72),
-                 (float)(-(POWER_RUNE_RADIUS - POWER_TARGET_RADIUS) * cos72)                                                             },
-                {0.0, (float)(POWER_RUNE_RADIUS * sin72 + POWER_TARGET_RADIUS * cos72),
-                 (float)(-(POWER_RUNE_RADIUS * cos72 - POWER_TARGET_RADIUS * sin72))                                                     },
-                {0.0,       (float)((POWER_RUNE_RADIUS + POWER_TARGET_RADIUS) * sin72),
-                 (float)(-((POWER_RUNE_RADIUS + POWER_TARGET_RADIUS) * cos72))                                                           },
-                {0.0, (float)(POWER_RUNE_RADIUS * sin72 - POWER_TARGET_RADIUS * cos72),
-                 (float)(-(POWER_RUNE_RADIUS * cos72 + POWER_TARGET_RADIUS * sin72))                                                     }
-            };
-            // std::cerr << "72度，两个靶相邻" << std::endl;
-
-            // 校验数量匹配
-            if (object_points.size() != image_points.size()) {
-                std::cerr << "3D point number not equals 2D point number" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
-
-            // 2. 点数数量校验（至少4个点，满足solvePnP要求）
-            if (object_points.size() < 4) {
-                std::cerr << "pnp point number less 4" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
-
-            bool success = cv::solvePnPRansac(
-                object_points, image_points, cameraMatrix, distCoeffs, rvec, tvec);
-            if (!success) {
-                std::cerr << "R点PnP解算失败" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
-        } else if (std::abs(distancetTargetToTarget - theo72) < eps) {
-            object_points = {
-                {0.0,                                                              0.0,0.0                                                                                       },
-                {0.0,                                                              0.0,                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                                                              0.0, (float)(-POWER_RUNE_RADIUS + POWER_TARGET_RADIUS)},
-                {0.0,                                       (float)POWER_TARGET_RADIUS,                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                                                              0.0, (float)(-POWER_RUNE_RADIUS - POWER_TARGET_RADIUS)},
-                {0.0,                                    (float)(-POWER_TARGET_RADIUS),                       (float)(-POWER_RUNE_RADIUS)},
-                {0.0,                               (float)(POWER_RUNE_RADIUS * cos54),                (float)(POWER_RUNE_RADIUS * sin54)},
-                {0.0,       (float)((POWER_RUNE_RADIUS - POWER_TARGET_RADIUS) * cos54),
-                 (float)((POWER_RUNE_RADIUS - POWER_TARGET_RADIUS) * sin54)                                                              },
-                {0.0, (float)(POWER_RUNE_RADIUS * cos54 - POWER_TARGET_RADIUS * sin54),
-                 (float)(POWER_RUNE_RADIUS * sin54 + POWER_TARGET_RADIUS * cos54)                                                        },
-                {0.0,       (float)((POWER_RUNE_RADIUS + POWER_TARGET_RADIUS) * cos54),
-                 (float)((POWER_RUNE_RADIUS + POWER_TARGET_RADIUS) * sin54)                                                              },
-                {0.0, (float)(POWER_RUNE_RADIUS * cos54 + POWER_TARGET_RADIUS * sin54),
-                 (float)(POWER_RUNE_RADIUS * sin54 - POWER_TARGET_RADIUS * cos54)                                                        }
-            };
-            // std::cerr << "144度，两个靶中隔一个靶" << std::endl;
-
-            // 校验数量匹配
-            if (object_points.size() != image_points.size()) {
-                std::cerr << "3D point number not equals 2D point number" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
-
-            // 2. 点数数量校验（至少4个点，满足solvePnP要求）
-            if (object_points.size() < 4) {
-                std::cerr << "pnp point number less 4" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
-
-            bool success = cv::solvePnP(
-                object_points, image_points, cameraMatrix, distCoeffs, rvec, tvec, false,
-                cv::SOLVEPNP_IPPE);
-            if (!success) {
-                std::cerr << "R点PnP解算失败" << std::endl;
-                return Eigen::Matrix4d::Identity();
-            }
+        bool success = cv::solvePnP(
+            object_points, image_points, cameraMatrix, distCoeffs, rvec, tvec, false,
+            cv::SOLVEPNP_SQPNP);
+        if (!success) {
+            std::cerr << "R点PnP解算失败" << std::endl;
+            return Eigen::Matrix4d::Identity();
         }
     }
 

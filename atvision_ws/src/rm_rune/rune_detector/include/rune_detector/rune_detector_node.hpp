@@ -42,24 +42,19 @@ private:
     void createDebugPublishers();
     void destroyDebugPublishers();
 
-    void setModeCallback(
-        const std::shared_ptr<rm_interfaces::srv::SetMode::Request> request,
-        std::shared_ptr<rm_interfaces::srv::SetMode::Response> response);
+    void timerCallback();
 
     // Dynamic Parameter
     rcl_interfaces::msg::SetParametersResult
         onSetParameters(std::vector<rclcpp::Parameter> parameters);
     rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_handle_;
 
-    
     std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
     // Image subscription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
 
-    // Target publisher
     std::string frame_id_;
-    rclcpp::Publisher<rm_interfaces::msg::RuneTarget>::SharedPtr rune_pub_;
 
     // Rune detector
     std::unique_ptr<RuneDetector> rune_detector_;
@@ -67,7 +62,6 @@ private:
     // Rune params
     EnemyColor detect_color_;
     bool is_rune_;
-    bool is_big_rune_;
 
     int arrow_threshold_;
     int target_threshold_;
@@ -87,7 +81,6 @@ private:
     cv::Mat distCoeffs_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_pub_;
-    
 
     visualization_msgs::msg::Marker
         create_r_marker(const rclcpp::Time& now, const Eigen::Vector3d& r_center_world) {
@@ -142,7 +135,6 @@ private:
         marker.lifetime           = rclcpp::Duration::from_seconds(0.1);
         return marker;
     }
-
 };
 } // namespace fyt::rune
 #endif // RUNE_DETECTOR_RUNE_DETECTOR_NODE_HPP_
