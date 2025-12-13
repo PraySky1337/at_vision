@@ -36,22 +36,41 @@ CalibrationNode::CalibrationNode()
         setupExtrinsicMode();
     }
 
+    // Callback groups to allow services and subscriptions to run concurrently.
+    image_callback_group_   = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    service_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
     // Subscribe to image and camera info topics
+    rclcpp::SubscriptionOptions image_opts;
+    image_opts.callback_group = image_callback_group_;
     image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/image_raw", 10, std::bind(&CalibrationNode::imageCallback, this, std::placeholders::_1));
+        "/image_raw", 10, std::bind(&CalibrationNode::imageCallback, this, std::placeholders::_1),
+        image_opts);
+
+    rclcpp::SubscriptionOptions info_opts;
+    info_opts.callback_group = image_callback_group_;
     camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-        camera_info_topic_, 10, std::bind(&CalibrationNode::cameraInfoCallback, this, std::placeholders::_1));
+        camera_info_topic_, 10,
+        std::bind(&CalibrationNode::cameraInfoCallback, this, std::placeholders::_1), info_opts);
 
     // Create services
     calibrate_service_ = this->create_service<std_srvs::srv::Trigger>(
         "~/calibrate", std::bind(
                            &CalibrationNode::calibrateServiceCallback, this, std::placeholders::_1,
-                           std::placeholders::_2));
+                           std::placeholders::_2),
+        rmw_qos_profile_services_default, service_callback_group_);
+
+    capture_sample_service_ = this->create_service<std_srvs::srv::Trigger>(
+        "~/capture_sample", std::bind(
+                                &CalibrationNode::captureSampleServiceCallback, this,
+                                std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default, service_callback_group_);
 
     reset_service_ = this->create_service<std_srvs::srv::Trigger>(
         "~/reset", std::bind(
                        &CalibrationNode::resetServiceCallback, this, std::placeholders::_1,
-                       std::placeholders::_2));
+                       std::placeholders::_2),
+        rmw_qos_profile_services_default, service_callback_group_);
 
     preview_pub_ = image_transport::create_publisher(this, "~/preview");
 
@@ -67,10 +86,9 @@ void CalibrationNode::declareParameters() {
     this->declare_parameter("square_size", 0.025);
     this->declare_parameter("required_frames", 20);
     this->declare_parameter("target_samples", 25);
-    this->declare_parameter("calibration_duration", 30.0);
     this->declare_parameter("quality_threshold", 0.2);
     this->declare_parameter("display_fps", 10.0);
-    this->declare_parameter("min_sample_interval", 0.2);
+    this->declare_parameter("max_tf_time_diff", 0.3);
     this->declare_parameter("imu_frame", "gimbal_link");
     this->declare_parameter("base_frame", "odom");
     this->declare_parameter("camera_name", "camera");
@@ -95,9 +113,8 @@ void CalibrationNode::loadParameters() {
     square_size_           = this->get_parameter("square_size").as_double();
     target_samples_        = this->get_parameter("target_samples").as_int();
     quality_threshold_     = this->get_parameter("quality_threshold").as_double();
-    calibration_duration_  = this->get_parameter("calibration_duration").as_double();
     display_fps_           = this->get_parameter("display_fps").as_double();
-    min_sample_interval_   = this->get_parameter("min_sample_interval").as_double();
+    max_tf_time_diff_      = this->get_parameter("max_tf_time_diff").as_double();
     imu_frame_             = this->get_parameter("imu_frame").as_string();
     base_frame_            = this->get_parameter("base_frame").as_string();
     camera_name_           = this->get_parameter("camera_name").as_string();
@@ -113,8 +130,8 @@ void CalibrationNode::loadParameters() {
 
     target_samples_       = std::max(1, target_samples_);
     quality_threshold_    = std::max(0.0, std::min(1.0, quality_threshold_));
-    calibration_duration_ = std::max(0.1, calibration_duration_);
-    min_sample_interval_  = std::max(0.0, min_sample_interval_);
+    display_fps_          = std::max(0.0, display_fps_);
+    max_tf_time_diff_     = std::max(0.0, max_tf_time_diff_);
 
     loadQualityWeights();
 }
@@ -168,6 +185,26 @@ void CalibrationNode::setupExtrinsicMode() {
         board_height_, square_size_, target_samples_);
 }
 
+void CalibrationNode::refreshCollectionParameters() {
+    target_samples_    = this->get_parameter("target_samples").as_int();
+    quality_threshold_ = this->get_parameter("quality_threshold").as_double();
+    display_fps_       = this->get_parameter("display_fps").as_double();
+
+    target_samples_    = std::max(1, target_samples_);
+    quality_threshold_ = std::max(0.0, std::min(1.0, quality_threshold_));
+    display_fps_       = std::max(0.0, display_fps_);
+
+    loadQualityWeights();
+
+    if (mode_ == CalibrationMode::INTRINSIC) {
+        if (intrinsic_calibrator_) {
+            intrinsic_calibrator_->configureCollection(target_samples_, quality_threshold_);
+        }
+    } else if (extrinsic_calibrator_) {
+        extrinsic_calibrator_->configureCollection(target_samples_, quality_threshold_);
+    }
+}
+
 void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
     // Convert ROS image to OpenCV
     cv_bridge::CvImagePtr cv_ptr;
@@ -180,12 +217,7 @@ void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg
 
     cv::Mat display_image;
     double current_quality = 0.0;
-
-    CalibrationState state_snapshot;
-    {
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        state_snapshot = state_;
-    }
+    last_image_stamp_ = msg->header.stamp;
 
     if (mode_ == CalibrationMode::INTRINSIC) {
         std::vector<cv::Point2f> corners;
@@ -195,65 +227,35 @@ void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg
             current_quality = quality_scorer_.scoreIntrinsicFrame(
                 cv_ptr->image, corners, cv::Size(board_width_, board_height_), previous_corners_);
             previous_corners_ = corners;
-
-            if (state_snapshot == CalibrationState::COLLECTING) {
-                rclcpp::Time now = this->now();
-                if (last_sample_time_.nanoseconds() == 0 ||
-                    (now - last_sample_time_).seconds() >= min_sample_interval_) {
-                    intrinsic_calibrator_->tryAddSample(
-                        corners, cv_ptr->image.size(), current_quality);
-                    last_sample_time_ = now;
-                }
-                if (intrinsic_calibrator_->getCollectedFrames() >= target_samples_) {
-                    triggerCalibration();
-                }
-            }
-        }
-    } else {
-        if (!extrinsic_calibrator_) {
-            display_image = cv_ptr->image.clone();
-            RCLCPP_WARN_THROTTLE(
-                this->get_logger(), *this->get_clock(), 2000,
-                "Waiting for camera info to initialize extrinsic calibrator...");
-            drawStatusOverlay(display_image, current_quality);
-
-            if (preview_pub_) {
-                std_msgs::msg::Header header = msg->header;
-                auto preview_msg =
-                    cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, display_image)
-                        .toImageMsg();
-                preview_pub_.publish(preview_msg);
-            }
-            return;
         }
 
-        Eigen::Matrix3d R_imu;
-        if (getIMURotation(R_imu)) {
-            std::vector<cv::Point2f> corners;
-            cv::Mat rvec, tvec;
-            double reprojection_error = 0.0;
-            bool found                = extrinsic_calibrator_->detectSample(
+        handleCaptureRequestIntrinsic(found, corners, cv_ptr->image.size(), current_quality);
+  } else {
+    Eigen::Matrix3d R_imu;
+    Eigen::Vector3d t_imu = Eigen::Vector3d::Zero();
+    bool imu_ready = getIMUPose(msg->header.stamp, R_imu, t_imu);
+
+    std::vector<cv::Point2f> corners;
+    cv::Mat rvec, tvec;
+    double reprojection_error = 0.0;
+        bool found                = false;
+
+        if (extrinsic_calibrator_ && imu_ready) {
+            found = extrinsic_calibrator_->detectSample(
                 cv_ptr->image, R_imu, corners, display_image, rvec, tvec, reprojection_error);
 
             if (found) {
                 current_quality = quality_scorer_.scoreExtrinsicSample(
                     cv_ptr->image, corners, rvec, tvec, R_imu, reprojection_error);
                 previous_corners_ = corners;
-
-                if (state_snapshot == CalibrationState::COLLECTING) {
-                    rclcpp::Time now = this->now();
-                    if (last_sample_time_.nanoseconds() == 0 ||
-                        (now - last_sample_time_).seconds() >= min_sample_interval_) {
-                        extrinsic_calibrator_->tryAddSample(
-                            rvec, tvec, R_imu, corners, current_quality, reprojection_error);
-                        last_sample_time_ = now;
-                    }
-                }
             }
         } else {
             display_image = cv_ptr->image.clone();
         }
-    }
+
+    handleCaptureRequestExtrinsic(
+        imu_ready, found, corners, rvec, tvec, R_imu, t_imu, current_quality, reprojection_error);
+  }
 
     drawStatusOverlay(display_image, current_quality);
 
@@ -283,24 +285,164 @@ void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg
     }
 }
 
-bool CalibrationNode::getIMURotation(Eigen::Matrix3d& R_imu) {
+void CalibrationNode::handleCaptureRequestIntrinsic(
+    bool found,
+    const std::vector<cv::Point2f>& corners,
+    const cv::Size& image_size,
+    double quality) {
+    if (!capture_requested_.load()) {
+        return;
+    }
+
+    std::unique_lock<std::mutex> lock(capture_mutex_);
+    if (!capture_requested_) {
+        return;
+    }
+
+    bool accepted = false;
+    if (found) {
+        accepted = intrinsic_calibrator_->tryAddSample(corners, image_size, quality);
+    }
+
+    if (!found) {
+        last_capture_success_ = false;
+        last_capture_message_ = "Chessboard not detected in current frame";
+    } else if (accepted) {
+        last_capture_success_ = true;
+        std::ostringstream oss;
+        oss << "Sample stored (" << intrinsic_calibrator_->getCollectedFrames() << "/"
+            << target_samples_ << ")";
+        last_capture_message_ = oss.str();
+    } else {
+        last_capture_success_ = false;
+        std::ostringstream oss;
+        oss << "Sample rejected (quality " << std::fixed << std::setprecision(2) << quality << ")";
+        last_capture_message_ = oss.str();
+    }
+
+    capture_requested_      = false;
+    capture_response_ready_ = true;
+    lock.unlock();
+
+    {
+        std::lock_guard<std::mutex> state_lock(data_mutex_);
+        state_ = CalibrationState::IDLE;
+    }
+
+    capture_cv_.notify_all();
+}
+
+void CalibrationNode::handleCaptureRequestExtrinsic(
+    bool imu_ready,
+    bool found,
+    const std::vector<cv::Point2f>& corners,
+    const cv::Mat& rvec,
+    const cv::Mat& tvec,
+    const Eigen::Matrix3d& R_imu,
+    const Eigen::Vector3d& t_imu,
+    double quality,
+    double reprojection_error) {
+    if (!capture_requested_.load()) {
+        return;
+    }
+
+    std::unique_lock<std::mutex> lock(capture_mutex_);
+    if (!capture_requested_) {
+        return;
+    }
+
+    bool accepted = false;
+    if (!imu_ready) {
+        last_capture_success_ = false;
+        last_capture_message_ = "IMU transform unavailable";
+    } else if (!extrinsic_calibrator_) {
+        last_capture_success_ = false;
+        last_capture_message_ = "Extrinsic calibrator not ready";
+    } else if (!found) {
+        last_capture_success_ = false;
+        last_capture_message_ = "Chessboard not detected in current frame";
+    } else {
+        accepted = extrinsic_calibrator_->tryAddSample(
+            rvec, tvec, R_imu, t_imu, corners, quality, reprojection_error);
+        if (accepted) {
+            std::ostringstream oss;
+            oss << "Sample stored (" << extrinsic_calibrator_->getCollectedSamples() << "/"
+                << target_samples_ << ")";
+            last_capture_success_ = true;
+            last_capture_message_ = oss.str();
+        } else {
+            std::ostringstream oss;
+            oss << "Sample rejected (quality " << std::fixed << std::setprecision(2) << quality
+                << ")";
+            last_capture_success_ = false;
+            last_capture_message_ = oss.str();
+        }
+    }
+
+    capture_requested_      = false;
+    capture_response_ready_ = true;
+    lock.unlock();
+
+    {
+        std::lock_guard<std::mutex> state_lock(data_mutex_);
+        state_ = CalibrationState::IDLE;
+    }
+
+    capture_cv_.notify_all();
+}
+
+bool CalibrationNode::getIMUPose(
+    const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu) {
+    // Try to use the timestamped transform; fall back to latest if it's within tolerance.
+    geometry_msgs::msg::TransformStamped transform;
+    bool used_fallback = false;
     try {
-        geometry_msgs::msg::TransformStamped transform =
-            tf_buffer_->lookupTransform(base_frame_, imu_frame_, tf2::TimePointZero);
-
-        tf2::Quaternion q(
-            transform.transform.rotation.x, transform.transform.rotation.y,
-            transform.transform.rotation.z, transform.transform.rotation.w);
-
-        tf2::Matrix3x3 m(q);
-        R_imu << m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2];
-
-        return true;
-    } catch (tf2::TransformException& ex) {
+        tf2::TimePoint tf_time = tf2::timeFromSec(stamp.seconds());
+        transform = tf_buffer_->lookupTransform(
+            base_frame_, imu_frame_, tf_time, tf2::durationFromSec(0.2));
+    } catch (const tf2::ExtrapolationException&) {
+        try {
+            transform = tf_buffer_->lookupTransform(base_frame_, imu_frame_, tf2::TimePointZero);
+            used_fallback = true;
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(), *this->get_clock(), 1000, "Could not get transform: %s",
+                ex.what());
+            return false;
+        }
+    } catch (const tf2::TransformException& ex) {
         RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 1000, "Could not get transform: %s", ex.what());
         return false;
     }
+
+    if (used_fallback) {
+        rclcpp::Time tf_stamp(transform.header.stamp);
+        double dt = std::abs((tf_stamp - stamp).seconds());
+        if (dt > max_tf_time_diff_) {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(), *this->get_clock(), 1000,
+                "IMU transform too far from image time (|%.0f| ms > %.0f ms)",
+                dt * 1000.0, max_tf_time_diff_ * 1000.0);
+            return false;
+        }
+
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 1000,
+            "Using latest IMU transform; dt=%.0f ms (image %.3f, tf %.3f)",
+            dt * 1000.0, stamp.seconds(), tf_stamp.seconds());
+    }
+
+    tf2::Quaternion q(
+        transform.transform.rotation.x, transform.transform.rotation.y,
+        transform.transform.rotation.z, transform.transform.rotation.w);
+
+    tf2::Matrix3x3 m(q);
+    R_imu << m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2];
+    t_imu << transform.transform.translation.x, transform.transform.translation.y,
+        transform.transform.translation.z;
+
+    return true;
 }
 
 void CalibrationNode::calibrateServiceCallback(
@@ -310,57 +452,51 @@ void CalibrationNode::calibrateServiceCallback(
 
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
-        if (state_ != CalibrationState::IDLE) {
+        if (state_ == CalibrationState::CALIBRATING) {
             response->success = false;
             response->message = "Calibration already in progress";
             return;
         }
     }
 
-    // Refresh collection parameters in case they were updated dynamically
-    target_samples_       = this->get_parameter("target_samples").as_int();
-    quality_threshold_    = this->get_parameter("quality_threshold").as_double();
-    calibration_duration_ = this->get_parameter("calibration_duration").as_double();
-    display_fps_          = this->get_parameter("display_fps").as_double();
-    loadQualityWeights();
+    if (capture_requested_.load()) {
+        response->success = false;
+        response->message = "Capture request in progress; try again";
+        return;
+    }
 
-    target_samples_       = std::max(1, target_samples_);
-    quality_threshold_    = std::max(0.0, std::min(1.0, quality_threshold_));
-    calibration_duration_ = std::max(0.1, calibration_duration_);
+    if (mode_ == CalibrationMode::EXTRINSIC && !extrinsic_calibrator_) {
+        response->success = false;
+        response->message = "Extrinsic calibrator not ready (waiting for CameraInfo)";
+        return;
+    }
 
+    refreshCollectionParameters();
+
+    int collected = 0;
     if (mode_ == CalibrationMode::INTRINSIC) {
-        intrinsic_calibrator_->reset();
-        intrinsic_calibrator_->configureCollection(target_samples_, quality_threshold_);
-    } else {
-        if (!extrinsic_calibrator_) {
-            response->success = false;
-            response->message = "Extrinsic calibrator not ready (waiting for CameraInfo)";
-            return;
-        }
-        extrinsic_calibrator_->reset();
-        extrinsic_calibrator_->configureCollection(target_samples_, quality_threshold_);
+        collected = intrinsic_calibrator_->getCollectedFrames();
+    } else if (extrinsic_calibrator_) {
+        collected = extrinsic_calibrator_->getCollectedSamples();
+    }
+
+    if (collected < 3) {
+        std::ostringstream oss;
+        oss << "Not enough samples to calibrate (" << collected << "/3)";
+        response->success = false;
+        response->message = oss.str();
+        return;
     }
 
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
-        previous_corners_.clear();
-        state_                 = CalibrationState::COLLECTING;
-        collection_start_time_ = this->now();
-        last_sample_time_      = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
+        state_ = CalibrationState::CALIBRATING;
     }
 
-    if (calibration_timer_) {
-        calibration_timer_->cancel();
-        calibration_timer_.reset();
-    }
-
-    calibration_timer_ = this->create_wall_timer(
-        std::chrono::duration<double>(calibration_duration_),
-        std::bind(&CalibrationNode::triggerCalibration, this));
+    triggerCalibration();
 
     std::ostringstream oss;
-    oss << "Started collecting calibration data for " << calibration_duration_ << "s, target "
-        << target_samples_ << " samples (threshold " << quality_threshold_ << ")";
+    oss << "Started calibration with " << collected << " samples";
 
     response->success = true;
     response->message = oss.str();
@@ -368,32 +504,110 @@ void CalibrationNode::calibrateServiceCallback(
     RCLCPP_INFO(this->get_logger(), "%s", response->message.c_str());
 }
 
+void CalibrationNode::captureSampleServiceCallback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+    (void)request;
+
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (state_ == CalibrationState::CALIBRATING) {
+            response->success = false;
+            response->message = "Calibration is running; wait until it finishes";
+            return;
+        }
+
+        if (capture_requested_.load()) {
+            response->success = false;
+            response->message = "Capture already requested";
+            return;
+        }
+
+        state_ = CalibrationState::COLLECTING;
+    }
+
+    // Quick fail if no image has been seen recently.
+    rclcpp::Time now = this->now();
+    if (last_image_stamp_.nanoseconds() == 0 ||
+        (now - last_image_stamp_).seconds() > 1.0) {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        state_ = CalibrationState::IDLE;
+        response->success = false;
+        response->message = "No recent image received; ensure camera publishes /image_raw";
+        RCLCPP_WARN(this->get_logger(), "%s", response->message.c_str());
+        return;
+    }
+
+    if (mode_ == CalibrationMode::EXTRINSIC && !extrinsic_calibrator_) {
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            state_ = CalibrationState::IDLE;
+        }
+        response->success = false;
+        response->message = "Extrinsic calibrator not ready (waiting for CameraInfo)";
+        return;
+    }
+
+    refreshCollectionParameters();
+
+    {
+        std::lock_guard<std::mutex> lock(capture_mutex_);
+        capture_requested_      = true;
+        capture_response_ready_ = false;
+    }
+
+    std::unique_lock<std::mutex> wait_lock(capture_mutex_);
+    bool finished = capture_cv_.wait_for(
+        wait_lock, std::chrono::seconds(3), [this]() { return capture_response_ready_; });
+
+    if (!finished) {
+        capture_requested_      = false;
+        capture_response_ready_ = false;
+        response->success       = false;
+        response->message       = "Timed out waiting for a valid frame";
+    } else {
+        response->success = last_capture_success_;
+        response->message = last_capture_message_;
+        capture_response_ready_ = false;
+    }
+
+    wait_lock.unlock();
+
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        if (state_ != CalibrationState::CALIBRATING) {
+            state_ = CalibrationState::IDLE;
+        }
+    }
+
+    if (response->success) {
+        RCLCPP_INFO(this->get_logger(), "%s", response->message.c_str());
+    } else {
+        RCLCPP_WARN(this->get_logger(), "%s", response->message.c_str());
+    }
+}
+
 void CalibrationNode::resetServiceCallback(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
     (void)request;
 
-    if (calibration_timer_) {
-        calibration_timer_->cancel();
-        calibration_timer_.reset();
+    {
+        std::lock_guard<std::mutex> lock(capture_mutex_);
+        capture_requested_      = false;
+        capture_response_ready_ = false;
     }
 
-  if (mode_ == CalibrationMode::INTRINSIC) {
-    intrinsic_calibrator_->reset();
-  } else {
-    if (extrinsic_calibrator_) {
-      extrinsic_calibrator_->reset();
+    if (mode_ == CalibrationMode::INTRINSIC) {
+        intrinsic_calibrator_->reset();
+    } else if (extrinsic_calibrator_) {
+        extrinsic_calibrator_->reset();
     }
-  }
 
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
         state_ = CalibrationState::IDLE;
         previous_corners_.clear();
-        if (calibration_timer_) {
-            calibration_timer_->cancel();
-            calibration_timer_.reset();
-        }
     }
 
     response->success = true;
@@ -407,67 +621,54 @@ void CalibrationNode::drawStatusOverlay(cv::Mat& image, double current_quality) 
     }
 
     CalibrationState state_snapshot;
-    rclcpp::Time start_time;
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
         state_snapshot = state_;
-        start_time     = collection_start_time_;
     }
 
     std::string state_text;
     cv::Scalar color;
 
     if (state_snapshot == CalibrationState::IDLE) {
-        state_text = "Ready - Call calibrate service to start";
-        color      = cv::Scalar(255, 255, 0);
+        state_text = "Ready - Call capture_sample to store a frame";
+        color      = cv::Scalar(255, 255, 0); // yellow
     } else if (state_snapshot == CalibrationState::COLLECTING) {
-        double elapsed   = (this->now() - start_time).seconds();
-        double remaining = std::max(0.0, calibration_duration_ - elapsed);
-        state_text       = "Collecting... " + std::to_string(static_cast<int>(remaining)) + "s";
-        color            = cv::Scalar(0, 255, 0);
+        state_text = "Capturing sample...";
+        color      = cv::Scalar(0, 255, 0); // green
     } else {
         state_text = "Calibrating...";
-        color      = cv::Scalar(0, 165, 255);
+        color      = cv::Scalar(0, 165, 255); // orange
     }
 
     cv::putText(image, state_text, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.9, color, 2);
 
-  int collected = 0;
-  double avg_quality = 0.0;
-  if (mode_ == CalibrationMode::INTRINSIC) {
-    collected = intrinsic_calibrator_->getCollectedFrames();
-    avg_quality = intrinsic_calibrator_->getAverageQuality();
-  } else if (extrinsic_calibrator_) {
-    collected = extrinsic_calibrator_->getCollectedSamples();
-    avg_quality = extrinsic_calibrator_->getAverageQuality();
-  }
-
-    if (state_snapshot == CalibrationState::COLLECTING) {
-        double progress = std::min(
-            1.0,
-            static_cast<double>(collected) / static_cast<double>(std::max(1, target_samples_)));
-        int bar_width = 300;
-        int filled    = static_cast<int>(progress * bar_width);
-        cv::rectangle(
-            image, cv::Point(10, 50), cv::Point(10 + bar_width, 70), cv::Scalar(80, 80, 80), 1);
-        cv::rectangle(
-            image, cv::Point(10, 50), cv::Point(10 + filled, 70), cv::Scalar(0, 255, 0),
-            cv::FILLED);
-
-        std::ostringstream progress_text;
-        progress_text << collected << "/" << target_samples_ << " samples  avg: " << std::fixed
-                      << std::setprecision(2) << avg_quality;
-        cv::putText(
-            image, progress_text.str(), cv::Point(10, 95), cv::FONT_HERSHEY_SIMPLEX, 0.7,
-            cv::Scalar(255, 255, 255), 2);
-    } else {
-        std::ostringstream info;
-        info << "Samples: " << collected << " avg quality: " << std::fixed << std::setprecision(2)
-             << avg_quality;
-        cv::putText(
-            image, info.str(), cv::Point(10, 70), cv::FONT_HERSHEY_SIMPLEX, 0.7,
-            cv::Scalar(255, 255, 255), 2);
+    int collected    = 0;
+    double avg_quality = 0.0;
+    if (mode_ == CalibrationMode::INTRINSIC) {
+        collected    = intrinsic_calibrator_->getCollectedFrames();
+        avg_quality  = intrinsic_calibrator_->getAverageQuality();
+    } else if (extrinsic_calibrator_) {
+        collected    = extrinsic_calibrator_->getCollectedSamples();
+        avg_quality  = extrinsic_calibrator_->getAverageQuality();
     }
+
+    double progress = std::min(
+        1.0,
+        static_cast<double>(collected) / static_cast<double>(std::max(1, target_samples_)));
+    int bar_width = 300;
+    int filled    = static_cast<int>(progress * bar_width);
+    cv::rectangle(
+        image, cv::Point(10, 50), cv::Point(10 + bar_width, 70), cv::Scalar(80, 80, 80), 1);
+    cv::rectangle(
+        image, cv::Point(10, 50), cv::Point(10 + filled, 70), cv::Scalar(0, 255, 0),
+        cv::FILLED);
+
+    std::ostringstream progress_text;
+    progress_text << collected << "/" << target_samples_ << " samples  avg: " << std::fixed
+                  << std::setprecision(2) << avg_quality;
+    cv::putText(
+        image, progress_text.str(), cv::Point(10, 95), cv::FONT_HERSHEY_SIMPLEX, 0.7,
+        cv::Scalar(255, 255, 255), 2);
 
     if (current_quality > 0.0) {
         std::ostringstream quality_text;
@@ -480,48 +681,35 @@ void CalibrationNode::drawStatusOverlay(cv::Mat& image, double current_quality) 
 }
 
 void CalibrationNode::triggerCalibration() {
-    {
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        if (state_ != CalibrationState::COLLECTING) {
-            return;
-        }
-        state_ = CalibrationState::CALIBRATING;
-    }
-
-    if (calibration_timer_) {
-        calibration_timer_->cancel();
-        calibration_timer_.reset();
-    }
-
     calibration_future_ = std::async(std::launch::async, [this]() { performCalibration(); });
 }
 
 void CalibrationNode::performCalibration() {
-    bool success           = false;
-    double error           = std::numeric_limits<double>::quiet_NaN();
-    int collected          = 0;
-    double average_quality = 0.0;
+  bool success           = false;
+  double error           = std::numeric_limits<double>::quiet_NaN();
+  int collected          = 0;
+  double average_quality = 0.0;
 
-    try {
-        if (mode_ == CalibrationMode::INTRINSIC) {
-            success         = intrinsic_calibrator_->calibrate(camera_matrix_, dist_coeffs_, error);
-            collected       = intrinsic_calibrator_->getCollectedFrames();
-            average_quality = intrinsic_calibrator_->getAverageQuality();
-            if (success) {
-                intrinsic_calibrated_ = true;
-            }
-        } else {
-            if (!extrinsic_calibrator_) {
-                throw std::runtime_error("Extrinsic calibrator not initialized");
-            }
-            success         = extrinsic_calibrator_->calibrate(R_cam_to_imu_, t_cam_to_imu_, error);
-            collected       = extrinsic_calibrator_->getCollectedSamples();
-            average_quality = extrinsic_calibrator_->getAverageQuality();
-        }
-    } catch (const cv::Exception& e) {
-        RCLCPP_ERROR(this->get_logger(), "Calibration failed with OpenCV exception: %s", e.what());
-        success = false;
-    } catch (const std::exception& e) {
+  try {
+    if (mode_ == CalibrationMode::INTRINSIC) {
+      success         = intrinsic_calibrator_->calibrate(camera_matrix_, dist_coeffs_, error);
+      collected       = intrinsic_calibrator_->getCollectedFrames();
+      average_quality = intrinsic_calibrator_->getAverageQuality();
+      if (success) {
+        intrinsic_calibrated_ = true;
+      }
+    } else {
+      if (!extrinsic_calibrator_) {
+        throw std::runtime_error("Extrinsic calibrator not initialized");
+      }
+      success         = extrinsic_calibrator_->calibrate(R_cam_to_imu_, t_cam_to_imu_, error);
+      collected       = extrinsic_calibrator_->getCollectedSamples();
+      average_quality = extrinsic_calibrator_->getAverageQuality();
+    }
+  } catch (const cv::Exception& e) {
+    RCLCPP_ERROR(this->get_logger(), "Calibration failed with OpenCV exception: %s", e.what());
+    success = false;
+  } catch (const std::exception& e) {
         RCLCPP_ERROR(this->get_logger(), "Calibration failed with exception: %s", e.what());
         success = false;
     }
@@ -530,10 +718,18 @@ void CalibrationNode::performCalibration() {
         std::lock_guard<std::mutex> lock(data_mutex_);
         state_ = CalibrationState::IDLE;
         previous_corners_.clear();
-    }
+  }
 
-    std::ostringstream oss;
-    if (success) {
+  if (mode_ == CalibrationMode::INTRINSIC) {
+    collected       = intrinsic_calibrator_->getCollectedFrames();
+    average_quality = intrinsic_calibrator_->getAverageQuality();
+  } else if (extrinsic_calibrator_) {
+    collected       = extrinsic_calibrator_->getCollectedSamples();
+    average_quality = extrinsic_calibrator_->getAverageQuality();
+  }
+
+  std::ostringstream oss;
+  if (success) {
         std::string error_label = (mode_ == CalibrationMode::INTRINSIC) ? "RMS" : "Error";
         oss << (mode_ == CalibrationMode::INTRINSIC ? "Intrinsic" : "Extrinsic")
             << " calibration successful! " << error_label << ": " << std::fixed
@@ -604,6 +800,42 @@ void CalibrationNode::printCalibrationResults() {
         std::cout << R_cam_to_imu_ << std::endl;
         std::cout << "\nTranslation Vector t (Camera to IMU):" << std::endl;
         std::cout << t_cam_to_imu_.t() << std::endl;
+
+        if (R_cam_to_imu_.rows == 3 && R_cam_to_imu_.cols == 3 &&
+            t_cam_to_imu_.rows >= 3 && t_cam_to_imu_.cols >= 1) {
+            auto printPose = [](const cv::Mat& R, const cv::Mat& t, const std::string& label) {
+                tf2::Matrix3x3 tf_R(
+                    R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2),
+                    R.at<double>(1, 0), R.at<double>(1, 1), R.at<double>(1, 2),
+                    R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2));
+                double roll = 0.0, pitch = 0.0, yaw = 0.0;
+                tf_R.getRPY(roll, pitch, yaw);
+
+                double tx = t.at<double>(0, 0);
+                double ty = t.at<double>(1, 0);
+                double tz = t.at<double>(2, 0);
+
+                std::cout << std::fixed << std::setprecision(4);
+                std::cout << "\n" << label << " (RPY rad): {roll " << roll << ", pitch " << pitch
+                          << ", yaw " << yaw << "}" << std::endl;
+                std::cout << label << " translation (m): {x " << tx << ", y " << ty
+                          << ", z " << tz << "}" << std::endl;
+            };
+
+            // Native OpenCV camera (optical) frame: x right, y down, z forward.
+            printPose(R_cam_to_imu_, t_cam_to_imu_, "Camera(optical) -> IMU");
+
+            // Optional ROS camera_link-style frame: x forward, y left, z up.
+            cv::Mat R_optical_to_ros = (cv::Mat_<double>(3, 3) <<
+                0.0, 0.0, 1.0,
+               -1.0, 0.0, 0.0,
+                0.0,-1.0, 0.0);
+            cv::Mat R_ros_to_optical = R_optical_to_ros.t();
+            cv::Mat R_camlink_to_imu = R_cam_to_imu_ * R_ros_to_optical;
+            // Origins coincide between camera_link and optical in ROS, so translation stays the same.
+            printPose(R_camlink_to_imu, t_cam_to_imu_, "Camera(link) -> IMU");
+        }
+
         std::cout << "================================================\n" << std::endl;
     }
 }
@@ -613,7 +845,13 @@ void CalibrationNode::printCalibrationResults() {
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<camera_imu_calibration::CalibrationNode>();
-    rclcpp::spin(node);
+
+    // Use a multithreaded executor so the image callback can run while services
+    // wait for capture responses.
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
+
     rclcpp::shutdown();
     return 0;
 }

@@ -19,7 +19,7 @@ public:
   bool detectCorners(const cv::Mat& image, std::vector<cv::Point2f>& corners, cv::Mat& display_image) const;
 
   void configureCollection(int target_samples, double quality_threshold);
-  void tryAddSample(const std::vector<cv::Point2f>& corners, const cv::Size& image_size, double score);
+  bool tryAddSample(const std::vector<cv::Point2f>& corners, const cv::Size& image_size, double score);
 
   bool calibrate(cv::Mat& camera_matrix, cv::Mat& dist_coeffs, double& rms_error);
 

@@ -4,7 +4,6 @@
     base_frame: odom
     board_height: 7
     board_width: 10
-    calibration_duration: 20.0
     calibration_node:
       preview:
         enable_pub_plugins:
@@ -23,6 +22,7 @@
     camera_info_url: ''
     camera_name: camera
     display_fps: 10.0
+    max_tf_time_diff: 0.3
     enable_preview_window: false
     imu_frame: gimbal_link
     mode: extrinsic

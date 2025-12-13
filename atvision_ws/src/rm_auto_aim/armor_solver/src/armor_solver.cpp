@@ -74,7 +74,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         min_switching_v_yaw_ = node->get_parameter("solver.min_switching_v_yaw").as_double();
         node.reset();
     } catch (const std::runtime_error& e) {
-        FYT_ERROR("armor_solver", "{}", e.what());
+        // nothing
     }
 
     // Get current roll, yaw and pitch of gimbal
@@ -94,7 +94,6 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
 
         rpy_[1] = -rpy_[1];
     } catch (tf2::TransformException& ex) {
-        FYT_ERROR("armor_solver", "{}", ex.what());
         throw ex;
     }
 
@@ -199,10 +198,6 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     gimbal_cmd.pitch_diff = (cmd_pitch - rpy_[1]) * 180 / M_PI;
     predicted_position_   = predicted_position;
     has_prediction_       = true;
-
-    if (gimbal_cmd.fire_advice) {
-        FYT_DEBUG("armor_solver", "You Need Fire!");
-    }
     return gimbal_cmd;
 }
 

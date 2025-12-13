@@ -11,6 +11,8 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <condition_variable>
 #include <image_transport/image_transport.hpp>
 #include <camera_info_manager/camera_info_manager.hpp>
 
@@ -46,15 +48,35 @@ private:
   void loadParameters();
   void setupIntrinsicMode();
   void setupExtrinsicMode();
+  void refreshCollectionParameters();
   void drawStatusOverlay(cv::Mat& image, double current_quality);
   void triggerCalibration();
   void performCalibration();
   void loadQualityWeights();
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
   bool loadIntrinsicsFromCameraInfo(const sensor_msgs::msg::CameraInfo& info);
+  void handleCaptureRequestIntrinsic(
+    bool found,
+    const std::vector<cv::Point2f>& corners,
+    const cv::Size& image_size,
+    double quality);
+  void handleCaptureRequestExtrinsic(
+    bool imu_ready,
+    bool found,
+    const std::vector<cv::Point2f>& corners,
+    const cv::Mat& rvec,
+    const cv::Mat& tvec,
+    const Eigen::Matrix3d& R_imu,
+    const Eigen::Vector3d& t_imu,
+    double quality,
+    double reprojection_error);
   
   // Service callbacks
   void calibrateServiceCallback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+  void captureSampleServiceCallback(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   
@@ -63,14 +85,18 @@ private:
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   
   // Helper methods
-  bool getIMURotation(Eigen::Matrix3d& R_imu);
+  bool getIMUPose(
+    const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu);
   void printCalibrationResults();
   
   // ROS interfaces
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibrate_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr capture_sample_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_service_;
   image_transport::Publisher preview_pub_;
+  rclcpp::CallbackGroup::SharedPtr image_callback_group_;
+  rclcpp::CallbackGroup::SharedPtr service_callback_group_;
   
   // TF2
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -83,9 +109,8 @@ private:
   double square_size_;
   int target_samples_;
   double quality_threshold_;
-  double calibration_duration_;
   double display_fps_;
-  double min_sample_interval_;
+  double max_tf_time_diff_;
   std::string imu_frame_;
   std::string base_frame_;
   std::string camera_name_;
@@ -112,12 +137,16 @@ private:
   bool intrinsic_calibrated_;
 
   CalibrationState state_{CalibrationState::IDLE};
-  rclcpp::Time collection_start_time_;
-  rclcpp::TimerBase::SharedPtr calibration_timer_;
   std::future<void> calibration_future_;
   std::vector<cv::Point2f> previous_corners_;
   rclcpp::Time last_display_time_;
-  rclcpp::Time last_sample_time_;
+  std::atomic_bool capture_requested_{false};
+  bool capture_response_ready_{false};
+  bool last_capture_success_{false};
+  std::string last_capture_message_;
+  rclcpp::Time last_image_stamp_;
+  std::condition_variable capture_cv_;
+  std::mutex capture_mutex_;
   std::mutex data_mutex_;
 };
 

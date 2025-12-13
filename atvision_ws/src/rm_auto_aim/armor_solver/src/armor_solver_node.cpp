@@ -353,7 +353,7 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
         try {
             armor.pose = tf2_buffer_->transform(ps, target_frame_).pose;
         } catch (const tf2::TransformException& ex) {
-            FYT_ERROR("armor_solver", "Transform error: {}", ex.what());
+            RCLCPP_ERROR(get_logger(), "Transform error: %s", ex.what());
             return;
         }
     }

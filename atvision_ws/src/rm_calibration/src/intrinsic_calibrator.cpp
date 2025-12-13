@@ -62,13 +62,13 @@ void IntrinsicCalibrator::configureCollection(int target_samples, double quality
   quality_threshold_ = quality_threshold;
 }
 
-void IntrinsicCalibrator::tryAddSample(
+bool IntrinsicCalibrator::tryAddSample(
   const std::vector<cv::Point2f>& corners,
   const cv::Size& image_size,
   double score)
 {
   if (score < quality_threshold_ && !best_frames_.empty()) {
-    return;
+    return false;
   }
 
   std::lock_guard<std::mutex> lock(data_mutex_);
@@ -79,10 +79,16 @@ void IntrinsicCalibrator::tryAddSample(
 
   if (best_frames_.size() < static_cast<size_t>(target_samples_)) {
     best_frames_.push(frame);
-  } else if (!best_frames_.empty() && score > best_frames_.top().score) {
+    return true;
+  }
+
+  if (!best_frames_.empty() && score > best_frames_.top().score) {
     best_frames_.pop();
     best_frames_.push(frame);
+    return true;
   }
+
+  return false;
 }
 
 bool IntrinsicCalibrator::calibrate(

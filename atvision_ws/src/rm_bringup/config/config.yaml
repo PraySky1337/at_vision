@@ -2,7 +2,7 @@
   ros__parameters:
     debug: true
     target_frame: odom
-    detect_color: "BLUE"
+    detect_color: "RED"
     binary_thres: 90
 
     use_pca: true # 使用PCA算法矫正灯条的角点
@@ -46,9 +46,9 @@
           reliability: reliable
     target_frame: odom
     tracker:
-      lost_threshold: 200
+      lost_threshold: 100
       matcher_gate: 5.0
-      outpost_matcher_gate: 0.1
+      outpost_matcher_gate: 1.0
       measure_distance_k: 0.43
       outpost:
         measure_distance_k: 0.43

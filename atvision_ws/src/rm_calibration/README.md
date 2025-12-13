@@ -45,9 +45,13 @@ ros2 launch camera_imu_calibration calibration.launch.py mode:=intrinsic
 
 2. **采集图像**：
    - 节点启动后会持续检测棋盘格并实时显示角点，但不会自动保存
-   - 调用标定服务后进入采集模式（默认30s），自动挑选质量最高的样本
-   - 在采集窗口内移动标定板，覆盖不同距离、角度和位置
-   - 默认收集最优25帧（可在配置文件中调整）
+   - 每次调用`~/capture_sample`服务时，会立即尝试将当前画面存为一个样本
+   - 采样间隔完全由人工控制，建议在每次采样前移动标定板以覆盖不同距离、角度和位置
+   - 默认保留质量最高的25帧（可在配置文件中调整）
+
+```bash
+ros2 service call /calibration_node/capture_sample std_srvs/srv/Trigger
+```
 
 3. **执行标定**：
 
@@ -55,7 +59,7 @@ ros2 launch camera_imu_calibration calibration.launch.py mode:=intrinsic
 ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger
 ```
 
-   服务会启动采集，倒计时结束后自动输出标定结果。
+   服务直接使用已采集的样本进行求解（至少需要3个样本）。
 
 4. **保存结果**：
    - 标定结果会输出到终端
@@ -94,8 +98,8 @@ ros2 launch camera_imu_calibration calibration.launch.py mode:=extrinsic
 
 3. **采集样本**：
    - 确保IMU在发布TF变换（`odom` → `gimbal_link`）
-   - 调用`~/calibrate`服务后进入采样窗口，自动保留最优样本
-   - 在采集过程中移动标定板并改变IMU姿态，保证姿态多样性
+   - 每次调用`~/capture_sample`服务都会基于当前画面尝试保存一个样本
+   - 每次采样前移动标定板并改变IMU姿态，保证姿态多样性
    - 默认目标25个高质量样本（可参数化）
 
 4. **执行标定**：
@@ -104,7 +108,7 @@ ros2 launch camera_imu_calibration calibration.launch.py mode:=extrinsic
 ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger
 ```
 
-   服务会启动采集并在窗口结束后自动输出标定结果。
+   服务直接对已经采集的样本执行标定（至少需要3个样本）。
 
 5. **查看结果**：
 
@@ -131,7 +135,8 @@ Translation Vector t (Camera to IMU):
 
 ### 服务
 
-- `~/calibrate` (std_srvs/Trigger): 执行标定计算
+- `~/capture_sample` (std_srvs/Trigger): 手动采样当前画面
+- `~/calibrate` (std_srvs/Trigger): 使用已采集的数据执行标定计算
 - `~/reset` (std_srvs/Trigger): 清除已采集的数据
 
 ## 参数配置
@@ -144,7 +149,6 @@ Translation Vector t (Camera to IMU):
 | board_width | 棋盘格内部角点列数 | 9 |
 | board_height | 棋盘格内部角点行数 | 6 |
 | square_size | 每个方格的边长（米） | 0.025 |
-| calibration_duration | 采集时长（秒） | 30.0 |
 | target_samples | 目标样本数量（Top-N保存） | 25 |
 | quality_threshold | 样本质量阈值（0-1） | 0.6 |
 | display_fps | 叠加状态刷新率 | 10 |
