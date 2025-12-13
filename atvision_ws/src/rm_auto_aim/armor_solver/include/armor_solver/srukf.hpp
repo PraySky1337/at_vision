@@ -10,7 +10,7 @@ template <typename Scalar>
 struct SigmaPointConfig {
     Scalar alpha{static_cast<Scalar>(0.518)}; // 0.517 - 1.932
     Scalar beta{static_cast<Scalar>(2.0)};
-    Scalar kappa{static_cast<Scalar>(0.0)};
+    Scalar kappa{static_cast<Scalar>(0)};
 };
 
 namespace detail {
@@ -27,9 +27,9 @@ inline Eigen::Matrix<Scalar, N, N> chol_from_ldlt(
 
     // 1) LDLT（带置换）
     Eigen::LDLT<Mat> ldlt(P);
-    const bool ok      = (ldlt.info() == Eigen::Success);
-    const auto& trans  = ldlt.transpositionsP();
-    bool no_perm       = true;
+    const bool ok     = (ldlt.info() == Eigen::Success);
+    const auto& trans = ldlt.transpositionsP();
+    bool no_perm      = true;
     for (int i = 0; i < N; ++i) {
         if (trans.indices()(i) != i) {
             no_perm = false;

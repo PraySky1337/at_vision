@@ -34,8 +34,8 @@
 * `solver.side_angle` (`double`, default: 15.0) - 跳转到下一装甲板的角度阈值
 * `solver.bullet_speed` (`double`, default: 25.0) - 子弹速度
 * `solver.gravity` (`double`, default: 9.8) - 重力加速度
-* `solver.compensator_type` (`string`, default: "ideal") - 补偿器类型
-* `solver.resistance` (`double`, default: 0.001) - 空气阻力
+* `solver.compensator_type` (`string`, default: "rk4") - 补偿器类型（rk4 启用四阶 RK 弹道补偿）
+* `solver.resistance` (`double`, default: 0.001) - 空气阻力系数（k，二次阻力）
 
 
 ## ArmorSolverNode
@@ -122,4 +122,3 @@ $$ P_{k|k} = (I - K * H) * P_{k|k-1} $$
 如果可以用数学算法处理，就使用数学处理，追求最简单的实现方案，不要陷进软件设计的泥潭。
 
 在滤波器设计上，如果可观，就尽量放到滤波器中处理，而不是手动管理。
-

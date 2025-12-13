@@ -17,6 +17,8 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     reconnect_max_attempts_ = this->declare_parameter("reconnect_max_attempts", -1);
     timestamp_offset_ms_    = this->declare_parameter("timestamp_offset_ms", 10);
     bayer_cvt_quality_      = this->declare_parameter("bayer_cvt_color_quality", 1);
+    force_8bit_pixel_format_ =
+        this->declare_parameter("force_8bit_pixel_format", true); // 强制输出 8bit 像素格式
     // 尝试打开相机（第一次初始化）
     if (!openCamera()) {
         RCLCPP_WARN(this->get_logger(), "Initial camera open failed, entering reconnect loop.");
@@ -100,13 +102,13 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                 image_msg_->data.resize(image_msg_->width * image_msg_->height * 3);
 
                 camera_info_msg_->header = image_msg_->header;
-                RCLCPP_INFO_SKIPFIRST_THROTTLE(
-                    this->get_logger(), *get_clock(), 1000,
-                    "Publishing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR
-                    " camera_info ptr=0x%" PRIXPTR,
-                    reinterpret_cast<std::uintptr_t>(image_msg_.get()),
-                    reinterpret_cast<std::uintptr_t>(image_msg_->data.data()),
-                    reinterpret_cast<std::uintptr_t>(camera_info_msg_.get()));
+                // RCLCPP_INFO_SKIPFIRST_THROTTLE(
+                //     this->get_logger(), *get_clock(), 1000,
+                //     "Publishing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR
+                //     " camera_info ptr=0x%" PRIXPTR,
+                // reinterpret_cast<std::uintptr_t>(image_msg_.get()),
+                // reinterpret_cast<std::uintptr_t>(image_msg_->data.data()),
+                // reinterpret_cast<std::uintptr_t>(camera_info_msg_.get()));
                 image_pub_->publish(std::move(image_msg_));
                 camera_info_pub_->publish(*camera_info_msg_);
 
@@ -272,6 +274,65 @@ bool HikCameraNode::openCamera() {
         MV_CC_DestroyHandle(&camera_handle_);
         camera_handle_ = nullptr;
         return false;
+    }
+
+    if (force_8bit_pixel_format_) {
+        MVCC_ENUMVALUE cur_pf{};
+        int pf_ret = MV_CC_GetPixelFormat(camera_handle_, &cur_pf);
+        if (pf_ret == MV_OK) {
+            auto to_8bit = [](unsigned int current) -> unsigned int {
+                switch (current) {
+                case PixelType_Gvsp_BayerRG10:
+                case PixelType_Gvsp_BayerRG10_Packed:
+                case PixelType_Gvsp_BayerRG12:
+                case PixelType_Gvsp_BayerRG12_Packed:
+                case PixelType_Gvsp_BayerRG16: return PixelType_Gvsp_BayerRG8;
+                case PixelType_Gvsp_BayerBG10:
+                case PixelType_Gvsp_BayerBG10_Packed:
+                case PixelType_Gvsp_BayerBG12:
+                case PixelType_Gvsp_BayerBG12_Packed:
+                case PixelType_Gvsp_BayerBG16: return PixelType_Gvsp_BayerBG8;
+                case PixelType_Gvsp_BayerGB10:
+                case PixelType_Gvsp_BayerGB10_Packed:
+                case PixelType_Gvsp_BayerGB12:
+                case PixelType_Gvsp_BayerGB12_Packed:
+                case PixelType_Gvsp_BayerGB16: return PixelType_Gvsp_BayerGB8;
+                case PixelType_Gvsp_BayerGR10:
+                case PixelType_Gvsp_BayerGR10_Packed:
+                case PixelType_Gvsp_BayerGR12:
+                case PixelType_Gvsp_BayerGR12_Packed:
+                case PixelType_Gvsp_BayerGR16: return PixelType_Gvsp_BayerGR8;
+                case PixelType_Gvsp_Mono10:
+                case PixelType_Gvsp_Mono10_Packed:
+                case PixelType_Gvsp_Mono12:
+                case PixelType_Gvsp_Mono12_Packed:
+                case PixelType_Gvsp_Mono14:
+                case PixelType_Gvsp_Mono16: return PixelType_Gvsp_Mono8;
+                default: return current;
+                }
+            };
+            unsigned int target_pf = to_8bit(cur_pf.nCurValue);
+            if (target_pf != cur_pf.nCurValue) {
+                int set_ret = MV_CC_SetPixelFormat(camera_handle_, target_pf);
+                if (set_ret == MV_OK) {
+                    RCLCPP_INFO(
+                        this->get_logger(),
+                        "Force pixel format 0x%x -> 8bit 0x%x succeeded.",
+                        cur_pf.nCurValue, target_pf);
+                } else {
+                    RCLCPP_WARN(
+                        this->get_logger(),
+                        "Force pixel format 0x%x -> 8bit 0x%x failed, ret=0x%x.",
+                        cur_pf.nCurValue, target_pf, set_ret);
+                }
+            } else {
+                RCLCPP_INFO(
+                    this->get_logger(), "Pixel format already 8bit (0x%x).", cur_pf.nCurValue);
+            }
+        } else {
+            RCLCPP_WARN(
+                this->get_logger(), "GetPixelFormat failed, ret=0x%x, skip forcing 8bit.", pf_ret);
+        }
     }
 
     // get image info & prepare buffers
