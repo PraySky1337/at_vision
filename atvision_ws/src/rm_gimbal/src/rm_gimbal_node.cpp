@@ -14,9 +14,8 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     , device_(parser_)
     , tf_broadcaster_(*this)
     , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN)) {
-    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
-    std::string target_component_name =
-        declare_parameter("target_component_name", "armor_detector");
+    tf_buffer_       = std::make_shared<tf2_ros::Buffer>(get_clock());
+    std::string target_component_name = declare_parameter("target_component_name", "armor_detector");
     detector_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, target_component_name);
     this->init_parser();
     try {
@@ -67,7 +66,7 @@ void GimbalNode::set_params(const std::string& color) {
         try {
             if (result.get()[0].successful) {
                 aiming_color_ = color == "red" ? static_cast<int>(EnemyColor::RED)
-                                               : static_cast<int>(EnemyColor::BLUE);
+                               : static_cast<int>(EnemyColor::BLUE);
                 RCLCPP_INFO(get_logger(), "Set enemy color to %s successfully.", color.data());
             } else {
                 RCLCPP_WARN(
@@ -131,7 +130,6 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
     if (std::isnan(q.x()) || std::isnan(q.y()) || std::isnan(q.z())) [[unlikely]] {
         RCLCPP_WARN(get_logger(), "roll, pitch or yaw is invalid nan");
     }
-    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000, "Bullet speed: %.2f", d.bullet_speed);
 
     double offset_ms = timestamp_offset_ms_.load();
     auto duration    = rclcpp::Duration(

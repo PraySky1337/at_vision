@@ -37,27 +37,6 @@ std::vector<Eigen::Vector4d> get_robo_armor_poses(
     return poses;
 }
 
-std::vector<Eigen::Vector4d> get_outpost_armor_poses(
-    const Eigen::Vector3d& target_pos, double yaw, double radius0, double z0, double z1,
-    double z2) {
-    std::vector<Eigen::Vector4d> poses(3);
-    constexpr double angle_step = 2.0 * M_PI / 3;
-
-    const double cx = target_pos.x();
-    const double cy = target_pos.y();
-
-    for (size_t i = 0; i < 3; ++i) {
-        const double angle = normalize_rad(yaw + angle_step * static_cast<double>(i));
-
-        poses[i].x() = cx - radius0 * std::cos(angle);
-        poses[i].y() = cy - radius0 * std::sin(angle);
-        poses[i].z() = (i == 0) ? z0 : (i == 1) ? z1 : z2;
-        poses[i].w() = angle;
-    }
-
-    return poses;
-}
-
 std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target) {
     Eigen::Vector3d target_center(target.position.x, target.position.y, target.position.z);
     return get_robo_armor_poses(

@@ -19,7 +19,6 @@
 
 // std
 #include <memory>
-#include <optional>
 // ros2
 #include <angles/angles.h>
 #include <tf2_ros/buffer.h>
@@ -34,7 +33,7 @@
 #include "rm_utils/math/trajectory_compensator.hpp"
 #include "util.hpp"
 
-namespace rm_auto_aim {
+namespace fyt::auto_aim {
 // Solver class used to solve the gimbal command from tracked target
 class Solver {
 public:
@@ -52,8 +51,6 @@ public:
 
     std::vector<std::pair<double, double>> getTrajectory() const noexcept;
 
-    std::optional<Eigen::Vector3d> getPredictedPosition() const noexcept;
-
 private:
 
 
@@ -69,7 +66,7 @@ private:
         double cur_yaw, double cur_pitch, double target_yaw, double target_pitch,
         double distance) const noexcept;
 
-    std::unique_ptr<fyt::TrajectoryCompensator> trajectory_compensator_;
+    std::unique_ptr<TrajectoryCompensator> trajectory_compensator_;
 
     Eigen::Vector3d rpy_;
     Eigen::Vector4d xyza_;
@@ -88,9 +85,6 @@ private:
     double min_switching_v_yaw_;
 
     std::weak_ptr<rclcpp::Node> node_;
-
-    Eigen::Vector3d predicted_position_{Eigen::Vector3d::Zero()};
-    bool has_prediction_{false};
 };
 } // namespace fyt::auto_aim
 #endif // ARMOR_SOLVER_SOLVER_HPP_

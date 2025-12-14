@@ -32,7 +32,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
-  PLUGIN rm_auto_aim::ArmorSolverNode
+  PLUGIN fyt::auto_aim::ArmorSolverNode
   EXECUTABLE ${PROJECT_NAME}_node
 )
 

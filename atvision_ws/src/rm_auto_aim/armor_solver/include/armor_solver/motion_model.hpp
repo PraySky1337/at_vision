@@ -250,7 +250,7 @@ struct OutpostModel {
 
         Eigen::Matrix<Scalar, NZ, NZ> Rs = Eigen::Matrix<Scalar, NZ, NZ>::Zero();
         Rs.diagonal() << weight + std::abs(delta_yaw / 3 + 1), weight + std::abs(delta_yaw / 3 + 1),
-            weight, log(std::abs(ypd[2]) + 1) / 600 + 9e-2;
+            weight, log(std::abs(ypd[2]) + 1) / 200 + 9e-2;
         return Rs;
     }
 };

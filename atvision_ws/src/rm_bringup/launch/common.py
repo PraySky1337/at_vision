@@ -55,7 +55,7 @@ def armor_detector_ov_node(node_params):
 def armor_solver_node(node_params):
     return ComposableNode(
     package='armor_solver',
-    plugin='rm_auto_aim::ArmorSolverNode',
+    plugin='fyt::auto_aim::ArmorSolverNode',
     name='armor_solver',
     parameters=[node_params],
 )

@@ -46,7 +46,6 @@ private:
 
     double timestamp_offset_ms_{};
     int bayer_cvt_quality_ = 1;
-    bool force_8bit_pixel_format_ = true;
     std::size_t image_capacity_ = 0;
 
     // Hikvision SDK

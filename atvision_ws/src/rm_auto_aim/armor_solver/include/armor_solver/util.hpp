@@ -47,11 +47,6 @@ std::vector<Eigen::Vector4d> get_robo_armor_poses(
 // 从 Target 消息中直接计算装甲板中心位置
 std::vector<Eigen::Vector4d> get_robo_armor_poses(const rm_interfaces::msg::Target& target);
 
-
-std::vector<Eigen::Vector4d> get_outpost_armor_poses(
-    const Eigen::Vector3d& target_pos, double yaw, double radius0, double z0,
-    double z1, double z2);
-
 // 熵权法，输入：样本矩阵 X（行：样本，列：指标），输出：各指标权重
 // discard
 std::vector<double> entropy_weight(const std::vector<std::vector<double>>& X);

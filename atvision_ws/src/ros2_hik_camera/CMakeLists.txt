@@ -24,36 +24,21 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 
 target_include_directories(${PROJECT_NAME} PUBLIC hikSDK/include)
 
-# Allow overriding target architecture so the package can be built for multiple platforms
-set(HIK_SDK_ARCH "" CACHE STRING "Target architecture for Hik SDK (amd64 or arm64)")
-if(NOT HIK_SDK_ARCH AND DEFINED ENV{HIK_SDK_ARCH})
-  set(HIK_SDK_ARCH "$ENV{HIK_SDK_ARCH}")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  target_link_directories(${PROJECT_NAME} PUBLIC hikSDK/lib/amd64)
+  install(
+    DIRECTORY hikSDK/lib/amd64/
+    DESTINATION lib
+  )
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+  target_link_directories(${PROJECT_NAME} PUBLIC hikSDK/lib/arm64)
+  install(
+    DIRECTORY hikSDK/lib/arm64/
+    DESTINATION lib
+  )
+else()
+  message(FATAL_ERROR "Unsupport host system architecture: ${CMAKE_HOST_SYSTEM_PROCESSOR}!")
 endif()
-
-if(NOT HIK_SDK_ARCH)
-  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _hik_cpu)
-  if(_hik_cpu MATCHES "x86_64|amd64")
-    set(HIK_SDK_ARCH "amd64")
-  elseif(_hik_cpu MATCHES "aarch64|arm64")
-    set(HIK_SDK_ARCH "arm64")
-  else()
-    message(
-      FATAL_ERROR
-        "Unsupported target architecture '${CMAKE_SYSTEM_PROCESSOR}'. "
-        "Set HIK_SDK_ARCH to one of: amd64, arm64.")
-  endif()
-endif()
-
-set(_hik_sdk_lib_dir "${CMAKE_CURRENT_SOURCE_DIR}/hikSDK/lib/${HIK_SDK_ARCH}")
-if(NOT EXISTS "${_hik_sdk_lib_dir}")
-  message(FATAL_ERROR "Hik SDK libraries not found for '${HIK_SDK_ARCH}' at ${_hik_sdk_lib_dir}")
-endif()
-
-target_link_directories(${PROJECT_NAME} PUBLIC ${_hik_sdk_lib_dir})
-install(
-  DIRECTORY ${_hik_sdk_lib_dir}/
-  DESTINATION lib
-)
 
 target_link_libraries(${PROJECT_NAME}
   FormatConversion

@@ -46,18 +46,18 @@
           reliability: reliable
     target_frame: odom
     tracker:
-      lost_threshold: 200
-      matcher_gate: 5.0
-      outpost_matcher_gate: 0.1
+      lost_threshold: 40
+      matcher_gate: 10.0
+      outpost_matcher_gate: 0.4
       measure_distance_k: 0.43
       outpost:
         measure_distance_k: 0.43
-        sigma_a_yaw: 1.7
-        sigma_q_xy: 10.0
-        sigma_q_z: 8.
+        sigma_a_yaw: 1.5
+        sigma_q_xy: 9.1
+        sigma_q_z: 1.
         yaw_log_k: 0.005
-      sigma_a_xy: 30.0
-      sigma_a_yaw: 10.0
+      sigma_a_xy: 9.1
+      sigma_a_yaw: 0.7
       sigma_a_z: 2.0
       sigma_h: 0.8
       sigma_r: 1.0
@@ -65,28 +65,6 @@
       yaw_log_k: 0.005
     use_sim_time: false
 
-    solver:
-      prediction_delay: 0.
-      controller_delay: 0.
-      max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
-      side_angle: 15.0 
-      bullet_speed: 25.0
-      compenstator_type: "rk4"
-      gravity: 10.0
-      resistance: 0.092
-      iteration_times: 20 # 补偿的迭代次数
-      # ["距离下限, 距离上限, 高度下限, 高度下限, pitch轴补偿值"]
-      pitch_offset: [
-        "5.0 6.0 -1.0 0.4 0.0",
-        "5.0 6.0  0.4 0.8 0.0",
-        "5.0 6.0  0.8 1.2 0.0",
-        "6.0 7.0 -1.0 0.4 0.0",
-        "6.0 7.0  0.4 0.8 0.0",
-        "6.0 7.0  0.8 1.2 0.0",
-        "7.0 8.0 -1.0 0.4 0.0",
-        "7.0 8.0  0.4 0.8 0.0",
-        "7.0 8.0  0.8 1.2 0.0",
-      ]
 
 /camera_node:
   ros__parameters:

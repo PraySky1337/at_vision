@@ -153,26 +153,16 @@ void ArmorDetectorNode::imageCallback(sensor_msgs::msg::Image::UniquePtr img_msg
         imu_to_camera_ << tf2_matrix.getRow(0)[0], tf2_matrix.getRow(0)[1], tf2_matrix.getRow(0)[2],
             tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1], tf2_matrix.getRow(1)[2],
             tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1], tf2_matrix.getRow(2)[2];
-        // Possible exceptions tf2::LookupException, tf2::ConnectivityException,
-        // * tf2::ExtrapolationException, tf2::InvalidArgumentException
-    } catch (tf2::LookupException& e) {
-        RCLCPP_ERROR(get_logger(), "lookupTransform: bad frame number %s", e.what());
-        return;
-    } catch (tf2::ConnectivityException& e) {
-        RCLCPP_ERROR(get_logger(), "lookupTransform: bad connection %s", e.what());
-        return;
-    } catch (tf2::ExtrapolationException& e) {
-        RCLCPP_ERROR(get_logger(), "lookupTransform: bad extrapolation %s", e.what());
-        return;
-    } catch (tf2::InvalidArgumentException& e) {
-        RCLCPP_ERROR(get_logger(), "lookupTransform: invalid argument %s", e.what());
+    } catch (...) {
+        FYT_ERROR("armor_detector", "Something Wrong when lookUpTransform");
         return;
     }
-    // RCLCPP_INFO_SKIPFIRST_THROTTLE(
-    //     this->get_logger(), *get_clock(), 1000,
-    //     "Subscribing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR,
-    //     reinterpret_cast<std::uintptr_t>(img_msg.get()),
-    //     reinterpret_cast<std::uintptr_t>(img_msg->data.data()));
+
+    RCLCPP_INFO_SKIPFIRST_THROTTLE(
+        this->get_logger(), *get_clock(), 1000,
+        "Subscribing image ptr=0x%" PRIXPTR " data_ptr=0x%" PRIXPTR,
+        reinterpret_cast<std::uintptr_t>(img_msg.get()),
+        reinterpret_cast<std::uintptr_t>(img_msg->data.data()));
 
     // Detect armors
     auto armors = detectArmors(img_msg);

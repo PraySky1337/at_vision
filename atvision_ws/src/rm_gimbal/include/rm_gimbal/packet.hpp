@@ -20,7 +20,6 @@ struct ReceiveImuData {
     uint32_t time_stamp;
     struct {
         uint8_t self_color;
-        float bullet_speed;
         float yaw;
         float pitch;
         float roll;

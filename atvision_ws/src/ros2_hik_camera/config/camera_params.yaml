@@ -4,4 +4,3 @@
 
     exposure_time: 2500
     gain: 16.0
-    force_8bit_pixel_format: true
