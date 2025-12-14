@@ -92,20 +92,15 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
     // 转换 ROS 图像为 OpenCV
     cv::Mat src_img = cv_bridge::toCvCopy(msg, "bgr8")->image;
 
-     if (src_img.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Received empty image");
-        return;
-    }
-
     int image_width  = msg->width;
     int image_height = msg->height;
     auto timestamp   = rclcpp::Time(msg->header.stamp);
     frame_id_        = msg->header.frame_id;
 
     // 检测
-    rune_detector_->detect(src_img, image_width, image_height);
+    bool success = rune_detector_->detect(src_img, image_width, image_height);
 
-    if (!rune_detector_->targets.empty() && rune_detector_->rcenter.center != cv::Point2f(0, 0)) {
+    if (!rune_detector_->targets.empty()) {
         rune_detector_->setKeyPoints();
     }
 
@@ -136,38 +131,27 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 
         if (!rune_detector_->targets.empty()) {
             for (auto target : rune_detector_->targets) {
-                if (target.center != cv::Point2f(0, 0)) {
-                    cv::circle(
-                        debug_img, target.center, 3, cv::Scalar(0, 255, 255), -1); // 黄 - 中心
-                }
 
-                if (target.keypnt.ru != cv::Point2f(0, 0) || target.keypnt.rd != cv::Point2f(0, 0)
-                    || target.keypnt.ld != cv::Point2f(0, 0)
-                    || target.keypnt.lu != cv::Point2f(0, 0)) {
-                    // 1. 绘制四个角点
-                    cv::circle(
-                        debug_img, target.keypnt.ru, 3, cv::Scalar(255, 0, 0), -1); // 蓝 - 右上
-                    cv::circle(
-                        debug_img, target.keypnt.rd, 3, cv::Scalar(0, 255, 0), -1); // 绿 - 右下
-                    cv::circle(
-                        debug_img, target.keypnt.ld, 3, cv::Scalar(0, 0, 255), -1); // 红 - 左下
-                    cv::circle(
-                        debug_img, target.keypnt.lu, 3, cv::Scalar(0, 0, 0), -1);   // 黑 - 左上
+                // 1. 绘制四个角点
+                cv::circle(debug_img, target.keypnt.ru, 3, cv::Scalar(255, 0, 0), -1); // 蓝 - 右上
+                cv::circle(debug_img, target.keypnt.rd, 3, cv::Scalar(0, 255, 0), -1); // 绿 - 右下
+                cv::circle(debug_img, target.keypnt.ld, 3, cv::Scalar(0, 0, 255), -1); // 红 - 左下
+                cv::circle(debug_img, target.keypnt.lu, 3, cv::Scalar(0, 0, 0), -1);   // 黑 - 左上
+                cv::circle(debug_img, target.center, 3, cv::Scalar(0, 255, 255), -1);  // 黄 - 中心
 
-                    // 2. 绘制矩形边框（按「右上→右下→左下→左上→右上」闭环顺序）
-                    cv::line(
-                        debug_img, target.keypnt.ru, target.keypnt.rd, cv::Scalar(255, 255, 255),
-                        2); // 右上→右下
-                    cv::line(
-                        debug_img, target.keypnt.rd, target.keypnt.ld, cv::Scalar(255, 255, 255),
-                        2); // 右下→左下
-                    cv::line(
-                        debug_img, target.keypnt.ld, target.keypnt.lu, cv::Scalar(255, 255, 255),
-                        2); // 左下→左上
-                    cv::line(
-                        debug_img, target.keypnt.lu, target.keypnt.ru, cv::Scalar(255, 255, 255),
-                        2); // 左上→右上
-                }
+                // 2. 绘制矩形边框（按「右上→右下→左下→左上→右上」闭环顺序）
+                cv::line(
+                    debug_img, target.keypnt.ru, target.keypnt.rd, cv::Scalar(255, 255, 255),
+                    2); // 右上→右下
+                cv::line(
+                    debug_img, target.keypnt.rd, target.keypnt.ld, cv::Scalar(255, 255, 255),
+                    2); // 右下→左下
+                cv::line(
+                    debug_img, target.keypnt.ld, target.keypnt.lu, cv::Scalar(255, 255, 255),
+                    2); // 左下→左上
+                cv::line(
+                    debug_img, target.keypnt.lu, target.keypnt.ru, cv::Scalar(255, 255, 255),
+                    2); // 左上→右上
             }
         }
 
@@ -225,13 +209,17 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 
         visualization_msgs::msg::Marker target_body1 = create_target_marker(
             timestamp, target_center1_world, q, 0.3, 0.3, 0.1, 0.0, 1.0, 0.0, 0.8,
-            1); // 绿色区分，ID=1
+            1);                                       // 绿色区分，ID=1
         marker_array.markers.push_back(target_body1);
 
         visualization_msgs::msg::Marker r_marker = create_r_marker(timestamp, r_center_world);
         marker_array.markers.push_back(r_marker);
     }
     marker_array_pub_->publish(marker_array);
+
+    if (success) {
+        rune_detector_->setGlobalRoi();
+    }
 }
 
 rcl_interfaces::msg::SetParametersResult

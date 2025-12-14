@@ -34,7 +34,6 @@
     <child link="camera_optical_frame" />
   </joint>
 
-  <!-- ✅ 新增枪口系 -->
   <link name="muzzle_link" />
   <joint name="muzzle_joint" type="fixed">
     <origin xyz="$(arg muzzle_xyz)" rpy="$(arg muzzle_rpy)" />

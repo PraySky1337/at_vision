@@ -8,8 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 ## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
 ## enforcing cleaner code.
 add_definitions(-Wall -Werror -O3)
-# add_compile_options(-Wall -Werror)
-
 
 ## Export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -37,16 +35,6 @@ rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN fyt::rune::RuneDetectorNode
   EXECUTABLE rune_detector_node
 )
-
-# # ===== Debug / ASan =====
-# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-#   target_compile_options(${PROJECT_NAME} PRIVATE
-#     -fsanitize=address -g -O0
-#   )
-#   target_link_options(${PROJECT_NAME} PRIVATE
-#     -fsanitize=address
-#   )
-# endif()
 
 set(USE_SCOPED_HEADER_INSTALL_DIR ON)
 ament_auto_package(

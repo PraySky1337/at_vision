@@ -7,7 +7,7 @@
 #include <optional>
 #include <rclcpp/time.hpp>
 
-namespace armor_tracker {
+namespace rm_auto_aim {
 
 struct Tracker {
     struct Params {

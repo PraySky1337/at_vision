@@ -21,19 +21,44 @@
 // std
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <vector>
 // project
 #include "rm_utils/common.hpp"
 #include "rm_utils/heartbeat.hpp"
 
-namespace fyt::auto_aim {
+namespace {
+rcl_interfaces::msg::ParameterDescriptor
+    makeIntDescriptor(const std::string& description, int from, int to, int step = 1) {
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.description = description;
+    desc.integer_range.resize(1);
+    desc.integer_range[0].from_value = from;
+    desc.integer_range[0].to_value   = to;
+    desc.integer_range[0].step       = step;
+    return desc;
+}
+
+rcl_interfaces::msg::ParameterDescriptor makeDoubleDescriptor(
+    const std::string& description, double from, double to, double step = 0.01) {
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.description = description;
+    desc.floating_point_range.resize(1);
+    desc.floating_point_range[0].from_value = from;
+    desc.floating_point_range[0].to_value   = to;
+    desc.floating_point_range[0].step       = step;
+    return desc;
+}
+} // namespace
+
+namespace rm_auto_aim {
 
 ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
     : Node("armor_solver", options)
+    , system_clock_(std::make_shared<rclcpp::Clock>(RCL_SYSTEM_TIME))
     , dt_(0.004)
     , solver_(nullptr) {
     // Register logger
-    FYT_REGISTER_LOGGER("armor_solver", "~/fyt2024-log", INFO);
     RCLCPP_INFO(get_logger(), "Starting ArmorSolver node");
 
     debug_mode_ = this->declare_parameter("debug", true);
@@ -43,7 +68,7 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // Subscriber with tf2 message_filter
-    tf2_buffer_          = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf2_buffer_          = std::make_shared<tf2_ros::Buffer>(system_clock_);
     auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
         this->get_node_base_interface(), this->get_node_timers_interface());
     tf2_buffer_->setCreateTimerInterface(timer_interface);
@@ -71,28 +96,10 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
         std::chrono::milliseconds(4), std::bind(&ArmorSolverNode::timerCallback, this),
         timer_callback_group_);
 
-    auto& rbp = tracker_params_.robot_params;
-    auto& opp = tracker_params_.outpost_params;
-
-    tracker_params_.lost_thres     = (int)declare_parameter("tracker.lost_threshold", 60);
-    tracker_params_.tracking_thres = (int)declare_parameter("tracker.tracking_threshold", 5);
-    tracker_params_.matcher_gate   = declare_parameter("tracker.matcher_gate", 30.);
-
-    rbp.sigma_a_xy  = declare_parameter("tracker.sigma_a_xy", 10.);
-    rbp.sigma_a_z   = declare_parameter("tracker.sigma_a_z", 1.);
-    rbp.sigma_a_yaw = declare_parameter("tracker.sigma_a_yaw", 1.);
-    rbp.sigma_h     = declare_parameter("tracker.sigma_h", 0.5);
-    rbp.sigma_r0    = declare_parameter("tracker.sigma_r", 1.);
-    rbp.meas_dist_k = declare_parameter("tracker.measure_distance_k", 0.43);
-    rbp.yaw_log_k   = declare_parameter("tracker.yaw_log_k", 0.005);
-
-    opp.sigma_a_yaw = declare_parameter("tracker.outpost.sigma_a_yaw", 1.0);
-    opp.sigma_q_xy  = declare_parameter("tracker.outpost.sigma_q_xy", 1.0);
-    opp.sigma_q_z   = declare_parameter("tracker.outpost.sigma_q_z", 1.0);
-    opp.meas_dist_k = declare_parameter("tracker.outpost.measure_distance_k", 0.43);
-    opp.yaw_log_k   = declare_parameter("tracker.outpost.yaw_log_k", 0.005);
-
+    tracker_params_ = declareTrackerParameters();
     tracker_.set_params(tracker_params_);
+    tracker_param_cb_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&ArmorSolverNode::onSetParameters, this, std::placeholders::_1));
 
     initMarkers();
 }
@@ -123,15 +130,7 @@ void ArmorSolverNode::timerCallback() {
     }
 
     if (target_snapshot.tracking) {
-        try {
-            control_msg = solver_->solve(target_snapshot, this->now(), tf2_buffer_);
-        } catch (...) {
-            FYT_ERROR("armor_solver", "Something went wrong in solver!");
-            control_msg.yaw_diff    = 0;
-            control_msg.pitch_diff  = 0;
-            control_msg.distance    = -1;
-            control_msg.fire_advice = false;
-        }
+        control_msg = solver_->solve(target_snapshot, system_clock_->now(), tf2_buffer_);
     } else {
         control_msg.yaw_diff    = 0;
         control_msg.pitch_diff  = 0;
@@ -182,6 +181,13 @@ void ArmorSolverNode::initMarkers() noexcept {
     selection_marker_.color.a  = 0.3;
     selection_marker_.color.g  = 1.0;
     selection_marker_.color.r  = 1.0;
+    predicted_marker_.ns       = "predicted_position";
+    predicted_marker_.type     = visualization_msgs::msg::Marker::SPHERE;
+    predicted_marker_.scale.x  = predicted_marker_.scale.y = predicted_marker_.scale.z = 0.08;
+    predicted_marker_.color.a  = 0.6;
+    predicted_marker_.color.r  = 1.0;
+    predicted_marker_.color.g  = 0.5;
+    predicted_marker_.color.b  = 0.2;
     trajectory_marker_.ns      = "trajectory";
     trajectory_marker_.type    = visualization_msgs::msg::Marker::POINTS;
     trajectory_marker_.scale.x = 0.01;
@@ -191,6 +197,151 @@ void ArmorSolverNode::initMarkers() noexcept {
     trajectory_marker_.color.g = 0.75;
     trajectory_marker_.color.b = 0.79;
     trajectory_marker_.points.clear();
+}
+
+Tracker::Params ArmorSolverNode::declareTrackerParameters() {
+    Tracker::Params params{};
+    auto& rbp = params.robot_params;
+    auto& opp = params.outpost_params;
+
+// 定义中文参数声明宏
+#define DECLARE_INT_ZH(name, default_val, desc_zh, min, max) \
+    this->declare_parameter(name, default_val, makeIntDescriptor(desc_zh, min, max))
+
+#define DECLARE_DOUBLE_ZH(name, default_val, desc_zh, min, max, step) \
+    this->declare_parameter(name, default_val, makeDoubleDescriptor(desc_zh, min, max, step))
+
+    // clang-format off
+    params.lost_thres = DECLARE_INT_ZH("tracker.lost_threshold", 60,
+        "丢失阈值：连续丢失帧数超过此值则重置跟踪器", 0, 240);
+    params.tracking_thres = DECLARE_INT_ZH("tracker.tracking_threshold", 5,
+        "确认跟踪所需的连续检测帧数", 0, 120);
+    params.matcher_gate = DECLARE_DOUBLE_ZH("tracker.matcher_gate", 30.0,
+        "机器人目标匹配的马氏距离门限", 0.0, 200.0, 0.001);
+    params.outpost_matcher_gate = DECLARE_DOUBLE_ZH("tracker.outpost_matcher_gate", 0.4,
+        "前哨站目标匹配的马氏距离门限", 0.0, 20.0, 0.001);
+
+    rbp.sigma_a_xy = DECLARE_DOUBLE_ZH("tracker.sigma_a_xy", 10.0,
+        "过程噪声：xy方向加速度", 0.0, 100.0, 0.001);
+    rbp.sigma_a_z = DECLARE_DOUBLE_ZH("tracker.sigma_a_z", 1.0,
+        "过程噪声：z方向加速度", 0.0, 10.0, 0.001);
+    rbp.sigma_a_yaw = DECLARE_DOUBLE_ZH("tracker.sigma_a_yaw", 1.0,
+        "过程噪声：yaw角加速度", 0.0, 10.0, 0.001);
+    rbp.sigma_h = DECLARE_DOUBLE_ZH("tracker.sigma_h", 0.5,
+        "过程噪声：装甲板高度漂移", 0.0, 5.0, 0.001);
+    rbp.sigma_r0 = DECLARE_DOUBLE_ZH("tracker.sigma_r", 1.0,
+        "过程噪声：装甲板半径漂移", 0.0, 5.0, 0.001);
+    rbp.meas_dist_k = DECLARE_DOUBLE_ZH("tracker.measure_distance_k", 0.43,
+        "测量噪声距离权重因子", 0.0, 5.0, 0.001);
+    rbp.yaw_log_k = DECLARE_DOUBLE_ZH("tracker.yaw_log_k", 0.005,
+        "yaw测量噪声对数因子", 0.0, 0.2, 0.0001);
+
+    opp.sigma_a_yaw = DECLARE_DOUBLE_ZH("tracker.outpost.sigma_a_yaw", 1.0,
+        "前哨站yaw加速度噪声", 0.0, 10.0, 0.001);
+    opp.sigma_q_xy = DECLARE_DOUBLE_ZH("tracker.outpost.sigma_q_xy", 1.0,
+        "前哨站xy漂移噪声", 0.0, 20.0, 0.001);
+    opp.sigma_q_z = DECLARE_DOUBLE_ZH("tracker.outpost.sigma_q_z", 1.0,
+        "前哨站z漂移噪声", 0.0, 10.0, 0.001);
+    opp.meas_dist_k = DECLARE_DOUBLE_ZH("tracker.outpost.measure_distance_k", 0.43,
+        "前哨站测量噪声距离权重因子", 0.0, 5.0, 0.001);
+    opp.yaw_log_k = DECLARE_DOUBLE_ZH("tracker.outpost.yaw_log_k", 0.005,
+        "前哨站yaw测量噪声对数因子", 0.0, 0.2, 0.0001);
+    // clang-format on
+
+#undef DECLARE_INT_ZH
+#undef DECLARE_DOUBLE_ZH
+
+    return params;
+}
+
+bool ArmorSolverNode::applyTrackerParamUpdate(
+    const rclcpp::Parameter& param, Tracker::Params& params) {
+    const auto& name = param.get_name();
+    if (name == "tracker.lost_threshold") {
+        params.lost_thres = param.as_int();
+        return true;
+    }
+    if (name == "tracker.tracking_threshold") {
+        params.tracking_thres = param.as_int();
+        return true;
+    }
+    if (name == "tracker.matcher_gate") {
+        params.matcher_gate = param.as_double();
+        return true;
+    }
+    if (name == "tracker.outpost_matcher_gate") {
+        params.outpost_matcher_gate = param.as_double();
+        return true;
+    }
+    auto& rbp = params.robot_params;
+    if (name == "tracker.sigma_a_xy") {
+        rbp.sigma_a_xy = param.as_double();
+        return true;
+    }
+    if (name == "tracker.sigma_a_z") {
+        rbp.sigma_a_z = param.as_double();
+        return true;
+    }
+    if (name == "tracker.sigma_a_yaw") {
+        rbp.sigma_a_yaw = param.as_double();
+        return true;
+    }
+    if (name == "tracker.sigma_h") {
+        rbp.sigma_h = param.as_double();
+        return true;
+    }
+    if (name == "tracker.sigma_r") {
+        rbp.sigma_r0 = param.as_double();
+        return true;
+    }
+    if (name == "tracker.measure_distance_k") {
+        rbp.meas_dist_k = param.as_double();
+        return true;
+    }
+    if (name == "tracker.yaw_log_k") {
+        rbp.yaw_log_k = param.as_double();
+        return true;
+    }
+
+    auto& opp = params.outpost_params;
+    if (name == "tracker.outpost.sigma_a_yaw") {
+        opp.sigma_a_yaw = param.as_double();
+        return true;
+    }
+    if (name == "tracker.outpost.sigma_q_xy") {
+        opp.sigma_q_xy = param.as_double();
+        return true;
+    }
+    if (name == "tracker.outpost.sigma_q_z") {
+        opp.sigma_q_z = param.as_double();
+        return true;
+    }
+    if (name == "tracker.outpost.measure_distance_k") {
+        opp.meas_dist_k = param.as_double();
+        return true;
+    }
+    if (name == "tracker.outpost.yaw_log_k") {
+        opp.yaw_log_k = param.as_double();
+        return true;
+    }
+    return false;
+}
+
+rcl_interfaces::msg::SetParametersResult
+    ArmorSolverNode::onSetParameters(const std::vector<rclcpp::Parameter>& parameters) {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    bool updated      = false;
+    {
+        std::lock_guard<std::mutex> lock(tracker_mutex_);
+        for (const auto& param : parameters) {
+            updated = applyTrackerParamUpdate(param, tracker_params_) || updated;
+        }
+        if (updated) {
+            tracker_.set_params(tracker_params_);
+        }
+    }
+    return result;
 }
 
 void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armors_msg) {
@@ -211,30 +362,48 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
     // Init message
     // Update tracker
     std::string number;
-    auto n     = now();
-    double dts = (n - armors_msg->header.stamp).seconds();
-    if (tracker_.state != armor_tracker::Tracker::IDLE) {
-        tracker_.predict(dts);
+    const auto msg_stamp = armors_msg->header.stamp;
+    rclcpp::Time msg_time(msg_stamp);
+    if (last_time_.nanoseconds() == 0) {
+        last_time_ = msg_time; // 初始化上一帧时间
     }
-    if (tracker_.state == armor_tracker::Tracker::IDLE) {
-        number = tracker_.first_meet_u(*armors_msg);
-    } else {
-        tracker_.update(*armors_msg);
-        rm_interfaces::msg::Measurement measurement_msg;
-        const auto& z        = tracker_.get_measurement();
-        measurement_msg.x1   = z[0];
-        measurement_msg.y1   = z[1];
-        measurement_msg.z1   = z[2];
-        measurement_msg.yaw1 = z[3];
-        measurement_msg.x2   = z[4];
-        measurement_msg.y2   = z[5];
-        measurement_msg.z2   = z[6];
-        measurement_msg.yaw2 = z[7];
+    double dts = (msg_time - last_time_).seconds();
+    if (dts < 0.0) {
+        RCLCPP_ERROR(get_logger(), "delta time period < 0");
+        dts = 0.0;             // 避免时间戳回跳导致的负时间间隔
+    }
+    last_time_ = msg_time;
+    rm_interfaces::msg::Target target_msg;
+    rm_interfaces::msg::Measurement measurement_msg;
+    bool publish_measurement = false;
+    {
+        std::lock_guard<std::mutex> lock(tracker_mutex_);
+        if (tracker_.state != Tracker::IDLE) {
+            tracker_.predict(dts);
+        }
+        if (tracker_.state == Tracker::IDLE) {
+            number = tracker_.first_meet_u(*armors_msg);
+        } else {
+            tracker_.update(*armors_msg);
+            const auto& z        = tracker_.get_measurement();
+            measurement_msg      = rm_interfaces::msg::Measurement();
+            measurement_msg.x1   = z[0];
+            measurement_msg.y1   = z[1];
+            measurement_msg.z1   = z[2];
+            measurement_msg.yaw1 = z[3];
+            measurement_msg.x2   = z[4];
+            measurement_msg.y2   = z[5];
+            measurement_msg.z2   = z[6];
+            measurement_msg.yaw2 = z[7];
+            publish_measurement  = true;
+        }
+        target_msg = tracker_.get_target();
+    }
+    if (publish_measurement) {
         measure_pub_->publish(measurement_msg);
     }
-    rm_interfaces::msg::Target target_msg = tracker_.get_target();
 
-    target_msg.header.stamp    = n;
+    target_msg.header.stamp    = msg_stamp;
     target_msg.header.frame_id = target_frame_;
     if (!number.empty()) {
         target_msg.id = number;
@@ -265,10 +434,10 @@ void ArmorSolverNode::publishMarkers(
     assert(a_n == 4 || a_n == 3);
     if (target_msg.tracking) {
 
-        linear_v_marker_.header  = hdr;
-        angular_v_marker_.header = hdr;
-        position_marker_.header  = hdr;
-        selection_marker_.header = hdr;
+        linear_v_marker_.header   = hdr;
+        angular_v_marker_.header  = hdr;
+        position_marker_.header   = hdr;
+        selection_marker_.header  = hdr;
         trajectory_marker_.header = hdr;
 
         position_marker_.action        = visualization_msgs::msg::Marker::ADD;
@@ -365,6 +534,23 @@ void ArmorSolverNode::publishMarkers(
         selection_marker_.pose.position.z =
             gimbal_cmd.distance * sin(gimbal_cmd.pitch * M_PI / 180);
 
+        predicted_marker_.header = hdr;
+        predicted_marker_.id     = id++;
+        predicted_marker_.action = visualization_msgs::msg::Marker::DELETE;
+        if (solver_ != nullptr) {
+            const auto predicted_position = solver_->getPredictedPosition();
+            if (predicted_position.has_value()) {
+                predicted_marker_.action            = visualization_msgs::msg::Marker::ADD;
+                predicted_marker_.pose.position.x   = predicted_position->x();
+                predicted_marker_.pose.position.y   = predicted_position->y();
+                predicted_marker_.pose.position.z   = predicted_position->z();
+                predicted_marker_.pose.orientation.x = 0.0;
+                predicted_marker_.pose.orientation.y = 0.0;
+                predicted_marker_.pose.orientation.z = 0.0;
+                predicted_marker_.pose.orientation.w = 1.0;
+            }
+        }
+
         trajectory_marker_.action = visualization_msgs::msg::Marker::ADD;
         trajectory_marker_.points.clear();
         trajectory_marker_.header.frame_id = "muzzle_link";
@@ -390,12 +576,15 @@ void ArmorSolverNode::publishMarkers(
         selection_marker_.action  = Marker::DELETE;
         trajectory_marker_.action = Marker::DELETE;
         angular_v_marker_.action  = Marker::DELETE;
+        predicted_marker_.action  = Marker::DELETE;
+        predicted_marker_.header  = hdr;
     }
     marry.markers.emplace_back(linear_v_marker_);
     marry.markers.emplace_back(angular_v_marker_);
     marry.markers.emplace_back(position_marker_);
     marry.markers.emplace_back(trajectory_marker_);
     marry.markers.emplace_back(selection_marker_);
+    marry.markers.emplace_back(predicted_marker_);
 
     geometry_msgs::msg::Point p0, p1;
     p0 = target_msg.position;
@@ -409,4 +598,4 @@ void ArmorSolverNode::publishMarkers(
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable
 // when its library is being loaded into a running process.
-RCLCPP_COMPONENTS_REGISTER_NODE(fyt::auto_aim::ArmorSolverNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(rm_auto_aim::ArmorSolverNode)

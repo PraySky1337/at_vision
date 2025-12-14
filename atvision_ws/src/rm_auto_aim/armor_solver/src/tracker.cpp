@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace armor_tracker {
+namespace rm_auto_aim {
 
 bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
     std::vector<int> idx;

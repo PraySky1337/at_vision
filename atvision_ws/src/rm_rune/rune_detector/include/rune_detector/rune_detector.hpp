@@ -57,7 +57,6 @@ public:
 
 private:
     cv::Mat processPictures(const cv::Mat& src);
-     bool isArrowRoiMatched(const Arrow& arrow, const cv::Rect2f& roi, const cv::Rect2f& globalRoi);
 
     bool detectCenterR();
     bool detectAllArrows();
