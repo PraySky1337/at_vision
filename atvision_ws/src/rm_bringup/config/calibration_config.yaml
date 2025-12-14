@@ -1,0 +1,92 @@
+/camera_node:
+  ros__parameters:
+    bayer_cvt_color_quality: 2
+    bayer_demosaic_method: ''
+    camera_info_url: package://rm_bringup/config/camera_info.yaml
+    camera_name: camera
+    exposure_time: 25000
+    force_8bit_pixel_format: true
+    gain: 8.0
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    reconnect_interval_ms: 2000
+    reconnect_max_attempts: -1
+    timestamp_offset_ms: 10
+    use_sensor_data_qos: true
+    use_sim_time: false
+
+/rm_gimbal:
+  ros__parameters:
+    debug: true
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+      /tf:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    target_component_name: armor_detector
+    timestamp_offset: 0.006
+    use_judgement_color: false
+    use_planner: true
+    use_roll: false
+    use_sim_time: false
+
+/calibration_node:
+  ros__parameters:
+    # TF frames based on URDF: odom -> gimbal_link (IMU), camera_optical_frame from image header
+    base_frame: odom
+    board_height: 7
+    board_width: 10
+    calibration_node:
+      preview:
+        enable_pub_plugins:
+        - image_transport/compressedDepth
+        - image_transport/compressed
+        - image_transport/raw
+        - image_transport/theora
+        format: jpeg
+        jpeg_quality: 95
+        png_level: 3
+        tiff:
+          res_unit: inch
+          xdpi: -1
+          ydpi: -1
+    camera_info_topic: /camera_info
+    camera_info_url: ''
+    camera_name: camera
+    display_fps: 40.0
+    max_tf_time_diff: 0.1
+    enable_preview_window: false
+    imu_frame: gimbal_link
+    mode: intrinsic
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    quality_threshold: 0.1
+    required_frames: 20
+    square_size: 0.025
+    target_samples: 25
+    use_sim_time: false
+    weight_board_angle: 0.3
+    weight_board_pose: 0.3
+    weight_board_size: 0.2
+    weight_corner_quality: 0.3
+    weight_image_sharpness: 0.2
+    weight_imu_diversity: 0.3
+    weight_reprojection_error: 0.4

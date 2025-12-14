@@ -1,9 +1,9 @@
 /armor_detector:
   ros__parameters:
-    debug: true
+    debug: false
     target_frame: odom
     detect_color: "RED"
-    binary_thres: 90
+    binary_thres: 50
 
     use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
@@ -48,31 +48,29 @@
     tracker:
       lost_threshold: 100
       matcher_gate: 5.0
-      outpost_matcher_gate: 1.0
-      measure_distance_k: 0.43
+      outpost_matcher_gate: 2.0
+      measure_distance_k: 0.30
       outpost:
-        measure_distance_k: 0.43
+        measure_distance_k: 0.30
         sigma_a_yaw: 1.7
         sigma_q_xy: 10.0
-        sigma_q_z: 8.
-        yaw_log_k: 0.005
-      sigma_a_xy: 30.0
-      sigma_a_yaw: 10.0
+        sigma_q_z: 3.
+      sigma_a_xy: 20.0
+      sigma_a_yaw: 7.8
       sigma_a_z: 2.0
       sigma_h: 0.8
       sigma_r: 1.0
       tracking_threshold: 5
-      yaw_log_k: 0.005
     use_sim_time: false
 
     solver:
       prediction_delay: 0.
       controller_delay: 0.
       max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
-      side_angle: 15.0 
-      bullet_speed: 25.0
+      side_angle: 10.0 
+      bullet_speed: 25.
       compenstator_type: "rk4"
-      gravity: 10.0
+      gravity: 9.81
       resistance: 0.092
       iteration_times: 20 # 补偿的迭代次数
       # ["距离下限, 距离上限, 高度下限, 高度下限, pitch轴补偿值"]
@@ -90,20 +88,13 @@
 
 /camera_node:
   ros__parameters:
+    bayer_cvt_color_quality: 1
+    bayer_demosaic_method: ''
     camera_info_url: package://rm_bringup/config/camera_info.yaml
     camera_name: camera
     exposure_time: 3000
+    force_8bit_pixel_format: true
     gain: 16.7
-    image_raw:
-      enable_pub_plugins:
-      - image_transport/raw
-      format: jpeg
-      jpeg_quality: 95
-      png_level: 3
-      tiff:
-        res_unit: inch
-        xdpi: -1
-        ydpi: -1
     qos_overrides:
       /parameter_events:
         publisher:
@@ -113,8 +104,12 @@
           reliability: reliable
     reconnect_interval_ms: 2000
     reconnect_max_attempts: -1
+    timestamp_offset_ms: 0
     use_sensor_data_qos: true
     use_sim_time: false
+    # Bayer demosaic method for MV_CC_ConvertPixelType:
+    #   nearest | bilinear | optimized (Hamilton)
+    bayer_demosaic_method: bilinear
 
 
 /rm_gimbal:

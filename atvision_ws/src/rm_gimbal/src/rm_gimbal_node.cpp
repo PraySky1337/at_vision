@@ -17,7 +17,14 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
     std::string target_component_name =
         declare_parameter("target_component_name", "armor_detector");
-    detector_client_ = std::make_shared<rclcpp::AsyncParametersClient>(this, target_component_name);
+    if (declare_parameter("use_judgement_color", false)) {
+        detector_client_ =
+            std::make_shared<rclcpp::AsyncParametersClient>(this, target_component_name);
+    } else {
+        RCLCPP_INFO(
+            get_logger(), "Gimbal Node will not set enemy color on armor detector, "
+                          "because use_judgement_color is false.");
+    }
     this->init_parser();
     try {
         if (device_.open(0x0483)) {
@@ -145,7 +152,7 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
     t.transform.rotation = tf2::toMsg(q);
     tf_broadcaster_.sendTransform(t);
 
-    if (d.self_color != aiming_color_) {
+    if (d.self_color != aiming_color_ && detector_client_ != nullptr) {
         set_params(aiming_color_ == 0 ? "red" : "blue"); // 保持原逻辑
     }
 }

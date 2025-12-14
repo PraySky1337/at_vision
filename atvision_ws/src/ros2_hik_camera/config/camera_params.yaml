@@ -5,3 +5,6 @@
     exposure_time: 2500
     gain: 16.0
     force_8bit_pixel_format: true
+    # Bayer demosaic method for MV_CC_ConvertPixelType:
+    #   nearest | bilinear | optimized (Hamilton)
+    bayer_demosaic_method: bilinear

@@ -4,10 +4,48 @@
 #include <chrono>
 #include <cinttypes>
 #include <csignal>
+#include <algorithm>
+#include <cctype>
 
 namespace hik_camera {
 
 using namespace std::chrono_literals;
+
+namespace {
+
+bool parse_bayer_demosaic_method(const std::string& method, unsigned int& quality_out) {
+    if (method.empty()) {
+        return false;
+    }
+
+    std::string normalized = method;
+    std::transform(
+        normalized.begin(), normalized.end(), normalized.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (normalized == "0" || normalized == "nearest" || normalized == "nearest_neighbor" ||
+        normalized == "nearest-neighbor" || normalized == "nn" || method == "最邻近" ||
+        method == "最近邻") {
+        quality_out = 0;
+        return true;
+    }
+
+    if (normalized == "1" || normalized == "bilinear" || normalized == "linear" ||
+        normalized == "bilinearity" || method == "双线性") {
+        quality_out = 1;
+        return true;
+    }
+
+    if (normalized == "2" || normalized == "optimized" || normalized == "optimal" ||
+        normalized == "hamilton" || method == "最优化") {
+        quality_out = 2;
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace
 
 HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     : Node("hik_camera", options) {
@@ -17,6 +55,28 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
     reconnect_max_attempts_ = this->declare_parameter("reconnect_max_attempts", -1);
     timestamp_offset_ms_    = this->declare_parameter("timestamp_offset_ms", 10);
     bayer_cvt_quality_      = this->declare_parameter("bayer_cvt_color_quality", 1);
+    bayer_demosaic_method_  = this->declare_parameter<std::string>("bayer_demosaic_method", "");
+    {
+        unsigned int parsed = 0;
+        if (!bayer_demosaic_method_.empty() &&
+            parse_bayer_demosaic_method(bayer_demosaic_method_, parsed)) {
+            bayer_cvt_quality_ = static_cast<int>(parsed);
+        } else if (!bayer_demosaic_method_.empty()) {
+            RCLCPP_WARN(
+                this->get_logger(),
+                "Invalid bayer_demosaic_method='%s' (expected: nearest|bilinear|optimized). "
+                "Falling back to bayer_cvt_color_quality=%d.",
+                bayer_demosaic_method_.c_str(), bayer_cvt_quality_);
+        }
+
+        if (bayer_cvt_quality_ < 0 || bayer_cvt_quality_ > 2) {
+            RCLCPP_WARN(
+                this->get_logger(),
+                "Invalid bayer_cvt_color_quality=%d (expected 0/1/2). Falling back to 1 (bilinear).",
+                bayer_cvt_quality_);
+            bayer_cvt_quality_ = 1;
+        }
+    }
     force_8bit_pixel_format_ =
         this->declare_parameter("force_8bit_pixel_format", true); // 强制输出 8bit 像素格式
     // 尝试打开相机（第一次初始化）
@@ -205,25 +265,92 @@ rcl_interfaces::msg::SetParametersResult
     HikCameraNode::parametersCallback(const std::vector<rclcpp::Parameter>& parameters) {
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
+    result.reason = "";
+
+    bool update_exposure = false;
+    int exposure_time_us = 0;
+    bool update_gain     = false;
+    double gain_value    = 0.0;
+    bool update_bayer    = false;
+    unsigned int bayer_quality = 0;
+    std::string bayer_method;
+
     for (const auto& param : parameters) {
-        if (param.get_name() == "exposure_time") {
-            std::scoped_lock lk(camera_mutex_);
-            int status = MV_CC_SetFloatValue(camera_handle_, "ExposureTime", param.as_int());
-            if (MV_OK != status) {
+        const auto& name = param.get_name();
+        if (name == "exposure_time") {
+            update_exposure = true;
+            exposure_time_us = param.as_int();
+        } else if (name == "gain") {
+            update_gain = true;
+            gain_value  = param.as_double();
+        } else if (name == "bayer_cvt_color_quality") {
+            const int q = param.as_int();
+            if (q < 0 || q > 2) {
                 result.successful = false;
-                result.reason = "Failed to set exposure time, status = " + std::to_string(status);
+                result.reason     = "bayer_cvt_color_quality must be 0(nearest)/1(bilinear)/2(optimized)";
+                break;
             }
-        } else if (param.get_name() == "gain") {
-            std::scoped_lock lk(camera_mutex_);
-            int status = MV_CC_SetFloatValue(camera_handle_, "Gain", param.as_double());
-            if (MV_OK != status) {
+            update_bayer  = true;
+            bayer_quality = static_cast<unsigned int>(q);
+            bayer_method.clear();
+        } else if (name == "bayer_demosaic_method") {
+            bayer_method = param.as_string();
+            unsigned int parsed = 0;
+            if (!parse_bayer_demosaic_method(bayer_method, parsed)) {
                 result.successful = false;
-                result.reason     = "Failed to set gain, status = " + std::to_string(status);
+                result.reason     = "bayer_demosaic_method must be one of: nearest, bilinear, optimized";
+                break;
             }
+            update_bayer  = true;
+            bayer_quality = parsed;
         } else {
             result.successful = false;
-            result.reason     = "Unknown parameter: " + param.get_name();
+            result.reason     = "Unknown parameter: " + name;
+            break;
         }
+    }
+
+    if (!result.successful) {
+        return result;
+    }
+
+    std::scoped_lock lk(camera_mutex_);
+
+    if (!camera_handle_ && (update_exposure || update_gain || update_bayer)) {
+        result.successful = false;
+        result.reason     = "Camera is not connected";
+        return result;
+    }
+
+    if (update_exposure) {
+        int status = MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time_us);
+        if (MV_OK != status) {
+            result.successful = false;
+            result.reason = "Failed to set exposure time, status = " + std::to_string(status);
+            return result;
+        }
+    }
+
+    if (update_gain) {
+        int status = MV_CC_SetFloatValue(camera_handle_, "Gain", gain_value);
+        if (MV_OK != status) {
+            result.successful = false;
+            result.reason     = "Failed to set gain, status = " + std::to_string(status);
+            return result;
+        }
+    }
+
+    if (update_bayer) {
+        const int status =
+            MV_CC_SetBayerCvtQuality(camera_handle_, static_cast<unsigned int>(bayer_quality));
+        if (MV_OK != status) {
+            result.successful = false;
+            result.reason =
+                "Failed to set Bayer demosaic method, status = " + std::to_string(status);
+            return result;
+        }
+        bayer_cvt_quality_ = static_cast<int>(bayer_quality);
+        bayer_demosaic_method_ = bayer_method;
     }
     return result;
 }
@@ -268,12 +395,17 @@ bool HikCameraNode::openCamera() {
     }
 
     ret = MV_CC_OpenDevice(camera_handle_);
-    MV_CC_SetBayerCvtQuality(camera_handle_, bayer_cvt_quality_);
     if (ret != MV_OK) {
         RCLCPP_ERROR(this->get_logger(), "OpenDevice failed: 0x%x", ret);
         MV_CC_DestroyHandle(&camera_handle_);
         camera_handle_ = nullptr;
         return false;
+    }
+
+    int bayer_ret = MV_CC_SetBayerCvtQuality(camera_handle_, static_cast<unsigned int>(bayer_cvt_quality_));
+    if (bayer_ret != MV_OK) {
+        RCLCPP_WARN(
+            this->get_logger(), "SetBayerCvtQuality(%d) failed: 0x%x", bayer_cvt_quality_, bayer_ret);
     }
 
     if (force_8bit_pixel_format_) {

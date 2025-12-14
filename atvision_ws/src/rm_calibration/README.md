@@ -99,7 +99,7 @@ ros2 launch camera_imu_calibration calibration.launch.py mode:=extrinsic
 3. **采集样本**：
    - 确保IMU在发布TF变换（`odom` → `gimbal_link`）
    - 每次调用`~/capture_sample`服务都会基于当前画面尝试保存一个样本
-   - 每次采样前移动标定板并改变IMU姿态，保证姿态多样性
+   - 标定板应在整个采样过程中保持相对`base_frame`静止（hand-eye 的必要前提）；通过转动云台/IMU（建议同时覆盖不同 yaw/pitch）来产生相对运动并保证姿态多样性
    - 默认目标25个高质量样本（可参数化）
 
 4. **执行标定**：
@@ -122,6 +122,10 @@ Rotation Matrix R (Camera to IMU):
 Translation Vector t (Camera to IMU):
 [0.050, 0.020, -0.030]
 ```
+
+说明：
+- 外参求解中的相机坐标系默认是 OpenCV 光学系（x 右、y 下、z 前），等价于 ROS 的`camera_optical_frame`约定。
+- 程序会同时打印`camera_link`风格（x 前、y 左、z 上）的等价结果，并给出可直接粘贴的 TF `static_transform_publisher` 命令与 URDF/xacro `camera_xyz/camera_rpy` 片段（用于更新云台 URDF 中`gimbal_link`↔`camera_link`固定外参）。
 
 ## 话题和服务
 

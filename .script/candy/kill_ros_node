@@ -1,0 +1,4 @@
+#! /usr/bin/bash
+set -e
+
+pkill -TERM -f "ros2 launch|ros2 run|component_container|rviz2|gzserver|gzclient|gazebo"

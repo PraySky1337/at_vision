@@ -4,6 +4,7 @@
 #include "MvCameraControl.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -46,6 +47,7 @@ private:
 
     double timestamp_offset_ms_{};
     int bayer_cvt_quality_ = 1;
+    std::string bayer_demosaic_method_{};
     bool force_8bit_pixel_format_ = true;
     std::size_t image_capacity_ = 0;
 

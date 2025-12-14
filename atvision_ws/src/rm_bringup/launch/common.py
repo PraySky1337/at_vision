@@ -77,3 +77,12 @@ def pub_video_node(node_params) :
     parameters=[node_params],
     extra_arguments=[{'use_intra_process_comms': True}],
 )
+
+def calibration_node(node_params) :
+    return Node(
+    package='rm_calibration',
+    executable='calibration_node',
+    name='calibration_node',
+    output='screen',
+    parameters=[node_params],
+)
