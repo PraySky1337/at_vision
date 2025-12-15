@@ -1,5 +1,6 @@
 #pragma once
 #include "srukf.hpp"
+#include "isrckf.hpp"
 #include "util.hpp"
 #include <Eigen/Dense>
 #include <cmath>

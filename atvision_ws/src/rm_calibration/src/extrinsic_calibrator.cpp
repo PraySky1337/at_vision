@@ -26,7 +26,8 @@ bool ExtrinsicCalibrator::detectSample(
     reprojection_error = 0.0;
 
     bool found = cv::findChessboardCorners(
-        image, board_size, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+        image, board_size, corners,
+        cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
 
     if (found) {
         // Refine corners

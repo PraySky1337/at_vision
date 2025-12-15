@@ -48,13 +48,13 @@
     tracker:
       lost_threshold: 100
       matcher_gate: 5.0
-      outpost_matcher_gate: 2.0
-      measure_distance_k: 0.30
+      outpost_matcher_gate: 3.0
+      measure_distance_k: 0.1
       outpost:
-        measure_distance_k: 0.30
+        measure_distance_k: 0.2
         sigma_a_yaw: 1.7
-        sigma_q_xy: 10.0
-        sigma_q_z: 3.
+        sigma_q_xy: 15.0
+        sigma_q_z: 1.
       sigma_a_xy: 20.0
       sigma_a_yaw: 7.8
       sigma_a_z: 2.0
@@ -69,7 +69,7 @@
       max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
       side_angle: 10.0 
       bullet_speed: 25.
-      compenstator_type: "rk4"
+      compensator_type: "resistance"
       gravity: 9.81
       resistance: 0.092
       iteration_times: 20 # 补偿的迭代次数

@@ -18,7 +18,8 @@ bool IntrinsicCalibrator::detectCorners(
     cv::Size board_size(board_width_, board_height_);
 
     bool found = cv::findChessboardCorners(
-        image, board_size, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+        image, board_size, corners,
+        cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
 
     if (found) {
         // Refine corner positions

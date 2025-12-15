@@ -19,9 +19,10 @@
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
+// ros2
+#include <rclcpp/rclcpp.hpp>
 // project
 #include "armor_solver/armor_solver_node.hpp"
-#include "armor_solver/rk4_compensator.hpp"
 #include "rm_utils/logger/log.hpp"
 #include "rm_utils/math/utils.hpp"
 
@@ -38,14 +39,16 @@ Solver::Solver(std::weak_ptr<rclcpp::Node> n)
     side_angle_          = node->declare_parameter("solver.side_angle", 15.0);
     min_switching_v_yaw_ = node->declare_parameter("solver.min_switching_v_yaw", 1.0);
 
-    std::string compenstator_type = node->declare_parameter("solver.compensator_type", "rk4");
-    if (compenstator_type == "rk4") {
-        trajectory_compensator_ = std::make_unique<Rk4Compensator>();
-    } else {
-        trajectory_compensator_ = fyt::CompensatorFactory::createCompensator(compenstator_type);
+    std::string compensator_type = node->declare_parameter("solver.compensator_type", "resistance");
+    if (compensator_type == "rk4") {
+        RCLCPP_WARN(
+            node->get_logger(),
+            "solver.compensator_type='rk4' has been removed; falling back to 'resistance'");
+        compensator_type = "resistance";
     }
+    trajectory_compensator_ = fyt::CompensatorFactory::createCompensator(compensator_type);
     if (!trajectory_compensator_) {
-        throw std::runtime_error("invalid trajectory compensator type: " + compenstator_type);
+        throw std::runtime_error("invalid trajectory compensator type: " + compensator_type);
     }
     trajectory_compensator_->iteration_times =
         node->declare_parameter("solver.iteration_times", 20);

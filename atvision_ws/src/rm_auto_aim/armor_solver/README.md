@@ -34,8 +34,8 @@
 * `solver.side_angle` (`double`, default: 15.0) - 跳转到下一装甲板的角度阈值
 * `solver.bullet_speed` (`double`, default: 25.0) - 子弹速度
 * `solver.gravity` (`double`, default: 9.8) - 重力加速度
-* `solver.compensator_type` (`string`, default: "rk4") - 补偿器类型（rk4 启用四阶 RK 弹道补偿）
-* `solver.resistance` (`double`, default: 0.001) - 空气阻力系数（k，二次阻力）
+* `solver.compensator_type` (`string`, default: "resistance") - 弹道补偿模型（`ideal`/`resistance`）
+* `solver.resistance` (`double`, default: 0.001) - 空气阻力系数（r，一阶线性阻力）
 
 
 ## ArmorSolverNode

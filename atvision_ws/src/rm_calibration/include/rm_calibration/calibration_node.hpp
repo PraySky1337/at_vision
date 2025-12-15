@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <camera_info_manager/camera_info_manager.hpp>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <cv_bridge/cv_bridge.h>
@@ -67,7 +68,9 @@ private:
         std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     // Helper methods
-    bool getIMUPose(const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu);
+    bool getIMUPose(
+        const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu,
+        bool allow_wait);
     void printCalibrationResults();
 
     // ROS interfaces
@@ -124,7 +127,7 @@ private:
     CalibrationState state_{CalibrationState::IDLE};
     std::future<void> calibration_future_;
     std::vector<cv::Point2f> previous_corners_;
-    rclcpp::Time last_display_time_;
+    std::chrono::steady_clock::time_point last_display_time_;
     std::atomic_bool capture_requested_{false};
     bool capture_response_ready_{false};
     bool last_capture_success_{false};

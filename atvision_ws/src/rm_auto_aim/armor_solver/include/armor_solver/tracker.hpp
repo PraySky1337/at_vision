@@ -41,8 +41,8 @@ struct Tracker {
 
     std::string name;
     int armor_num;
-    using RoboUKF    = srukf::SRUKF<RobotModel, RobotModel::NX, RobotModel::NZ>;
-    using OutpostUKF = srukf::SRUKF<OutpostModel, OutpostModel::NX, OutpostModel::NZ>;
+    using RoboUKF    = srukf::ISRCKF<RobotModel, RobotModel::NX, RobotModel::NZ>;
+    using OutpostUKF = srukf::ISRCKF<OutpostModel, OutpostModel::NX, OutpostModel::NZ>;
 
     std::optional<RoboUKF> robot_ukf;
     std::optional<OutpostUKF> outpost_ukf;

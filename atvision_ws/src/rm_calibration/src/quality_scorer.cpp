@@ -11,6 +11,47 @@ inline double clamp01(double value) { return std::max(0.0, std::min(1.0, value))
 constexpr double kPi        = 3.14159265358979323846;
 constexpr double kHalfPi    = kPi / 2.0;
 constexpr double kQuarterPi = kPi / 4.0;
+
+cv::Rect computeScoreRoi(const std::vector<cv::Point2f>& corners, const cv::Size& image_size) {
+    const cv::Rect full(0, 0, image_size.width, image_size.height);
+    if (corners.empty() || full.empty()) {
+        return full;
+    }
+
+    cv::Rect roi = cv::boundingRect(corners);
+    constexpr int kMarginPx = 20;
+    roi.x                  = std::max(full.x, roi.x - kMarginPx);
+    roi.y                  = std::max(full.y, roi.y - kMarginPx);
+    roi.width              = roi.width + 2 * kMarginPx;
+    roi.height             = roi.height + 2 * kMarginPx;
+    roi &= full;
+    return roi.empty() ? full : roi;
+}
+
+void downscaleForScoring(cv::Mat& gray, std::vector<cv::Point2f>& corners) {
+    constexpr int kMaxDimPx = 640;
+    const int max_dim       = std::max(gray.cols, gray.rows);
+    if (max_dim <= 0 || max_dim <= kMaxDimPx) {
+        return;
+    }
+
+    const double scale = static_cast<double>(kMaxDimPx) / static_cast<double>(max_dim);
+    if (scale <= 0.0 || scale >= 1.0) {
+        return;
+    }
+
+    cv::Mat resized;
+    cv::resize(gray, resized, cv::Size(), scale, scale, cv::INTER_AREA);
+    if (resized.empty()) {
+        return;
+    }
+
+    gray = resized;
+    for (auto& c : corners) {
+        c.x *= static_cast<float>(scale);
+        c.y *= static_cast<float>(scale);
+    }
+}
 } // namespace
 
 double QualityScorer::scoreIntrinsicFrame(
@@ -20,17 +61,27 @@ double QualityScorer::scoreIntrinsicFrame(
         return 0.0;
     }
 
-    cv::Mat gray;
-    if (image.channels() == 3) {
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    const cv::Rect roi = computeScoreRoi(corners, image.size());
+    const cv::Mat roi_image = roi.empty() ? image : image(roi);
+
+    cv::Mat gray_roi;
+    if (roi_image.channels() == 3) {
+        cv::cvtColor(roi_image, gray_roi, cv::COLOR_BGR2GRAY);
     } else {
-        gray = image;
+        gray_roi = roi_image;
     }
 
-    double corner_quality   = calculateCornerQuality(gray, corners);
+    std::vector<cv::Point2f> roi_corners;
+    roi_corners.reserve(corners.size());
+    for (const auto& c : corners) {
+        roi_corners.emplace_back(c.x - static_cast<float>(roi.x), c.y - static_cast<float>(roi.y));
+    }
+    downscaleForScoring(gray_roi, roi_corners);
+
+    double corner_quality   = calculateCornerQuality(gray_roi, roi_corners);
     double board_size_score = calculateBoardSizeScore(corners, image.size());
     double angle_score      = calculateAngleScore(corners, board_size);
-    double sharpness_score  = calculateSharpness(gray);
+    double sharpness_score  = calculateSharpness(gray_roi);
     double diversity_score  = calculateDiversity(corners, previous_corners, image.size());
 
     double angle_diversity = 0.6 * angle_score + 0.4 * diversity_score;
@@ -57,15 +108,25 @@ double QualityScorer::scoreExtrinsicSample(
         return 0.0;
     }
 
-    cv::Mat gray;
-    if (image.channels() == 3) {
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    const cv::Rect roi = computeScoreRoi(corners, image.size());
+    const cv::Mat roi_image = roi.empty() ? image : image(roi);
+
+    cv::Mat gray_roi;
+    if (roi_image.channels() == 3) {
+        cv::cvtColor(roi_image, gray_roi, cv::COLOR_BGR2GRAY);
     } else {
-        gray = image;
+        gray_roi = roi_image;
     }
 
-    double corner_quality     = calculateCornerQuality(gray, corners);
-    double sharpness_score    = calculateSharpness(gray);
+    std::vector<cv::Point2f> roi_corners;
+    roi_corners.reserve(corners.size());
+    for (const auto& c : corners) {
+        roi_corners.emplace_back(c.x - static_cast<float>(roi.x), c.y - static_cast<float>(roi.y));
+    }
+    downscaleForScoring(gray_roi, roi_corners);
+
+    double corner_quality     = calculateCornerQuality(gray_roi, roi_corners);
+    double sharpness_score    = calculateSharpness(gray_roi);
     double reprojection_score = calculateReprojectionScore(reprojection_error);
     double imu_diversity      = calculateImuDiversity(R_imu, previous_R_imu);
     double board_pose_score   = calculateBoardPoseScore(rvec);

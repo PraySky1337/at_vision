@@ -8,7 +8,7 @@ namespace srukf {
 
 template <typename Scalar>
 struct SigmaPointConfig {
-    Scalar alpha{static_cast<Scalar>(0.518)}; // 0.517 - 1.932
+    Scalar alpha{static_cast<Scalar>(0.7)}; // 0.517 - 1.932
     Scalar beta{static_cast<Scalar>(2.0)};
     Scalar kappa{static_cast<Scalar>(0)};
 };

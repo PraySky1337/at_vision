@@ -45,17 +45,23 @@ CalibrationNode::CalibrationNode()
         this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // Subscribe to image and camera info topics
+    auto sensor_qos = rclcpp::SensorDataQoS();
+    sensor_qos.keep_last(1);
+
     rclcpp::SubscriptionOptions image_opts;
     image_opts.callback_group = image_callback_group_;
     image_sub_                = this->create_subscription<sensor_msgs::msg::Image>(
-        "/image_raw", rclcpp::SensorDataQoS(),
+        "/image_raw", sensor_qos,
         std::bind(&CalibrationNode::imageCallback, this, std::placeholders::_1), image_opts);
 
-    rclcpp::SubscriptionOptions info_opts;
-    info_opts.callback_group = image_callback_group_;
-    camera_info_sub_         = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-        camera_info_topic_, rclcpp::SensorDataQoS(),
-        std::bind(&CalibrationNode::cameraInfoCallback, this, std::placeholders::_1), info_opts);
+    if (mode_ == CalibrationMode::EXTRINSIC && !extrinsic_calibrator_) {
+        rclcpp::SubscriptionOptions info_opts;
+        info_opts.callback_group = image_callback_group_;
+        camera_info_sub_         = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+            camera_info_topic_, sensor_qos,
+            std::bind(&CalibrationNode::cameraInfoCallback, this, std::placeholders::_1),
+            info_opts);
+    }
 
     // Create services
     calibrate_service_ = this->create_service<std_srvs::srv::Trigger>(
@@ -247,14 +253,13 @@ void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg
     // the board isn't visible.
     bool publish_visual = want_preview_output;
     if (want_preview_output && display_fps_ > 0.0 && !capture_pending) {
-        rclcpp::Time now = this->now();
-        double dt        = (last_display_time_.nanoseconds() == 0) ? (1.0 / display_fps_)
-                                                                   : (now - last_display_time_).seconds();
-        if (dt >= (1.0 / display_fps_)) {
-            last_display_time_ = now;
-        } else {
+        const auto now        = std::chrono::steady_clock::now();
+        const auto min_period = std::chrono::duration<double>(1.0 / display_fps_);
+        if (last_display_time_ != std::chrono::steady_clock::time_point{}
+            && (now - last_display_time_) < min_period) {
             return;
         }
+        last_display_time_ = now;
     }
 
     // Convert ROS image to OpenCV
@@ -283,28 +288,30 @@ void CalibrationNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg
 
         handleCaptureRequestIntrinsic(found, corners, cv_ptr->image.size(), current_quality);
     } else {
-        Eigen::Matrix3d R_imu;
-        Eigen::Vector3d t_imu = Eigen::Vector3d::Zero();
-        bool imu_ready        = getIMUPose(msg->header.stamp, R_imu, t_imu);
-
         std::vector<cv::Point2f> corners;
         cv::Mat rvec, tvec;
         double reprojection_error = 0.0;
         bool found                = false;
 
-        if (extrinsic_calibrator_ && imu_ready) {
-            display_image = cv_ptr->image;
-            found         = extrinsic_calibrator_->detectSample(
-                cv_ptr->image, R_imu, corners, display_image, rvec, tvec, reprojection_error);
+        display_image = cv_ptr->image;
+        if (extrinsic_calibrator_) {
+            found = extrinsic_calibrator_->detectSample(
+                cv_ptr->image, Eigen::Matrix3d::Identity(), corners, display_image, rvec, tvec,
+                reprojection_error);
+        }
 
-            if (found) {
+        Eigen::Matrix3d R_imu = Eigen::Matrix3d::Identity();
+        Eigen::Vector3d t_imu = Eigen::Vector3d::Zero();
+        bool imu_ready        = false;
+
+        if (found) {
+            imu_ready = getIMUPose(msg_stamp, R_imu, t_imu, capture_pending);
+            if (imu_ready) {
                 current_quality = quality_scorer_.scoreExtrinsicSample(
                     cv_ptr->image, corners, rvec, tvec, R_imu,
                     last_accepted_imu_valid_ ? &last_accepted_imu_R_ : nullptr, reprojection_error);
                 previous_corners_ = corners;
             }
-        } else {
-            display_image = cv_ptr->image;
         }
 
         handleCaptureRequestExtrinsic(
@@ -387,15 +394,15 @@ void CalibrationNode::handleCaptureRequestExtrinsic(
     }
 
     bool accepted = false;
-    if (!imu_ready) {
-        last_capture_success_ = false;
-        last_capture_message_ = "IMU transform unavailable";
-    } else if (!extrinsic_calibrator_) {
+    if (!extrinsic_calibrator_) {
         last_capture_success_ = false;
         last_capture_message_ = "Extrinsic calibrator not ready";
     } else if (!found) {
         last_capture_success_ = false;
         last_capture_message_ = "Chessboard not detected in current frame";
+    } else if (!imu_ready) {
+        last_capture_success_ = false;
+        last_capture_message_ = "IMU transform unavailable";
     } else {
         accepted = extrinsic_calibrator_->tryAddSample(
             rvec, tvec, R_imu, t_imu, corners, quality, reprojection_error);
@@ -429,17 +436,17 @@ void CalibrationNode::handleCaptureRequestExtrinsic(
 }
 
 bool CalibrationNode::getIMUPose(
-    const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu) {
+    const rclcpp::Time& stamp, Eigen::Matrix3d& R_imu, Eigen::Vector3d& t_imu, bool allow_wait) {
     // Try to use the timestamped transform; fall back to latest if it's within tolerance.
     geometry_msgs::msg::TransformStamped transform;
     bool used_fallback = false;
+    const auto timeout = allow_wait ? tf2::durationFromSec(0.2) : tf2::durationFromSec(0.0);
     try {
-        tf2::TimePoint tf_time = tf2::timeFromSec(stamp.seconds());
-        transform              = tf_buffer_->lookupTransform(
-            base_frame_, imu_frame_, tf_time, tf2::durationFromSec(0.2));
+        tf2::TimePoint tf_time(std::chrono::nanoseconds(stamp.nanoseconds()));
+        transform = tf_buffer_->lookupTransform(base_frame_, imu_frame_, tf_time, timeout);
     } catch (const tf2::ExtrapolationException&) {
         try {
-            transform = tf_buffer_->lookupTransform(base_frame_, imu_frame_, tf2::TimePointZero);
+            transform = tf_buffer_->lookupTransform(base_frame_, imu_frame_, tf2::TimePointZero, timeout);
             used_fallback = true;
         } catch (const tf2::TransformException& ex) {
             RCLCPP_WARN_THROTTLE(
@@ -454,7 +461,7 @@ bool CalibrationNode::getIMUPose(
     }
 
     if (used_fallback) {
-        rclcpp::Time tf_stamp(transform.header.stamp);
+        rclcpp::Time tf_stamp(transform.header.stamp, this->get_clock()->get_clock_type());
         double dt = std::abs((tf_stamp - stamp).seconds());
         if (dt > max_tf_time_diff_) {
             RCLCPP_WARN_THROTTLE(
@@ -799,12 +806,17 @@ void CalibrationNode::loadQualityWeights() {
 }
 
 void CalibrationNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg) {
+    if (mode_ != CalibrationMode::EXTRINSIC || extrinsic_calibrator_) {
+        return;
+    }
+
     camera_info_        = *msg;
     camera_info_loaded_ = true;
     camera_info_manager_->setCameraInfo(camera_info_);
 
-    if (mode_ == CalibrationMode::EXTRINSIC && !extrinsic_calibrator_) {
-        setupExtrinsicMode();
+    setupExtrinsicMode();
+    if (extrinsic_calibrator_) {
+        camera_info_sub_.reset();
     }
 }
 
