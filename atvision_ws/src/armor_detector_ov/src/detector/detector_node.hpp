@@ -3,6 +3,8 @@
 
 #include <Eigen/Dense>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include "armor_detector_ov/ov_model_base.hpp"
 #include "pnp_solver.hpp"
 #include "rm_interfaces/msg/armors.hpp"
+#include "rm_interfaces/msg/target.hpp"
 
 namespace rm_auto_aim {
 
@@ -32,6 +35,7 @@ public:
 private:
     // 回调
     void imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg);
+    void targetCallback(rm_interfaces::msg::Target::ConstSharedPtr target_msg);
     rcl_interfaces::msg::SetParametersResult
         onSetParameters(const std::vector<rclcpp::Parameter>& parameters);
     void publishMarkers(const rm_interfaces::msg::Armors& armors_msg) noexcept;
@@ -56,6 +60,13 @@ private:
 
     std::string detect_color_ = "RED";
 
+    // 回调组
+    rclcpp::CallbackGroup::SharedPtr img_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr other_callback_group_;
+
+    // 参数线程安全
+    std::mutex param_mutex_;
+
     // TF/坐标
     std::string odom_frame_ = "odom";
     Eigen::Matrix3d imu_to_camera_{Eigen::Matrix3d::Identity()};
@@ -69,6 +80,7 @@ private:
     // 订阅/发布
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
+    rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
     image_transport::Publisher result_img_pub_;
     rclcpp::Publisher<rm_interfaces::msg::Armors>::SharedPtr armors_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
@@ -79,11 +91,25 @@ private:
     visualization_msgs::msg::MarkerArray marker_array_;
 
     // 相机信息（可选）
+    std::mutex cam_info_mutex_;
     cv::Point2f cam_center_{0.f, 0.f};
     std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
 
     // Armors（若需发布）
     rm_interfaces::msg::Armors armors_msg_;
+
+    // ROI 生成/使用（基于 armor_solver/target）
+    bool use_roi_ = true;
+    std::string camera_frame_ = "camera_optical_frame";
+    double roi_timeout_s_ = 0.2;
+    double bbox_timeout_s_ = 0.2;
+
+    std::mutex roi_mutex_;
+    std::optional<cv::Rect> next_roi_;
+    rclcpp::Time next_roi_stamp_{0, 0, RCL_ROS_TIME};
+    std::optional<cv::Rect> last_bbox_;
+    rclcpp::Time last_bbox_stamp_{0, 0, RCL_ROS_TIME};
+    cv::Size last_image_size_{0, 0};
 };
 
 } // namespace rm_auto_aim

@@ -2,7 +2,11 @@
   ros__parameters:
     debug: true
     target_frame: odom
+    camera_frame: camera_optical_frame
     detect_color: "BLUE"
     model_path: package://armor_detector_ov/model/opt-1208-001.onnx
     use_gpu: false
     enable_multi_thread: false
+    use_roi: true
+    roi_timeout_s: 0.2
+    bbox_timeout_s: 0.2
