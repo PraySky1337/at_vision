@@ -34,17 +34,16 @@ protected:
         int num_classes = NUM_CLASSES;    // 实际可解析的类别列数
     };
 
-    std::unique_ptr<PreprocContext> preprocess(const cv::Mat& src) override;
-    void postprocess(const PreprocContext& ctx_) override;
+    std::unique_ptr<PreprocContext> preprocess(const cv::Mat& src, ov::InferRequest& request) override;
+    void postprocess(
+        const PreprocContext& ctx_, ov::InferRequest& request,
+        std::vector<ArmorObject>& objects) override;
 
 private:
     // 超参
     float conf_ = 0.75f;
     float nms_  = 0.30f;
     int topk_   = 128;
-
-    // 输出缓存
-    std::vector<ArmorObject> last_;
 };
 
 } // namespace rm_auto_aim

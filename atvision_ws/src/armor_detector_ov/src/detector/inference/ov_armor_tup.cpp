@@ -20,7 +20,8 @@
 namespace rm_auto_aim {
 
 // =============== 预处理 / 后处理 ===============
-std::unique_ptr<OVModelBase::PreprocContext> OVArmorTUP::preprocess(const cv::Mat& src) {
+std::unique_ptr<OVModelBase::PreprocContext> OVArmorTUP::preprocess(
+    const cv::Mat& src, ov::InferRequest& request) {
     auto ctx = std::make_unique<Ctx>();
 
     // 1) letterbox & 记录还原矩阵（与 TUP 版一致）
@@ -52,7 +53,7 @@ std::unique_ptr<OVModelBase::PreprocContext> OVArmorTUP::preprocess(const cv::Ma
     std::memcpy(dst + plane * 0, ch[0].data, plane * sizeof(float));
     std::memcpy(dst + plane * 1, ch[1].data, plane * sizeof(float));
     std::memcpy(dst + plane * 2, ch[2].data, plane * sizeof(float));
-    request_.set_input_tensor(in);
+    request.set_input_tensor(in);
 
     // 4) grids + 输出二维视图（anchors x columns）
     generate_grids_and_stride(INPUT_W, INPUT_H, {8, 16, 32}, ctx->grids);
@@ -94,12 +95,13 @@ std::unique_ptr<OVModelBase::PreprocContext> OVArmorTUP::preprocess(const cv::Ma
     return ctx;
 }
 
-void OVArmorTUP::postprocess(const PreprocContext& ctx_) {
+void OVArmorTUP::postprocess(
+    const PreprocContext& ctx_, ov::InferRequest& request, std::vector<ArmorObject>& objects) {
     const auto& ctx = dynamic_cast<const Ctx&>(ctx_);
 
-    ov::Tensor out = request_.get_output_tensor(0);
+    ov::Tensor out = request.get_output_tensor(0);
     const float* p = out.data<const float>();
-    last_.clear();
+    objects.clear();
     if (!p)
         return;
 
@@ -201,15 +203,14 @@ void OVArmorTUP::postprocess(const PreprocContext& ctx_) {
     }
 
     // 正常流程：topK + NMS
-    last_ = topKAndNms(objs, topk_, nms_);
+    objects = topKAndNms(objs, topk_, nms_);
 }
 
 bool OVArmorTUP::detect(const cv::Mat& src, std::vector<ArmorObject>& objects) {
-    if (!run(src)) {
+    if (!infer(src, objects)) {
         objects.clear();
         return false;
     }
-    objects = last_;
     return !objects.empty();
 }
 

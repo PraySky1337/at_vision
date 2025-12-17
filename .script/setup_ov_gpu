@@ -1,0 +1,43 @@
+# !/usr/bin/env bash
+# activate ov gpu 目前只支持 x86_64/amd64
+set -e
+
+CRT_VER="25.48.36300.8"      # compute-runtime tag
+WW_SUM="ww48.sum"            # 对应上面版本的校验文件
+IGC_VER="2.24.8"             # IGC tag
+IGC_BUILD="20344"            # 见 release 文件名
+GMM_VER="22.8.2"             # gmmlib 版本（release 里写死）
+
+mkdir -p ~/neo && \
+cd ~/neo && \
+
+# 1) IGC（OpenCL 编译器）
+wget -q https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC_VER}/intel-igc-core-2_${IGC_VER}+${IGC_BUILD}_amd64.deb && \
+wget -q https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC_VER}/intel-igc-opencl-2_${IGC_VER}+${IGC_BUILD}_amd64.deb && \
+
+# 2) NEO（OpenCL ICD + Level Zero GPU runtime + ocloc）+ gmmlib
+wget -q https://github.com/intel/compute-runtime/releases/download/${CRT_VER}/intel-ocloc_${CRT_VER}-0_amd64.deb && \
+wget -q https://github.com/intel/compute-runtime/releases/download/${CRT_VER}/intel-opencl-icd_${CRT_VER}-0_amd64.deb && \
+wget -q https://github.com/intel/compute-runtime/releases/download/${CRT_VER}/libze-intel-gpu1_${CRT_VER}-0_amd64.deb && \
+wget -q https://github.com/intel/compute-runtime/releases/download/${CRT_VER}/libigdgmm12_${GMM_VER}_amd64.deb && \
+
+# 3) 校验（只校验已下载文件）
+wget -q https://github.com/intel/compute-runtime/releases/download/${CRT_VER}/${WW_SUM} && \
+sha256sum -c ${WW_SUM} --ignore-missing && \
+
+# 4) 依赖（避免 dpkg 卡依赖）
+sudo apt-get update && \
+sudo apt-get install -y ocl-icd-libopencl1 libze1 clinfo && \
+
+# 5) 安装
+sudo dpkg -i ./*.deb || sudo apt-get -f install -y && \
+
+# 6) 权限（否则 OpenVINO/CL 可能看不到 GPU）
+sudo gpasswd -a ${USER} render && \
+
+# 7) 验证
+clinfo | grep -E "Device Name|Platform Name" || true && \
+
+# 8) 清理
+cd ~ && rm -rf ~/neo && \
+cd /home/developer/ws

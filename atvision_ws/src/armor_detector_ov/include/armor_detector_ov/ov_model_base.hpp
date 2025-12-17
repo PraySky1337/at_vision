@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <opencv2/opencv.hpp>
 #include <openvino/openvino.hpp>
@@ -24,8 +25,9 @@ public:
 
     // 加载模型
     virtual bool load(
-        const std::string& model_path, const std::string& device = "CPU",
-        bool enable_profiling = false, bool enable_multi_thread = false) {
+        const std::string& model_path, const std::string& device = "AUTO",
+        bool enable_profiling = false, bool enable_multi_thread = false,
+        const std::string& device_priorities = "GPU,CPU") {
         try {
             if (enable_profiling)
                 core_.set_property(device, ov::enable_profiling(true));
@@ -48,6 +50,12 @@ public:
             } else {
                 compile_opts.emplace(ov::num_streams.name(), 1);
             }
+            if (!device_priorities.empty()
+                && (device == "AUTO" || device.rfind("AUTO:", 0) == 0 || device == "MULTI"
+                    || device.rfind("MULTI:", 0) == 0 || device == "HETERO"
+                    || device.rfind("HETERO:", 0) == 0)) {
+                compile_opts.emplace(ov::device::priorities.name(), device_priorities);
+            }
 
             compiled_ = core_.compile_model(model_, device, compile_opts);
             request_ = compiled_.create_infer_request();
@@ -62,18 +70,42 @@ public:
     bool run(const cv::Mat& src) {
         if (src.empty())
             return false;
-        auto ctx = preprocess(src); // 子类负责：设置输入 Tensor
-        if (!ctx)
+        std::vector<ArmorObject> tmp;
+        if (!infer(src, tmp))
             return false;
-        request_.infer();
-        postprocess(*ctx);
         return true;
     }
 
-protected:
+    // 同步推理：输出检测结果
+    bool infer(const cv::Mat& src, std::vector<ArmorObject>& objects) {
+        objects.clear();
+        if (src.empty())
+            return false;
+        auto ctx = preprocess(src, request_); // 子类负责：设置输入 Tensor
+        if (!ctx)
+            return false;
+        request_.infer();
+        postprocess(*ctx, request_, objects);
+        return true;
+    }
+
+    // 创建额外的 InferRequest（用于异步/并行流水线）
+    ov::InferRequest createInferRequest() { return compiled_.create_infer_request(); }
+
+    // 查询实际执行设备（AUTO/MULTI 等会返回真实 device list）
+    std::vector<std::string> executionDevices() const {
+        try {
+            return compiled_.get_property(ov::execution_devices);
+        } catch (...) {
+            return {};
+        }
+    }
+
+public:
     // 子类必须实现
-    virtual std::unique_ptr<PreprocContext> preprocess(const cv::Mat& src) = 0;
-    virtual void postprocess(const PreprocContext& ctx)                    = 0;
+    virtual std::unique_ptr<PreprocContext> preprocess(const cv::Mat& src, ov::InferRequest& request) = 0;
+    virtual void postprocess(
+        const PreprocContext& ctx, ov::InferRequest& request, std::vector<ArmorObject>& objects) = 0;
 
 protected:
     ov::Core core_;

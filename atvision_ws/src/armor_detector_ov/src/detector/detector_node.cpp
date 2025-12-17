@@ -12,12 +12,22 @@
 // C++/OpenCV
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <exception>
 #include <filesystem>
 #include <limits>
+#include <map>
 #include <opencv2/opencv.hpp>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <thread>
+#include <unordered_set>
 
 #include "inference/ov_armor_at.hpp"
 #include "inference/ov_armor_tup.hpp"
@@ -241,6 +251,638 @@ std::optional<cv::Rect2f> projectArmorToImageRect(
 
 namespace rm_auto_aim {
 
+class ArmorDetectorOVNode::Pipeline {
+public:
+    using Clock = std::chrono::steady_clock;
+
+    struct Latency {
+        double queue_ms = 0.0;
+        double pre_ms   = 0.0;
+        double infer_ms = 0.0;
+        double post_ms  = 0.0;
+        double total_ms = 0.0;
+        double fps      = 0.0;
+    };
+
+    Pipeline(ArmorDetectorOVNode& node, OVModelBase& model, int num_requests, int input_capacity)
+        : node_(node)
+        , model_(model)
+        , input_capacity_(std::max<int>(1, input_capacity))
+        , num_requests_(std::max<int>(1, num_requests)) {
+
+        slots_.reserve(static_cast<size_t>(num_requests_));
+        for (int i = 0; i < num_requests_; ++i) {
+            Slot s{};
+            s.request             = model_.createInferRequest();
+            const size_t slot_idx = static_cast<size_t>(i);
+            s.request.set_callback(
+                [this, slot_idx](std::exception_ptr ex) { this->onInferDone(slot_idx, ex); });
+            slots_.emplace_back(std::move(s));
+            free_slots_.push_back(slot_idx);
+        }
+
+        preproc_thread_  = std::thread([this]() { this->preprocLoop(); });
+        postproc_thread_ = std::thread([this]() { this->postprocLoop(); });
+    }
+
+    ~Pipeline() { stop(); }
+
+    void stop() {
+        bool expected = false;
+        if (!stopping_.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(input_mtx_);
+            input_closed_ = true;
+        }
+        input_cv_.notify_all();
+        done_cv_.notify_all();
+        free_cv_.notify_all();
+
+        if (preproc_thread_.joinable()) {
+            preproc_thread_.join();
+        }
+
+        // Stop accepting new completions
+        done_cv_.notify_all();
+
+        // Wait for any in-flight inference to finish so callbacks don't outlive this object.
+        for (auto& s : slots_) {
+            if (s.in_flight) {
+                try {
+                    s.request.wait();
+                } catch (...) {}
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(done_mtx_);
+            done_closed_ = true;
+        }
+        done_cv_.notify_all();
+
+        if (postproc_thread_.joinable()) {
+            postproc_thread_.join();
+        }
+    }
+
+    void
+        enqueue(sensor_msgs::msg::Image::ConstSharedPtr msg, const cv::Rect& roi, bool debug_draw) {
+        if (!msg) {
+            return;
+        }
+        if (stopping_.load(std::memory_order_relaxed)) {
+            return;
+        }
+
+        FrameJob job;
+        job.seq        = seq_.fetch_add(1, std::memory_order_relaxed);
+        job.msg        = std::move(msg);
+        job.roi        = roi;
+        job.debug_draw = debug_draw;
+        job.t_enqueue  = Clock::now();
+
+        std::lock_guard<std::mutex> lk(input_mtx_);
+        if (input_closed_) {
+            return;
+        }
+        if ((int)input_q_.size() >= input_capacity_) {
+            // drop oldest to keep latency bounded
+            dropped_seqs_.insert(input_q_.front().seq);
+            input_q_.pop_front();
+        }
+        input_q_.push_back(std::move(job));
+        input_cv_.notify_one();
+    }
+
+private:
+    struct FrameJob {
+        uint64_t seq = 0;
+        sensor_msgs::msg::Image::ConstSharedPtr msg;
+        cv_bridge::CvImageConstPtr cv_ptr;
+        cv::Rect roi;
+        bool debug_draw = false;
+        Clock::time_point t_enqueue{};
+    };
+
+    struct Slot {
+        ov::InferRequest request;
+        std::unique_ptr<OVModelBase::PreprocContext> ctx;
+        FrameJob job;
+        bool in_flight = false;
+        Clock::time_point t_pre_start{};
+        Clock::time_point t_pre_end{};
+        Clock::time_point t_inf_start{};
+    };
+
+    struct DoneItem {
+        std::optional<size_t> slot_idx;
+        std::exception_ptr ex;
+        Clock::time_point t_inf_end{};
+        FrameJob job;
+        Clock::time_point t_pre_start{};
+        Clock::time_point t_pre_end{};
+        Clock::time_point t_inf_start{};
+    };
+
+    struct ResultItem {
+        FrameJob job;
+        std::vector<ArmorObject> dets;
+        Latency latency;
+    };
+
+    void onInferDone(size_t slot_idx, std::exception_ptr ex) {
+        if (stopping_.load(std::memory_order_relaxed)) {
+            return;
+        }
+        DoneItem di;
+        di.slot_idx  = slot_idx;
+        di.ex        = std::move(ex);
+        di.t_inf_end = Clock::now();
+
+        {
+            std::lock_guard<std::mutex> lk(done_mtx_);
+            if (done_closed_) {
+                return;
+            }
+            done_q_.push_back(std::move(di));
+        }
+        done_cv_.notify_one();
+    }
+
+    bool popInput(FrameJob& out) {
+        std::unique_lock<std::mutex> lk(input_mtx_);
+        input_cv_.wait(lk, [&]() { return input_closed_ || !input_q_.empty(); });
+        if (input_q_.empty()) {
+            return false;
+        }
+        out = std::move(input_q_.front());
+        input_q_.pop_front();
+        return true;
+    }
+
+    bool popDone(DoneItem& out) {
+        std::unique_lock<std::mutex> lk(done_mtx_);
+        done_cv_.wait(lk, [&]() { return done_closed_ || !done_q_.empty(); });
+        if (done_q_.empty()) {
+            return false;
+        }
+        out = std::move(done_q_.front());
+        done_q_.pop_front();
+        return true;
+    }
+
+    bool acquireFreeSlot(size_t& slot_idx) {
+        std::unique_lock<std::mutex> lk(free_mtx_);
+        free_cv_.wait(lk, [&]() {
+            return stopping_.load(std::memory_order_relaxed) || !free_slots_.empty();
+        });
+        if (free_slots_.empty()) {
+            return false;
+        }
+        slot_idx = free_slots_.front();
+        free_slots_.pop_front();
+        return true;
+    }
+
+    void releaseSlot(size_t slot_idx) {
+        {
+            std::lock_guard<std::mutex> lk(free_mtx_);
+            free_slots_.push_back(slot_idx);
+        }
+        free_cv_.notify_one();
+    }
+
+    void preprocLoop() {
+        while (!stopping_.load(std::memory_order_relaxed)) {
+            FrameJob job;
+            if (!popInput(job)) {
+                break;
+            }
+
+            size_t slot_idx = 0;
+            if (!acquireFreeSlot(slot_idx)) {
+                break;
+            }
+
+            auto& slot     = slots_[slot_idx];
+            slot.in_flight = false;
+            slot.ctx.reset();
+            slot.job         = std::move(job);
+            slot.t_pre_start = Clock::now();
+
+            try {
+                slot.job.cv_ptr = cv_bridge::toCvShare(slot.job.msg, "bgr8");
+            } catch (const std::exception& e) {
+                RCLCPP_WARN(node_.get_logger(), "cv_bridge: %s", e.what());
+                DoneItem di;
+                di.slot_idx    = std::nullopt;
+                di.ex          = std::make_exception_ptr(e);
+                di.t_inf_end   = Clock::now();
+                di.job         = std::move(slot.job);
+                di.t_pre_start = slot.t_pre_start;
+                di.t_pre_end   = Clock::now();
+                {
+                    std::lock_guard<std::mutex> lk(done_mtx_);
+                    done_q_.push_back(std::move(di));
+                }
+                done_cv_.notify_one();
+                releaseSlot(slot_idx);
+                continue;
+            }
+
+            const auto& img = slot.job.cv_ptr->image;
+            if (img.empty()) {
+                DoneItem di;
+                di.slot_idx    = std::nullopt;
+                di.ex          = std::make_exception_ptr(std::runtime_error("Image empty"));
+                di.t_inf_end   = Clock::now();
+                di.job         = std::move(slot.job);
+                di.t_pre_start = slot.t_pre_start;
+                di.t_pre_end   = Clock::now();
+                {
+                    std::lock_guard<std::mutex> lk(done_mtx_);
+                    done_q_.push_back(std::move(di));
+                }
+                done_cv_.notify_one();
+                releaseSlot(slot_idx);
+                continue;
+            }
+
+            const cv::Rect full_rc(0, 0, img.cols, img.rows);
+            cv::Rect roi = slot.job.roi;
+            if (roi.width <= 0 || roi.height <= 0) {
+                roi = full_rc;
+            } else {
+                roi &= full_rc;
+                if (roi.width <= 0 || roi.height <= 0) {
+                    roi = full_rc;
+                }
+            }
+            slot.job.roi = roi;
+
+            cv::Mat roi_img = img(roi);
+            slot.ctx        = model_.preprocess(roi_img, slot.request);
+            slot.t_pre_end  = Clock::now();
+            if (!slot.ctx) {
+                DoneItem di;
+                di.slot_idx    = std::nullopt;
+                di.ex          = std::make_exception_ptr(std::runtime_error("Preprocess failed"));
+                di.t_inf_end   = Clock::now();
+                di.job         = std::move(slot.job);
+                di.t_pre_start = slot.t_pre_start;
+                di.t_pre_end   = slot.t_pre_end;
+                {
+                    std::lock_guard<std::mutex> lk(done_mtx_);
+                    done_q_.push_back(std::move(di));
+                }
+                done_cv_.notify_one();
+                releaseSlot(slot_idx);
+                continue;
+            }
+
+            slot.t_inf_start = Clock::now();
+            slot.in_flight   = true;
+            try {
+                slot.request.start_async();
+            } catch (const std::exception& e) {
+                slot.in_flight = false;
+                DoneItem di;
+                di.slot_idx    = std::nullopt;
+                di.ex          = std::make_exception_ptr(e);
+                di.t_inf_end   = Clock::now();
+                di.job         = std::move(slot.job);
+                di.t_pre_start = slot.t_pre_start;
+                di.t_pre_end   = slot.t_pre_end;
+                di.t_inf_start = slot.t_inf_start;
+                {
+                    std::lock_guard<std::mutex> lk(done_mtx_);
+                    done_q_.push_back(std::move(di));
+                }
+                done_cv_.notify_one();
+                releaseSlot(slot_idx);
+                continue;
+            }
+        }
+    }
+
+    void postprocLoop() {
+        std::map<uint64_t, ResultItem> reorder;
+        uint64_t next_seq = 0;
+        Clock::time_point last_pub_tp{};
+        double fps_ema = 0.0;
+
+        while (!stopping_.load(std::memory_order_relaxed)) {
+            DoneItem di;
+            if (!popDone(di)) {
+                break;
+            }
+
+            ResultItem res;
+            std::unique_ptr<OVModelBase::PreprocContext> ctx;
+            ov::InferRequest* req = nullptr;
+            std::optional<size_t> release_slot_idx;
+
+            if (di.slot_idx.has_value()) {
+                const size_t slot_idx = *di.slot_idx;
+                auto& slot            = slots_[slot_idx];
+
+                res.job = std::move(slot.job);
+                ctx     = std::move(slot.ctx);
+                res.latency.queue_ms =
+                    std::chrono::duration<double, std::milli>(slot.t_pre_start - res.job.t_enqueue)
+                        .count();
+                res.latency.pre_ms =
+                    std::chrono::duration<double, std::milli>(slot.t_pre_end - slot.t_pre_start)
+                        .count();
+                res.latency.infer_ms =
+                    std::chrono::duration<double, std::milli>(di.t_inf_end - slot.t_inf_start)
+                        .count();
+                req = &slot.request;
+
+                slot.in_flight = false;
+                slot.job       = FrameJob{};
+                slot.ctx.reset();
+                release_slot_idx = slot_idx;
+            } else {
+                res.job = std::move(di.job);
+                res.latency.queue_ms =
+                    std::chrono::duration<double, std::milli>(di.t_pre_start - res.job.t_enqueue)
+                        .count();
+                res.latency.pre_ms =
+                    std::chrono::duration<double, std::milli>(di.t_pre_end - di.t_pre_start)
+                        .count();
+                res.latency.infer_ms = 0.0;
+            }
+
+            const auto post_start = Clock::now();
+            if (!di.ex && ctx && req) {
+                model_.postprocess(*ctx, *req, res.dets);
+            } else {
+                res.dets.clear();
+            }
+            const auto post_end = Clock::now();
+
+            if (release_slot_idx.has_value()) {
+                releaseSlot(*release_slot_idx);
+            }
+
+            res.latency.post_ms =
+                std::chrono::duration<double, std::milli>(post_end - post_start).count();
+            res.latency.total_ms =
+                std::chrono::duration<double, std::milli>(post_end - res.job.t_enqueue).count();
+
+            // Reorder & publish
+            reorder.emplace(res.job.seq, std::move(res));
+
+            // Skip frames explicitly dropped at input
+            {
+                std::lock_guard<std::mutex> lk(input_mtx_);
+                while (dropped_seqs_.erase(next_seq) > 0) {
+                    ++next_seq;
+                }
+            }
+
+            while (true) {
+                auto it = reorder.find(next_seq);
+                if (it == reorder.end()) {
+                    break;
+                }
+
+                if (node_.drop_out_of_order_) {
+                    if (!it->second.job.msg) {
+                        reorder.erase(it);
+                        ++next_seq;
+                        {
+                            std::lock_guard<std::mutex> lk(input_mtx_);
+                            while (dropped_seqs_.erase(next_seq) > 0) {
+                                ++next_seq;
+                            }
+                        }
+                        continue;
+                    }
+                    const rclcpp::Time stamp(it->second.job.msg->header.stamp, RCL_ROS_TIME);
+                    if (last_pub_stamp_.nanoseconds() != 0 && stamp < last_pub_stamp_) {
+                        RCLCPP_WARN_THROTTLE(
+                            node_.get_logger(), *node_.get_clock(), 2000,
+                            "Drop out-of-order image in pipeline: stamp=%.6f last=%.6f",
+                            stamp.seconds(), last_pub_stamp_.seconds());
+                        reorder.erase(it);
+                        ++next_seq;
+                        {
+                            std::lock_guard<std::mutex> lk(input_mtx_);
+                            while (dropped_seqs_.erase(next_seq) > 0) {
+                                ++next_seq;
+                            }
+                        }
+                        continue;
+                    }
+                    last_pub_stamp_ = stamp;
+                }
+
+                auto now = Clock::now();
+                if (last_pub_tp.time_since_epoch().count() != 0) {
+                    const double dt = std::chrono::duration<double>(now - last_pub_tp).count();
+                    if (dt > 1e-6) {
+                        const double inst_fps = 1.0 / dt;
+                        fps_ema = (fps_ema <= 0.0) ? inst_fps : (0.9 * fps_ema + 0.1 * inst_fps);
+                    }
+                }
+                last_pub_tp            = now;
+                it->second.latency.fps = fps_ema;
+
+                publishOne(it->second);
+                reorder.erase(it);
+                ++next_seq;
+
+                {
+                    std::lock_guard<std::mutex> lk(input_mtx_);
+                    while (dropped_seqs_.erase(next_seq) > 0) {
+                        ++next_seq;
+                    }
+                }
+            }
+        }
+    }
+
+    void publishOne(ResultItem& res) {
+        if (!res.job.msg) {
+            return;
+        }
+
+        const auto post_extra_start = Clock::now();
+
+        if (res.job.debug_draw && res.dets.size() > 20) {
+            RCLCPP_WARN(node_.get_logger(), "Too many armors detected: %d", (int)res.dets.size());
+            res.dets.clear();
+        }
+
+        // ROI 偏移回原图坐标
+        if (res.job.roi.x != 0 || res.job.roi.y != 0) {
+            for (auto& d : res.dets) {
+                d.rect.x += static_cast<float>(res.job.roi.x);
+                d.rect.y += static_cast<float>(res.job.roi.y);
+                for (auto& p : d.apex) {
+                    p.x += static_cast<float>(res.job.roi.x);
+                    p.y += static_cast<float>(res.job.roi.y);
+                }
+            }
+        }
+
+        // 记录上一帧 bbox（用于 target 回调生成 ROI）
+        const cv::Rect full_rc(
+            0, 0, static_cast<int>(res.job.msg->width), static_cast<int>(res.job.msg->height));
+        if (node_.roi_clear_on_miss_ && res.dets.empty() && res.job.roi != full_rc) {
+            std::lock_guard<std::mutex> lock(node_.roi_mutex_);
+            node_.next_roi_.reset();
+            if (node_.roi_miss_disable_s_ > 0.0) {
+                const rclcpp::Time msg_stamp(res.job.msg->header.stamp, RCL_ROS_TIME);
+                node_.roi_disable_until_ =
+                    msg_stamp + rclcpp::Duration::from_seconds(node_.roi_miss_disable_s_);
+            }
+        }
+        if (!res.dets.empty()) {
+            cv::Point2f cc(
+                static_cast<float>(full_rc.width) * 0.5f,
+                static_cast<float>(full_rc.height) * 0.5f);
+            {
+                std::lock_guard<std::mutex> lock(node_.cam_info_mutex_);
+                if (node_.cam_info_) {
+                    cc = node_.cam_center_;
+                }
+            }
+            auto best_it = std::min_element(
+                res.dets.begin(), res.dets.end(), [&](const auto& a, const auto& b) {
+                    const cv::Point2f ca(
+                        a.rect.x + a.rect.width * 0.5f, a.rect.y + a.rect.height * 0.5f);
+                    const cv::Point2f cb(
+                        b.rect.x + b.rect.width * 0.5f, b.rect.y + b.rect.height * 0.5f);
+                    return cv::norm(ca - cc) < cv::norm(cb - cc);
+                });
+            cv::Rect bb(
+                cvRound(best_it->rect.x), cvRound(best_it->rect.y), cvRound(best_it->rect.width),
+                cvRound(best_it->rect.height));
+            bb &= full_rc;
+            if (bb.width > 0 && bb.height > 0) {
+                std::lock_guard<std::mutex> lock(node_.roi_mutex_);
+                node_.last_bbox_       = bb;
+                node_.last_bbox_stamp_ = rclcpp::Time(res.job.msg->header.stamp, RCL_ROS_TIME);
+            }
+        }
+
+        // TF: imu->camera（给 BA 用），失败则退回 solvePnP
+        Eigen::Matrix3d imu_to_camera = Eigen::Matrix3d::Identity();
+        bool tf_ok                    = false;
+        try {
+            rclcpp::Time target_time = res.job.msg->header.stamp;
+            auto odom_to_gimbal      = node_.tf2_buffer_->lookupTransform(
+                node_.odom_frame_, res.job.msg->header.frame_id, target_time,
+                rclcpp::Duration::from_seconds(0.01));
+            auto msg_q = odom_to_gimbal.transform.rotation;
+            tf2::Quaternion tf_q;
+            tf2::fromMsg(msg_q, tf_q);
+            tf2::Matrix3x3 tf2_matrix = tf2::Matrix3x3(tf_q);
+            imu_to_camera << tf2_matrix.getRow(0)[0], tf2_matrix.getRow(0)[1],
+                tf2_matrix.getRow(0)[2], tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1],
+                tf2_matrix.getRow(1)[2], tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1],
+                tf2_matrix.getRow(2)[2];
+            tf_ok = true;
+        } catch (...) {
+            tf_ok = false;
+        }
+
+        auto armors   = node_.handleDets(res.dets, tf_ok ? &imu_to_camera : nullptr);
+        armors.header = res.job.msg->header;
+        node_.armors_pub_->publish(armors);
+        node_.publishMarkers(armors);
+
+        const bool do_draw = res.job.debug_draw && static_cast<bool>(res.job.cv_ptr);
+        cv::Mat draw;
+        if (do_draw) {
+            draw = res.job.cv_ptr->image.clone();
+            node_.drawResults(draw, res.dets, res.job.roi);
+        }
+
+        const auto post_extra_end = Clock::now();
+        res.latency.post_ms +=
+            std::chrono::duration<double, std::milli>(post_extra_end - post_extra_start).count();
+        res.latency.total_ms =
+            std::chrono::duration<double, std::milli>(post_extra_end - res.job.t_enqueue).count();
+
+        if (do_draw) {
+            if (node_.draw_latency_) {
+                drawLatency(draw, res.latency);
+            }
+            node_.result_img_pub_.publish(
+                cv_bridge::CvImage(res.job.msg->header, "bgr8", draw).toImageMsg());
+        }
+    }
+
+    void drawLatency(cv::Mat& img, const Latency& lat) const noexcept {
+        if (img.empty()) {
+            return;
+        }
+        const int img_min   = std::max(1, std::min(img.cols, img.rows));
+        const double fscale = std::clamp(img_min / 1100.0, 0.6, 1.2);
+        const int thick     = std::clamp(img_min / 800, 1, 2);
+        const int pad       = 6;
+
+        const std::string text = cv::format(
+            "q %.1f | pre %.1f | inf %.1f | post %.1f | total %.1f ms | %.1f fps", lat.queue_ms,
+            lat.pre_ms, lat.infer_ms, lat.post_ms, lat.total_ms, lat.fps);
+
+        int base          = 0;
+        const cv::Size ts = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, fscale, thick, &base);
+        cv::Rect bg(10, 10, ts.width + 2 * pad, ts.height + base + 2 * pad);
+        bg &= cv::Rect(0, 0, img.cols, img.rows);
+        if (bg.width <= 0 || bg.height <= 0) {
+            return;
+        }
+        cv::Mat roi = img(bg);
+        cv::Mat blk(roi.size(), roi.type(), cv::Scalar(0, 0, 0));
+        cv::addWeighted(blk, 0.55, roi, 0.45, 0.0, roi);
+        cv::putText(
+            img, text, {bg.x + pad, bg.y + pad + ts.height}, cv::FONT_HERSHEY_SIMPLEX, fscale,
+            cv::Scalar(255, 255, 255), thick, cv::LINE_AA);
+    }
+
+private:
+    ArmorDetectorOVNode& node_;
+    OVModelBase& model_;
+
+    const int input_capacity_;
+    const int num_requests_;
+
+    std::atomic<bool> stopping_{false};
+    std::atomic<uint64_t> seq_{0};
+
+    // Input queue
+    std::mutex input_mtx_;
+    std::condition_variable input_cv_;
+    std::deque<FrameJob> input_q_;
+    bool input_closed_ = false;
+    std::unordered_set<uint64_t> dropped_seqs_;
+
+    // Slots & free list
+    std::vector<Slot> slots_;
+    std::mutex free_mtx_;
+    std::condition_variable free_cv_;
+    std::deque<size_t> free_slots_;
+
+    // Done queue
+    std::mutex done_mtx_;
+    std::condition_variable done_cv_;
+    std::deque<DoneItem> done_q_;
+    bool done_closed_ = false;
+
+    std::thread preproc_thread_;
+    std::thread postproc_thread_;
+
+    rclcpp::Time last_pub_stamp_{0, 0, RCL_ROS_TIME};
+};
+
 ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     : rclcpp::Node("armor_detector_ov", options) {
 
@@ -250,20 +892,44 @@ ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     model_name_   = this->declare_parameter<std::string>("model_name", "armor_tup");
     const auto mp = this->declare_parameter<std::string>(
         "model_path", "package://armor_detector_ov/model/armor_tup.xml");
-    model_path_     = resolve_pkg_url(mp);
-    debug_          = this->declare_parameter<bool>("debug", true);
-    detect_color_   = this->declare_parameter<std::string>("detect_color", "RED"); // RED/BLUE
-    odom_frame_     = this->declare_parameter<std::string>("target_frame", "odom");
-    camera_frame_   = this->declare_parameter<std::string>("camera_frame", camera_frame_);
-    use_ba_         = this->declare_parameter<bool>("use_ba", true);
-    use_roi_        = this->declare_parameter<bool>("use_roi", use_roi_);
-    roi_timeout_s_  = this->declare_parameter<double>("roi_timeout_s", roi_timeout_s_);
-    bbox_timeout_s_ = this->declare_parameter<double>("bbox_timeout_s", bbox_timeout_s_);
-    const bool use_gpu =
-        this->declare_parameter<bool>("use_gpu", false); // true: GPU, false: CPU (default)
-    enable_multi_thread_ =
-        this->declare_parameter<bool>("enable_multi_thread", false); // OpenVINO throughput mode
-    device_name_ = use_gpu ? "GPU" : "CPU";
+    model_path_      = resolve_pkg_url(mp);
+    debug_           = this->declare_parameter<bool>("debug", true);
+    detect_color_    = this->declare_parameter<std::string>("detect_color", "RED"); // RED/BLUE
+    odom_frame_      = this->declare_parameter<std::string>("target_frame", "odom");
+    camera_frame_    = this->declare_parameter<std::string>("camera_frame", camera_frame_);
+    use_ba_          = this->declare_parameter<bool>("use_ba", true);
+    use_roi_         = this->declare_parameter<bool>("use_roi", use_roi_);
+    roi_timeout_s_   = this->declare_parameter<double>("roi_timeout_s", roi_timeout_s_);
+    bbox_timeout_s_  = this->declare_parameter<double>("bbox_timeout_s", bbox_timeout_s_);
+    roi_future_tolerance_s_ =
+        this->declare_parameter<double>("roi_future_tolerance_s", roi_future_tolerance_s_);
+    roi_disable_dist_m_ = this->declare_parameter<double>("roi_disable_dist_m", roi_disable_dist_m_);
+    roi_scale_          = this->declare_parameter<double>("roi_scale", roi_scale_);
+    roi_smooth_alpha_   = this->declare_parameter<double>("roi_smooth_alpha", roi_smooth_alpha_);
+    roi_clear_on_miss_  = this->declare_parameter<bool>("roi_clear_on_miss", roi_clear_on_miss_);
+    roi_miss_disable_s_ =
+        this->declare_parameter<double>("roi_miss_disable_s", roi_miss_disable_s_);
+    drop_out_of_order_  = this->declare_parameter<bool>("drop_out_of_order", drop_out_of_order_);
+    enable_pipeline_ = this->declare_parameter<bool>(
+        "enable_pipeline", enable_pipeline_); // pre/infer/post pipeline
+    pipeline_queue_size_ =
+        this->declare_parameter<int>("pipeline_queue_size", pipeline_queue_size_);
+    pipeline_num_requests_ =
+        this->declare_parameter<int>("pipeline_num_requests", pipeline_num_requests_);
+    draw_latency_ = this->declare_parameter<bool>("draw_latency", draw_latency_);
+
+    // OpenVINO device selection
+    device_name_ = this->declare_parameter<std::string>("device_name", device_name_);
+    device_priorities_ =
+        this->declare_parameter<std::string>("device_priorities", device_priorities_);
+    const bool use_gpu = this->declare_parameter<bool>(
+        "use_gpu", false); // Deprecated: prefer device_name=AUTO/GPU/CPU
+    if (use_gpu) {
+        device_name_ = "GPU";
+    }
+
+    // OpenVINO compile hint: throughput uses multiple streams + request pool
+    enable_multi_thread_ = this->declare_parameter<bool>("enable_multi_thread", enable_pipeline_);
 
     img_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     other_callback_group_ = this->get_node_base_interface()->get_default_callback_group();
@@ -271,14 +937,49 @@ ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     model_ = OVModelManager::instance().create(model_name_);
     if (!model_) {
         RCLCPP_ERROR(get_logger(), "Create model '%s' failed.", model_name_.c_str());
-    } else if (!model_->load(model_path_, device_name_, false, enable_multi_thread_)) {
+    } else if (!model_->load(
+                   model_path_, device_name_, false, enable_multi_thread_, device_priorities_)) {
         RCLCPP_ERROR(get_logger(), "Load OpenVINO model failed: %s", model_path_.c_str());
         model_.reset();
     } else {
+        const auto exec_devs = model_->executionDevices();
+        std::string exec_join;
+        for (size_t i = 0; i < exec_devs.size(); ++i) {
+            if (i)
+                exec_join += ", ";
+            exec_join += exec_devs[i];
+        }
+        std::string exec_kind = "UNKNOWN";
+        if (!exec_devs.empty()) {
+            bool has_gpu = false;
+            bool has_cpu = false;
+            for (const auto& d : exec_devs) {
+                has_gpu = has_gpu || (d.find("GPU") != std::string::npos);
+                has_cpu = has_cpu || (d.find("CPU") != std::string::npos);
+            }
+            if (has_gpu && !has_cpu) {
+                exec_kind = "GPU";
+            } else if (has_cpu && !has_gpu) {
+                exec_kind = "CPU";
+            } else if (has_gpu && has_cpu) {
+                exec_kind = "GPU+CPU";
+            }
+        } else {
+            if (device_name_.find("GPU") != std::string::npos) {
+                exec_kind = "GPU";
+            } else if (device_name_.find("CPU") != std::string::npos) {
+                exec_kind = "CPU";
+            } else if (device_name_.find("AUTO") != std::string::npos) {
+                exec_kind = "AUTO";
+            }
+        }
+        const std::string exec_text =
+            exec_join.empty() ? exec_kind : (exec_kind + " [" + exec_join + "]");
         RCLCPP_INFO(
-            get_logger(), "OpenVINO model loaded: %s (%s) on %s (multi_thread=%s)",
+            get_logger(),
+            "OpenVINO model loaded: %s (%s) device=%s (priorities=%s, exec=%s, multi_thread=%s)",
             model_path_.c_str(), model_name_.c_str(), device_name_.c_str(),
-            enable_multi_thread_ ? "on" : "off");
+            device_priorities_.c_str(), exec_text.c_str(), enable_multi_thread_ ? "on" : "off");
     }
 
     // —— 发布者 ——
@@ -355,6 +1056,16 @@ ArmorDetectorOVNode::ArmorDetectorOVNode(const rclcpp::NodeOptions& options)
     tf2_buffer_->setCreateTimerInterface(timer_interface);
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
 
+    if (model_ && enable_pipeline_) {
+        pipeline_ = std::make_unique<Pipeline>(
+            *this, *model_, pipeline_num_requests_, pipeline_queue_size_);
+        RCLCPP_INFO(
+            get_logger(), "Async pipeline enabled (queue=%d, requests=%d)", pipeline_queue_size_,
+            pipeline_num_requests_);
+    } else {
+        RCLCPP_INFO(get_logger(), "Async pipeline disabled.");
+    }
+
     if (debug_) {
         RCLCPP_INFO(
             get_logger(), "Debug draw enabled: publish result image to /armor_detector/result_img");
@@ -375,38 +1086,15 @@ std::string ArmorDetectorOVNode::color_letter_(int color) {
 }
 
 void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg) {
-    try {
-        rclcpp::Time target_time = img_msg->header.stamp;
-        auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
-            odom_frame_, img_msg->header.frame_id, target_time,
-            rclcpp::Duration::from_seconds(0.01));
-        auto msg_q = odom_to_gimbal.transform.rotation;
-        tf2::Quaternion tf_q;
-        tf2::fromMsg(msg_q, tf_q);
-        tf2::Matrix3x3 tf2_matrix = tf2::Matrix3x3(tf_q);
-        imu_to_camera_ << tf2_matrix.getRow(0)[0], tf2_matrix.getRow(0)[1], tf2_matrix.getRow(0)[2],
-            tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1], tf2_matrix.getRow(1)[2],
-            tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1], tf2_matrix.getRow(2)[2];
-    } catch (...) {
+    if (!img_msg) {
         return;
     }
-
     if (!model_) {
         RCLCPP_ERROR(get_logger(), "Model not initialized");
         return;
     }
 
-    cv::Mat img;
-    try {
-        img = cv_bridge::toCvShare(img_msg, "bgr8")->image;
-    } catch (const std::exception& e) {
-        RCLCPP_WARN(get_logger(), "cv_bridge: %s", e.what());
-        return;
-    }
-    if (img.empty()) {
-        RCLCPP_WARN(get_logger(), "Image empty");
-        return;
-    }
+    const rclcpp::Time img_stamp(img_msg->header.stamp, RCL_ROS_TIME);
 
     bool debug_draw = false;
     {
@@ -414,23 +1102,31 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
         debug_draw = debug_;
     }
 
+    const int w = static_cast<int>(img_msg->width);
+    const int h = static_cast<int>(img_msg->height);
+    if (w <= 0 || h <= 0) {
+        RCLCPP_WARN(get_logger(), "Invalid image size: %dx%d", w, h);
+        return;
+    }
+
     {
         std::lock_guard<std::mutex> lock(roi_mutex_);
-        last_image_size_ = img.size();
+        last_image_size_ = cv::Size(w, h);
     }
 
     cv::Rect roi;
     if (use_roi_) {
         std::lock_guard<std::mutex> lock(roi_mutex_);
-        if (next_roi_.has_value()) {
-            const rclcpp::Time img_time(img_msg->header.stamp, RCL_ROS_TIME);
-            const double age = (img_time - next_roi_stamp_).seconds();
-            if (age >= 0.0 && age <= roi_timeout_s_) {
+        if (img_stamp < roi_disable_until_) {
+            // ROI 临时禁用窗口内（例如上一帧 ROI miss），强制全图以恢复
+        } else if (next_roi_.has_value()) {
+            const double age = (img_stamp - next_roi_stamp_).seconds();
+            if (age >= -roi_future_tolerance_s_ && age <= roi_timeout_s_) {
                 roi = *next_roi_;
             }
         }
     }
-    const cv::Rect full_rc(0, 0, img.cols, img.rows);
+    const cv::Rect full_rc(0, 0, w, h);
     if (roi.width <= 0 || roi.height <= 0) {
         roi = full_rc;
     } else {
@@ -440,15 +1136,37 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
         }
     }
 
+    if (pipeline_) {
+        pipeline_->enqueue(img_msg, roi, debug_draw);
+        return;
+    }
+
+    // Fallback to synchronous path when pipeline is disabled.
+    if (drop_out_of_order_ && last_sync_pub_stamp_.nanoseconds() != 0
+        && img_stamp < last_sync_pub_stamp_) {
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 2000,
+            "Drop out-of-order image in sync path: stamp=%.6f last=%.6f", img_stamp.seconds(),
+            last_sync_pub_stamp_.seconds());
+        return;
+    }
+
+    cv_bridge::CvImageConstPtr cv_ptr;
+    try {
+        cv_ptr = cv_bridge::toCvShare(img_msg, "bgr8");
+    } catch (const std::exception& e) {
+        RCLCPP_WARN(get_logger(), "cv_bridge: %s", e.what());
+        return;
+    }
+    if (!cv_ptr || cv_ptr->image.empty()) {
+        RCLCPP_WARN(get_logger(), "Image empty");
+        return;
+    }
+
+    cv::Mat img = cv_ptr->image;
     std::vector<ArmorObject> dets;
     cv::Mat roi_img = img(roi);
-    if (auto* armor_ov_tup = dynamic_cast<OVArmorTUP*>(model_.get())) {
-        armor_ov_tup->detect(roi_img, dets);
-    } else if (auto* armor_ov_at = dynamic_cast<OVArmorAT*>(model_.get())) {
-        armor_ov_at->detect(roi_img, dets);
-    } else {
-        (void)model_->run(roi_img);
-    }
+    (void)model_->infer(roi_img, dets);
 
     // ROI 偏移回原图坐标
     if (roi.x != 0 || roi.y != 0) {
@@ -500,10 +1218,41 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
         }
     }
 
-    auto armors   = handleDets(dets);
+    if (roi_clear_on_miss_ && dets.empty() && roi != full_rc) {
+        std::lock_guard<std::mutex> lock(roi_mutex_);
+        next_roi_.reset();
+        if (roi_miss_disable_s_ > 0.0) {
+            roi_disable_until_ = img_stamp + rclcpp::Duration::from_seconds(roi_miss_disable_s_);
+        }
+    }
+
+    Eigen::Matrix3d imu_to_camera = Eigen::Matrix3d::Identity();
+    bool tf_ok                    = false;
+    try {
+        rclcpp::Time target_time = img_msg->header.stamp;
+        auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
+            odom_frame_, img_msg->header.frame_id, target_time,
+            rclcpp::Duration::from_seconds(0.01));
+        auto msg_q = odom_to_gimbal.transform.rotation;
+        tf2::Quaternion tf_q;
+        tf2::fromMsg(msg_q, tf_q);
+        tf2::Matrix3x3 tf2_matrix = tf2::Matrix3x3(tf_q);
+        imu_to_camera << tf2_matrix.getRow(0)[0], tf2_matrix.getRow(0)[1], tf2_matrix.getRow(0)[2],
+            tf2_matrix.getRow(1)[0], tf2_matrix.getRow(1)[1], tf2_matrix.getRow(1)[2],
+            tf2_matrix.getRow(2)[0], tf2_matrix.getRow(2)[1], tf2_matrix.getRow(2)[2];
+        tf_ok = true;
+    } catch (...) {
+        tf_ok = false;
+    }
+
+    auto armors   = handleDets(dets, tf_ok ? &imu_to_camera : nullptr);
     armors.header = img_msg->header;
     armors_pub_->publish(armors);
     publishMarkers(armors);
+
+    if (drop_out_of_order_) {
+        last_sync_pub_stamp_ = img_stamp;
+    }
 }
 
 void ArmorDetectorOVNode::targetCallback(rm_interfaces::msg::Target::ConstSharedPtr target_msg) {
@@ -552,6 +1301,20 @@ void ArmorDetectorOVNode::targetCallback(rm_interfaces::msg::Target::ConstShared
         return;
     }
 
+    // 目标距离过近时禁用 ROI（近距离角速度大，ROI 更容易失效）
+    {
+        const tf2::Vector3 p_tgt(
+            target_msg->position.x, target_msg->position.y, target_msg->position.z);
+        const tf2::Vector3 p_cam = target_to_cam * p_tgt;
+        const double dist_m =
+            std::sqrt(p_cam.x() * p_cam.x() + p_cam.y() * p_cam.y() + p_cam.z() * p_cam.z());
+        if (std::isfinite(dist_m) && dist_m > 0.0 && dist_m < roi_disable_dist_m_) {
+            std::lock_guard<std::mutex> lock(roi_mutex_);
+            next_roi_.reset();
+            return;
+        }
+    }
+
     const cv::Mat K = cameraMatrixFromInfo(*cam_info);
     const cv::Mat D = distCoeffsFromInfo(*cam_info);
 
@@ -585,6 +1348,18 @@ void ArmorDetectorOVNode::targetCallback(rm_interfaces::msg::Target::ConstShared
         }
     }
 
+    // 放大一点 ROI，降低导致的丢失风险
+    {
+        const float s = std::clamp(static_cast<float>(roi_scale_), 1.0f, 4.0f);
+        if (s > 1.0f) {
+            const float cx = roi_rect.x + roi_rect.width * 0.5f;
+            const float cy = roi_rect.y + roi_rect.height * 0.5f;
+            const float w  = roi_rect.width * s;
+            const float h  = roi_rect.height * s;
+            roi_rect       = cv::Rect2f(cx - w * 0.5f, cy - h * 0.5f, w, h);
+        }
+    }
+
     const int min_side = modelInputSize(model_.get());
     cv::Rect roi       = makeSquareRoi(roi_rect, min_side, image_size);
     if (roi.width <= 0 || roi.height <= 0) {
@@ -593,7 +1368,30 @@ void ArmorDetectorOVNode::targetCallback(rm_interfaces::msg::Target::ConstShared
 
     {
         std::lock_guard<std::mutex> lock(roi_mutex_);
-        next_roi_       = roi;
+        // 平滑 ROI，避免绘制/缩放跳变（仅对中心/边长做一阶滤波）
+        const float a = std::clamp(static_cast<float>(roi_smooth_alpha_), 0.0f, 1.0f);
+        if (next_roi_.has_value() && a > 0.0f && a < 1.0f) {
+            const cv::Rect prev = *next_roi_;
+            const float pcx = prev.x + prev.width * 0.5f;
+            const float pcy = prev.y + prev.height * 0.5f;
+            const float ncx = roi.x + roi.width * 0.5f;
+            const float ncy = roi.y + roi.height * 0.5f;
+            const float cx  = pcx * (1.0f - a) + ncx * a;
+            const float cy  = pcy * (1.0f - a) + ncy * a;
+
+            float side = prev.width * (1.0f - a) + roi.width * a;
+            side       = std::max(side, static_cast<float>(roi.width)); // 不要比当前估计更小
+            const int max_side = std::min(image_size.width, image_size.height);
+            int iside          = std::clamp(static_cast<int>(std::round(side)), 1, max_side);
+
+            int x = static_cast<int>(std::round(cx - iside * 0.5f));
+            int y = static_cast<int>(std::round(cy - iside * 0.5f));
+            x     = std::clamp(x, 0, image_size.width - iside);
+            y     = std::clamp(y, 0, image_size.height - iside);
+            next_roi_ = cv::Rect(x, y, iside, iside);
+        } else {
+            next_roi_ = roi;
+        }
         next_roi_stamp_ = stamp;
     }
 }
@@ -622,7 +1420,8 @@ void ArmorDetectorOVNode::filteredArmors(std::vector<ArmorObject>& armors) {
     }
 }
 
-rm_interfaces::msg::Armors ArmorDetectorOVNode::handleDets(std::vector<ArmorObject>& armors) {
+rm_interfaces::msg::Armors ArmorDetectorOVNode::handleDets(
+    std::vector<ArmorObject>& armors, const Eigen::Matrix3d* imu_to_camera) {
     rm_interfaces::msg::Armors armors_msg;
     rm_interfaces::msg::Armor armor_msg;
     if (armors.size() > 20) {
@@ -639,8 +1438,8 @@ rm_interfaces::msg::Armors ArmorDetectorOVNode::handleDets(std::vector<ArmorObje
     }
     cv::Mat rvec, tvec;
     for (const auto& a : armors) {
-        if (use_ba_) {
-            if (!pnp_solver->solvePnPWithBA(a, imu_to_camera_, rvec, tvec)) {
+        if (use_ba_ && imu_to_camera) {
+            if (!pnp_solver->solvePnPWithBA(a, *imu_to_camera, rvec, tvec)) {
                 RCLCPP_ERROR(
                     get_logger(), "PnP failed for armor cls = %d, check armor model.", a.cls);
             }
@@ -700,10 +1499,19 @@ rcl_interfaces::msg::SetParametersResult
             RCLCPP_WARN(get_logger(), "Changing model_path at runtime is not supported.");
         } else if (p.get_name() == "model_name") {
             RCLCPP_WARN(get_logger(), "Changing model_name at runtime is not supported.");
-        } else if (p.get_name() == "use_gpu" || p.get_name() == "enable_multi_thread") {
+        } else if (
+            p.get_name() == "use_gpu" || p.get_name() == "device_name"
+            || p.get_name() == "device_priorities" || p.get_name() == "enable_multi_thread"
+            || p.get_name() == "enable_pipeline" || p.get_name() == "pipeline_queue_size"
+            || p.get_name() == "pipeline_num_requests" || p.get_name() == "draw_latency"
+            || p.get_name() == "use_roi" || p.get_name() == "roi_timeout_s"
+            || p.get_name() == "bbox_timeout_s" || p.get_name() == "roi_future_tolerance_s"
+            || p.get_name() == "roi_disable_dist_m" || p.get_name() == "roi_scale"
+            || p.get_name() == "roi_smooth_alpha" || p.get_name() == "roi_clear_on_miss"
+            || p.get_name() == "roi_miss_disable_s" || p.get_name() == "drop_out_of_order") {
             res.successful = false;
             res.reason =
-                "Changing inference device/threading at runtime is not supported. Restart node.";
+                "Changing inference/pipeline config at runtime is not supported. Restart node.";
         }
     }
     return res;

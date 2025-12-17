@@ -1,0 +1,4 @@
+# !/usr/bin/env bash
+GID=$(stat -c "%g" /dev/dri/renderD128)
+getent group ${GID} || sudo groupadd -g ${GID} render
+sudo usermod -aG ${GID} developer

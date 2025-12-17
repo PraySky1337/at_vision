@@ -5,8 +5,20 @@
     camera_frame: camera_optical_frame
     detect_color: "BLUE"
     model_path: package://armor_detector_ov/model/opt-1208-001.onnx
-    use_gpu: false
-    enable_multi_thread: false
+    device_name: AUTO
+    device_priorities: "GPU,CPU"
+    enable_multi_thread: true
+    enable_pipeline: true
+    pipeline_queue_size: 4
+    pipeline_num_requests: 4
+    draw_latency: true
     use_roi: true
     roi_timeout_s: 0.2
     bbox_timeout_s: 0.2
+    roi_future_tolerance_s: 0.02
+    roi_disable_dist_m: 1.5
+    roi_scale: 1.15
+    roi_smooth_alpha: 0.35
+    roi_clear_on_miss: true
+    roi_miss_disable_s: 0.12
+    drop_out_of_order: true

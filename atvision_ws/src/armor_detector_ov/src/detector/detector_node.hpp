@@ -33,13 +33,16 @@ public:
     ~ArmorDetectorOVNode() override;
 
 private:
+    class Pipeline;
+
     // 回调
     void imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg);
     void targetCallback(rm_interfaces::msg::Target::ConstSharedPtr target_msg);
     rcl_interfaces::msg::SetParametersResult
         onSetParameters(const std::vector<rclcpp::Parameter>& parameters);
     void publishMarkers(const rm_interfaces::msg::Armors& armors_msg) noexcept;
-    rm_interfaces::msg::Armors handleDets(std::vector<ArmorObject>& armors);
+    rm_interfaces::msg::Armors
+        handleDets(std::vector<ArmorObject>& armors, const Eigen::Matrix3d* imu_to_camera);
     void filteredArmors(std::vector<ArmorObject>& armors);
 
     // 可视化
@@ -53,10 +56,15 @@ private:
     std::unique_ptr<PnPSolver> pnp_solver_;
     std::string model_name_;
     std::string model_path_;
-    std::string device_name_  = "CPU";
+    std::string device_name_  = "AUTO";
+    std::string device_priorities_ = "GPU,CPU";
     bool debug_               = true;
     bool use_ba_              = false;
     bool enable_multi_thread_ = false;
+    bool enable_pipeline_     = true;
+    int pipeline_queue_size_  = 4;
+    int pipeline_num_requests_ = 4;
+    bool draw_latency_        = true;
 
     std::string detect_color_ = "RED";
 
@@ -69,7 +77,6 @@ private:
 
     // TF/坐标
     std::string odom_frame_ = "odom";
-    Eigen::Matrix3d imu_to_camera_{Eigen::Matrix3d::Identity()};
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
 
@@ -103,13 +110,25 @@ private:
     std::string camera_frame_ = "camera_optical_frame";
     double roi_timeout_s_ = 0.2;
     double bbox_timeout_s_ = 0.2;
+    double roi_future_tolerance_s_ = 0.02;
+    double roi_disable_dist_m_ = 1.5;
+    double roi_scale_ = 1.15;
+    double roi_smooth_alpha_ = 0.35;
+    bool roi_clear_on_miss_ = true;
+    double roi_miss_disable_s_ = 0.12;
+    bool drop_out_of_order_ = true;
+    rclcpp::Time last_sync_pub_stamp_{0, 0, RCL_ROS_TIME};
 
     std::mutex roi_mutex_;
     std::optional<cv::Rect> next_roi_;
     rclcpp::Time next_roi_stamp_{0, 0, RCL_ROS_TIME};
+    rclcpp::Time roi_disable_until_{0, 0, RCL_ROS_TIME};
     std::optional<cv::Rect> last_bbox_;
     rclcpp::Time last_bbox_stamp_{0, 0, RCL_ROS_TIME};
     cv::Size last_image_size_{0, 0};
+
+    // 异步流水线（需要最后析构，确保线程先停再析构 pub/model）
+    std::unique_ptr<Pipeline> pipeline_;
 };
 
 } // namespace rm_auto_aim

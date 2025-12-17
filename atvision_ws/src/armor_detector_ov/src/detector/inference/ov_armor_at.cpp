@@ -12,7 +12,8 @@
 #include <rclcpp/logging.hpp>
 
 namespace rm_auto_aim {
-std::unique_ptr<OVModelBase::PreprocContext> OVArmorAT::preprocess(const cv::Mat& src) {
+std::unique_ptr<OVModelBase::PreprocContext> OVArmorAT::preprocess(
+    const cv::Mat& src, ov::InferRequest& request) {
     auto ctx = std::make_unique<Ctx>();
 
     // 1) 读输入 shape
@@ -63,17 +64,18 @@ std::unique_ptr<OVModelBase::PreprocContext> OVArmorAT::preprocess(const cv::Mat
     std::memcpy(dst + plane * 0, ch[0].data, plane * sizeof(float));
     std::memcpy(dst + plane * 1, ch[1].data, plane * sizeof(float));
     std::memcpy(dst + plane * 2, ch[2].data, plane * sizeof(float));
-    request_.set_input_tensor(in);
+    request.set_input_tensor(in);
 
     return ctx;
 }
 
-void OVArmorAT::postprocess(const PreprocContext& ctx_) {
+void OVArmorAT::postprocess(
+    const PreprocContext& ctx_, ov::InferRequest& request, std::vector<ArmorObject>& objects) {
     const auto& ctx = dynamic_cast<const Ctx&>(ctx_);
 
-    ov::Tensor out = request_.get_output_tensor(0);
+    ov::Tensor out = request.get_output_tensor(0);
     const float* p = out.data<const float>();
-    last_.clear();
+    objects.clear();
     if (!p)
         return;
 
@@ -197,15 +199,14 @@ void OVArmorAT::postprocess(const PreprocContext& ctx_) {
     }
 
     // 外部 NMS
-    last_ = topKAndNms(objs, topk_, nms_);
+    objects = topKAndNms(objs, topk_, nms_);
 }
 
 bool OVArmorAT::detect(const cv::Mat& src, std::vector<ArmorObject>& objects) {
-    if (!run(src)) {
+    if (!infer(src, objects)) {
         objects.clear();
         return false;
     }
-    objects = last_;
     return !objects.empty();
 }
 
