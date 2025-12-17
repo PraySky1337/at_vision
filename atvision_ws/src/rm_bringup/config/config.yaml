@@ -64,11 +64,11 @@
       measure_distance_k: 0.1
       outpost:
         measure_distance_k: 0.2
-        sigma_a_yaw: 1.7
-        sigma_q_xy: 15.0
-        sigma_q_z: 1.0
+        sigma_a_yaw: 1.5
+        sigma_q_xy: 8.0
+        sigma_q_z: 1.7
         yaw_log_k: 0.005
-      outpost_matcher_gate: 3.0
+      outpost_matcher_gate: 1.5
       sigma_a_xy: 10.0
       sigma_a_yaw: 10.0
       sigma_a_z: 2.0

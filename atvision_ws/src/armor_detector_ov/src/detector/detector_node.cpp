@@ -69,8 +69,6 @@ void drawCornerBox(cv::Mat& img, const cv::Rect& r, const cv::Scalar& col, int t
     // cv::line(img, {x + w, y + h}, {x + w, y + h - L}, col, t, aa);
 }
 
-constexpr double kPi = 3.14159265358979323846;
-
 bool isLargeTarget(const rm_interfaces::msg::Target& target) {
     return target.id == "1" || target.id == "base_large";
 }
@@ -160,7 +158,7 @@ std::vector<std::array<tf2::Vector3, 4>>
     std::vector<std::array<tf2::Vector3, 4>> corners;
     corners.reserve(static_cast<size_t>(n));
 
-    const double angle_step = 2.0 * kPi / static_cast<double>(n);
+    const double angle_step = 2.0 * M_PI / static_cast<double>(n);
     const double cx         = target.position.x;
     const double cy         = target.position.y;
     const double z0         = target.position.z;
