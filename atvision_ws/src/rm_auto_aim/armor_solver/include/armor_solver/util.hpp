@@ -33,7 +33,8 @@ enum OutpostState : uint8_t {
     O_STATE_MAX,
 };
 
-enum Measure : uint8_t { ARMOR_X, ARMOR_Y, ARMOR_Z, ARMOR_YAW, MEASURE_MAX };
+// Measurement space (spherical): [yaw, pitch, distance, armor_yaw]
+enum Measure : uint8_t { ARMOR_YAW, ARMOR_PITCH, ARMOR_DISTANCE, ARMOR_YAW_ARMOR, MEASURE_MAX };
 
 inline int armors_num(const std::string& id) {
     return id == "outpost" ? 3 : 4;

@@ -5,6 +5,18 @@
 
 namespace rm_auto_aim {
 
+void Tracker::reset_tracker_() {
+    robot_ukf.reset();
+    outpost_ukf.reset();
+    name.clear();
+    armor_num = 0;
+    measurement_.fill(0.0);
+    detecting_count_ = 0;
+    last_dt_         = 0.0;
+    lost_time_       = 0.0;
+    state            = IDLE;
+}
+
 bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
     std::vector<int> idx;
     const bool is_outpost = name == "outpost";
@@ -14,12 +26,14 @@ bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
     if (is_outpost && !outpost_ukf) {
         return false;
     }
+
     if (!is_outpost && !robot_ukf) {
         return false;
     }
 
-    auto matched = is_outpost ? match_all_outpost(armors, idx, outpost_ukf->x())
-                              : match_all(armors, idx, robot_ukf->x());
+    auto matched = is_outpost ? match_all_outpost(armors, idx, outpost_ukf->x(), outpost_ukf->Sx())
+                              : match_all(armors, idx, robot_ukf->x(), robot_ukf->Sx());
+
     if (matched.empty()) {
         // 没有任何通过门控的观测，这一帧只做 predict
         state_machine(false);
@@ -36,22 +50,25 @@ bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
         RoboUKF::VecZ z;
         auto& ia = matched[i];
 
-        z[0] = ia.pose.position.x;
-        z[1] = ia.pose.position.y;
-        z[2] = ia.pose.position.z;
-        double yaw;
-        yaw = util::orientation2yaw(ia.pose.orientation);
+        const auto& p = ia.pose.position;
+        const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
+        const double armor_yaw_raw = util::orientation2yaw(ia.pose.orientation);
         if (is_outpost) {
-            z[3] = util::unwrap_rad(
-                outpost_ukf->x()[util::O_YAW] + idx[i] * 2 * M_PI / armor_num, yaw);
             outpost_model_.armor_id = idx[i];
+            const auto z_pred       = outpost_model_.h(outpost_ukf->x(), idx[i]);
+            z[0]                    = util::unwrap_rad(z_pred[0], ypd[0]);
+            z[1]                    = util::unwrap_rad(z_pred[1], ypd[1]);
+            z[2]                    = ypd[2];
+            z[3]                    = util::unwrap_rad(z_pred[3], armor_yaw_raw);
             this->set_measurement(z, false);
             outpost_ukf->update(z);
         } else {
-            z[3] = util::unwrap_rad(
-                robot_ukf->x()[util::YAW] + idx[i] * 2 * M_PI / armor_num, yaw); // -pi - pi
-
             robot_model_.armor_id = idx[i];
+            const auto z_pred     = robot_model_.h(robot_ukf->x(), idx[i]);
+            z[0]                  = util::unwrap_rad(z_pred[0], ypd[0]);
+            z[1]                  = util::unwrap_rad(z_pred[1], ypd[1]);
+            z[2]                  = ypd[2];
+            z[3]                  = util::unwrap_rad(z_pred[3], armor_yaw_raw);
             bool is_another_pair  = (idx[i] == 1 || idx[i] == 3);
             this->set_measurement(z, is_another_pair);
             robot_ukf->update(z);
@@ -80,6 +97,12 @@ void Tracker::set_measurement(const RoboUKF::VecZ& z, bool is_another_pair) {
 }
 
 void Tracker::predict(double dts) {
+    last_dt_ = std::max(0.0, dts);
+    if (state == TEMP_LOST && (lost_time_ + last_dt_) >= params.lost_thres) {
+        reset_tracker_();
+        std::cout << "IDLE" << std::endl;
+        return;
+    }
     if (robot_ukf.has_value()) {
         robot_ukf->predict(dts);
         auto& x = *robot_ukf->x_raw_ptr();
@@ -167,29 +190,29 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
     armor_num       = util::armors_num(name);
     bool is_outpost = name == "outpost";
     double v0       = 0;
+    const double armor_yaw = util::orientation2yaw(tgt.pose.orientation);
 
     // Start fresh for a new target
     robot_ukf.reset();
     outpost_ukf.reset();
 
     if (is_outpost) {
-        double x0 = pos.x;
-        double y0 = pos.y;
+        const double x0 = pos.x + OutpostModel::OUTPOST_RADIUS * std::cos(armor_yaw);
+        const double y0 = pos.y + OutpostModel::OUTPOST_RADIUS * std::sin(armor_yaw);
         double z0, z1, z2;
         z0 = z1 = z2 = pos.z;
-        double yaw   = util::orientation2yaw(tgt.pose.orientation);
-        OutpostUKF::VecX xp0{x0, y0, yaw, v0, z0, z1, z2};
+        OutpostUKF::VecX xp0{x0, y0, armor_yaw, v0, z0, z1, z2};
         OutpostUKF::MatXX p0 = OutpostUKF::MatXX::Identity();
         outpost_ukf.emplace(outpost_model_, xp0, p0);
     } else {
-        double x0      = pos.x;
-        double y0      = pos.y;
-        double z0      = pos.z;
-        double yaw     = util::orientation2yaw(tgt.pose.orientation);
-        double radius1 = 0.23;
-        double radius2 = 0.23;
-        double h       = 0;
-        RoboUKF::VecX xp0{x0, v0, y0, v0, z0, v0, yaw, v0, radius1, radius2, h};
+        constexpr double kDefaultRadius = 0.23;
+        const double x0                = pos.x + kDefaultRadius * std::cos(armor_yaw);
+        const double y0                = pos.y + kDefaultRadius * std::sin(armor_yaw);
+        const double z0                = pos.z;
+        const double r0                = kDefaultRadius;
+        const double r1                = kDefaultRadius;
+        const double h                 = 0.0;
+        RoboUKF::VecX xp0{x0, v0, y0, v0, z0, v0, armor_yaw, v0, r0, r1, h};
         RoboUKF::MatXX P0 = RoboUKF::MatXX::Identity();
 
         robot_ukf.emplace(robot_model_, xp0, P0);
@@ -199,7 +222,8 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
 }
 
 std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
-    const rm_interfaces::msg::Armors& armors, std::vector<int>& idx, const RoboUKF::VecX& x_pre) {
+    const rm_interfaces::msg::Armors& armors, std::vector<int>& idx, const RoboUKF::VecX& x_pre,
+    const RoboUKF::MatXX& Sx_pre) {
 
     std::vector<rm_interfaces::msg::Armor> matched;
     idx.clear();
@@ -216,18 +240,73 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
         n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
 
     using VecZ = RobotModel::VecZ;
+    using MatZ = Eigen::Matrix<double, RobotModel::NZ, RobotModel::NZ>;
 
     // 预计算每个观测的量测向量
     std::vector<VecZ> meas_list(n_obs);
     for (int j = 0; j < n_obs; ++j) {
         const auto& a = armors.armors[j];
         VecZ z;
-        z[0] = a.pose.position.x;
-        z[1] = a.pose.position.y;
-        z[2] = a.pose.position.z;
-        z[3] = util::orientation2yaw(a.pose.orientation);
+        const auto& p  = a.pose.position;
+        const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
+        z[0]           = ypd[0];
+        z[1]           = ypd[1];
+        z[2]           = ypd[2];
+        z[3]           = util::orientation2yaw(a.pose.orientation);
 
         meas_list[j] = z;
+    }
+
+    // 预计算每个 armor_id 的量测预测与协方差（HPH^T），用于马氏距离门控
+    struct PredMeas {
+        VecZ z_pred;
+        MatZ Pzz;
+    };
+    std::vector<PredMeas> pred_cache(armors_num);
+    {
+        constexpr int NX = RobotModel::NX;
+        const double gamma = std::sqrt(static_cast<double>(NX));
+        const double w     = 1.0 / (2.0 * static_cast<double>(NX));
+        for (int id = 0; id < armors_num; ++id) {
+            const VecZ z0 = robot_model_.h(x_pre, id);
+
+            std::array<VecZ, 2 * NX> z_sig{};
+            for (int k = 0; k < NX; ++k) {
+                const RoboUKF::VecX xp = x_pre + gamma * Sx_pre.col(k);
+                const RoboUKF::VecX xm = x_pre - gamma * Sx_pre.col(k);
+
+                VecZ zp = robot_model_.h(xp, id);
+                VecZ zm = robot_model_.h(xm, id);
+
+                zp[0] = util::unwrap_rad(z0[0], zp[0]);
+                zp[1] = util::unwrap_rad(z0[1], zp[1]);
+                zp[3] = util::unwrap_rad(z0[3], zp[3]);
+
+                zm[0] = util::unwrap_rad(z0[0], zm[0]);
+                zm[1] = util::unwrap_rad(z0[1], zm[1]);
+                zm[3] = util::unwrap_rad(z0[3], zm[3]);
+
+                z_sig[k]      = zp;
+                z_sig[NX + k] = zm;
+            }
+
+            VecZ z_bar = VecZ::Zero();
+            for (const auto& zs : z_sig) {
+                z_bar.noalias() += w * zs;
+            }
+
+            MatZ Pzz = MatZ::Zero();
+            for (const auto& zs : z_sig) {
+                VecZ dz;
+                dz[0] = util::shortest_rad(z_bar[0], zs[0]);
+                dz[1] = zs[1] - z_bar[1];
+                dz[2] = zs[2] - z_bar[2];
+                dz[3] = util::shortest_rad(z_bar[3], zs[3]);
+                Pzz.noalias() += w * (dz * dz.transpose());
+            }
+
+            pred_cache[id] = {z_bar, Pzz};
+        }
     }
 
     // 给每个 (观测, armor_id) 计算残差 + 代价
@@ -235,19 +314,27 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
         if (armors.armors[j].number != name)
             continue; // 只匹配目标编号一致的装甲板
         for (int id = 0; id < armors_num; ++id) {
-            // 预测该 armor_id 对应的量测
-            VecZ z_pred = robot_model_.h(x_pre, id);
+            const auto& z_pred = pred_cache[id].z_pred;
 
-            VecZ nu = meas_list[j] - z_pred;
+            VecZ nu;
+            nu[0] = util::shortest_rad(z_pred[0], meas_list[j][0]);
+            nu[1] = meas_list[j][1] - z_pred[1];
+            nu[2] = meas_list[j][2] - z_pred[2];
+            nu[3] = util::shortest_rad(z_pred[3], meas_list[j][3]);
 
-            auto R = robot_model_.R_sqrt(z_pred); // 实际上返回的是对角协方差
-            // yaw 残差归一化到 [-pi, pi]
-            nu[3] = util::normalize_rad(nu[3]);
+            const Eigen::Matrix<double, RobotModel::NZ, 1> R_diag =
+                robot_model_.R_diag(meas_list[j]);
+            MatZ S = pred_cache[id].Pzz;
+            S.diagonal() += R_diag;
+            S      = (S + S.transpose()) * 0.5;
+            S.diagonal().array() += 1e-9;
 
-            // 这里用量测噪声协方差 R 近似创新协方差 S
-            Eigen::Matrix<double, RobotModel::NZ, RobotModel::NZ> Rinv = R.inverse();
+            const Eigen::LDLT<MatZ> ldlt(S);
+            if (ldlt.info() != Eigen::Success) {
+                continue;
+            }
 
-            double d2 = (nu.transpose() * Rinv * nu)(0, 0);
+            double d2 = nu.transpose() * ldlt.solve(nu);
 
             // 门控
             if (std::isfinite(d2) && d2 < params.matcher_gate) {
@@ -295,7 +382,7 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
 
 std::vector<rm_interfaces::msg::Armor> Tracker::match_all_outpost(
     const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
-    const OutpostUKF::VecX& x_pre) {
+    const OutpostUKF::VecX& x_pre, const OutpostUKF::MatXX& Sx_pre) {
 
     std::vector<rm_interfaces::msg::Armor> matched;
     idx.clear();
@@ -312,16 +399,72 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all_outpost(
         n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
 
     using VecZ = OutpostModel::VecZ;
+    using MatZ = Eigen::Matrix<double, OutpostModel::NZ, OutpostModel::NZ>;
 
     std::vector<VecZ> meas_list(n_obs);
-    // 构建测量（删除 z 轴）
+    // 构建测量（球坐标系）
     for (int j = 0; j < n_obs; ++j) {
         const auto& a = armors.armors[j];
         VecZ z;
-        z[0]         = a.pose.position.x;
-        z[1]         = a.pose.position.y;
-        z[2]         = util::orientation2yaw(a.pose.orientation); // yaw 放在第 3 维
-        meas_list[j] = z;
+        const auto& p  = a.pose.position;
+        const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
+        z[0]           = ypd[0];
+        z[1]           = ypd[1];
+        z[2]           = ypd[2];
+        z[3]           = util::orientation2yaw(a.pose.orientation);
+        meas_list[j]   = z;
+    }
+
+    // 预计算每个 armor_id 的量测预测与协方差（HPH^T）
+    struct PredMeas {
+        VecZ z_pred;
+        MatZ Pzz;
+    };
+    std::vector<PredMeas> pred_cache(armors_num);
+    {
+        constexpr int NX = OutpostModel::NX;
+        const double gamma = std::sqrt(static_cast<double>(NX));
+        const double w     = 1.0 / (2.0 * static_cast<double>(NX));
+        for (int id = 0; id < armors_num; ++id) {
+            const VecZ z0 = outpost_model_.h(x_pre, id);
+
+            std::array<VecZ, 2 * NX> z_sig{};
+            for (int k = 0; k < NX; ++k) {
+                const OutpostUKF::VecX xp = x_pre + gamma * Sx_pre.col(k);
+                const OutpostUKF::VecX xm = x_pre - gamma * Sx_pre.col(k);
+
+                VecZ zp = outpost_model_.h(xp, id);
+                VecZ zm = outpost_model_.h(xm, id);
+
+                zp[0] = util::unwrap_rad(z0[0], zp[0]);
+                zp[1] = util::unwrap_rad(z0[1], zp[1]);
+                zp[3] = util::unwrap_rad(z0[3], zp[3]);
+
+                zm[0] = util::unwrap_rad(z0[0], zm[0]);
+                zm[1] = util::unwrap_rad(z0[1], zm[1]);
+                zm[3] = util::unwrap_rad(z0[3], zm[3]);
+
+                z_sig[k]      = zp;
+                z_sig[NX + k] = zm;
+            }
+
+            VecZ z_bar = VecZ::Zero();
+            for (const auto& zs : z_sig) {
+                z_bar.noalias() += w * zs;
+            }
+
+            MatZ Pzz = MatZ::Zero();
+            for (const auto& zs : z_sig) {
+                VecZ dz;
+                dz[0] = util::shortest_rad(z_bar[0], zs[0]);
+                dz[1] = zs[1] - z_bar[1];
+                dz[2] = zs[2] - z_bar[2];
+                dz[3] = util::shortest_rad(z_bar[3], zs[3]);
+                Pzz.noalias() += w * (dz * dz.transpose());
+            }
+
+            pred_cache[id] = {z_bar, Pzz};
+        }
     }
 
     for (int j = 0; j < n_obs; ++j) {
@@ -329,24 +472,27 @@ std::vector<rm_interfaces::msg::Armor> Tracker::match_all_outpost(
             continue;
 
         for (int id = 0; id < armors_num; ++id) {
-            VecZ z_pred_full = outpost_model_.h(x_pre, id);
+            const auto& z_pred = pred_cache[id].z_pred;
 
-            // 预测 3 维
-            Eigen::Vector3d z_pred;
-            z_pred << z_pred_full[0], z_pred_full[1], z_pred_full[3];
-
-            // 残差
-            Eigen::Vector3d nu;
-            nu[0] = meas_list[j][0] - z_pred[0];
+            VecZ nu;
+            nu[0] = util::shortest_rad(z_pred[0], meas_list[j][0]);
             nu[1] = meas_list[j][1] - z_pred[1];
-            nu[2] = util::normalize_rad(meas_list[j][2] - z_pred[2]);
+            nu[2] = meas_list[j][2] - z_pred[2];
+            nu[3] = util::shortest_rad(z_pred[3], meas_list[j][3]);
 
-            // R 取 3×3
-            auto R_full          = outpost_model_.R_sqrt(z_pred_full);
-            Eigen::Matrix3d R    = R_full.topLeftCorner<3, 3>();
-            Eigen::Matrix3d Rinv = R.inverse();
+            const Eigen::Matrix<double, OutpostModel::NZ, 1> R_diag =
+                outpost_model_.R_diag(meas_list[j]);
+            MatZ S = pred_cache[id].Pzz;
+            S.diagonal() += R_diag;
+            S      = (S + S.transpose()) * 0.5;
+            S.diagonal().array() += 1e-9;
 
-            double d2 = nu.transpose() * Rinv * nu;
+            const Eigen::LDLT<MatZ> ldlt(S);
+            if (ldlt.info() != Eigen::Success) {
+                continue;
+            }
+
+            double d2 = nu.transpose() * ldlt.solve(nu);
 
             if (std::isfinite(d2) && d2 < params.outpost_matcher_gate) {
                 cost[j][id] = d2;
@@ -400,15 +546,7 @@ void Tracker::state_machine(bool found) {
                 std::cout << "IDLE" << std::endl;
             }
         } else {
-            if (robot_ukf) {
-                auto& x = *robot_ukf->x_raw_ptr();
-                x.setZero();
-            }
-            if (outpost_ukf) {
-                auto& x = *outpost_ukf->x_raw_ptr();
-                x.setZero();
-            }
-            detecting_count_ = 0;
+            reset_tracker_();
         }
         break;
 
@@ -422,11 +560,7 @@ void Tracker::state_machine(bool found) {
             }
         } else {
             // 检测中丢了，说明不稳定，回到 IDLE 重新来
-            detecting_count_ = 0;
-
-            auto& x = *robot_ukf->x_raw_ptr();
-            x.setZero();
-            state = IDLE;
+            reset_tracker_();
             std::cout << "IDLE" << std::endl;
         }
         break;
@@ -435,21 +569,19 @@ void Tracker::state_machine(bool found) {
         if (!found) {
             state = TEMP_LOST;
             std::cout << "TEMP_LOST" << std::endl;
-            lost_count_ = 1;                       // 刚丢一帧
+            lost_time_ = last_dt_;
         }
         break;
 
     case TEMP_LOST:
         if (found) {
-            lost_count_ = 0;
+            lost_time_ = 0.0;
             state       = TRACKING;                // 找回来了
             std::cout << "TRACKING" << std::endl;
         } else {
-            lost_count_++;
-            if (lost_count_ > params.lost_thres) { // 丢太久，放弃
-                lost_count_      = 0;
-                detecting_count_ = 0;
-                state            = IDLE;
+            lost_time_ += last_dt_;
+            if (lost_time_ >= params.lost_thres) { // 丢太久，放弃
+                reset_tracker_();
                 std::cout << "IDLE" << std::endl;
             }
         }

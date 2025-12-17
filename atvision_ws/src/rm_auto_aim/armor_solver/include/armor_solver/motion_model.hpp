@@ -8,7 +8,7 @@
 struct RobotModel {
     using Scalar            = double;
     static constexpr int NX = util::STATE_MAX;
-    static constexpr int NZ = util::MEASURE_MAX; // 量测 [px,py,pz,yaw]
+    static constexpr int NZ = util::MEASURE_MAX; // 量测（球坐标）[yaw, pitch, distance, armor_yaw]
 
     using VecX = Eigen::Matrix<Scalar, NX, 1>;
     using VecZ = Eigen::Matrix<Scalar, NZ, 1>;
@@ -64,21 +64,28 @@ struct RobotModel {
 
         const Scalar angle_step = 2.0 * M_PI / static_cast<Scalar>(ARMORS_NUM);
 
-        double tmp_yaw = x(YAW) + id * angle_step;
-
-        z[3] = tmp_yaw;
+        const double tmp_yaw = x(YAW) + id * angle_step;
 
         Scalar radius;
+        Scalar armor_x;
+        Scalar armor_y;
+        Scalar armor_z;
         if (id == 1 || id == 3) {
-            z[2]   = x(Z0) + x[H];
+            armor_z = x(Z0) + x[H];
             radius = x[R_1];
         } else {
-            z[2]   = x(Z0);
+            armor_z = x(Z0);
             radius = x[R_0];
         }
 
-        z[0] = x(XC) - radius * std::cos(tmp_yaw);
-        z[1] = x(YC) - radius * std::sin(tmp_yaw);
+        armor_x = x(XC) - radius * std::cos(tmp_yaw);
+        armor_y = x(YC) - radius * std::sin(tmp_yaw);
+
+        const auto ypd = util::xyz2ypd({armor_x, armor_y, armor_z});
+        z[0]           = ypd[0];
+        z[1]           = ypd[1];
+        z[2]           = ypd[2];
+        z[3]           = tmp_yaw;
         return z;
     }
 
@@ -124,16 +131,17 @@ struct RobotModel {
         return S;
     }
 
+    Eigen::Matrix<Scalar, NZ, 1> R_diag(const VecZ& z) const {
+        const double delta_angle = util::shortest_rad(z[0], z[3]);
+        Eigen::Matrix<Scalar, NZ, 1> R_dig;
+        R_dig << 4e-3, 4e-3, std::log(std::abs(delta_angle) + 1.0) + 1.0,
+            std::log(std::abs(z[2]) + 1.0) / 200.0 + 9e-2;
+        return R_dig;
+    }
+
     Eigen::Matrix<Scalar, NZ, Eigen::Dynamic> R_sqrt(const VecZ& z) const {
-        auto ypd         = util::xyz2ypd({z[0], z[1], z[2]});
-        double delta_yaw = util::shortest_deg(ypd[0], z[3]);
-
-        const double K = params.meas_dist_k;
-        double weight  = std::log(K * ypd[2] + 1.0);
-
         Eigen::Matrix<Scalar, NZ, NZ> Rs = Eigen::Matrix<Scalar, NZ, NZ>::Zero();
-        Rs.diagonal() << weight + std::abs(delta_yaw / 3 + 1), weight + std::abs(delta_yaw / 3 + 1),
-            weight, log(std::abs(ypd[2]) + 1) / 200 + 9e-2;
+        Rs.diagonal()                    = R_diag(z).cwiseSqrt();
         return Rs;
     }
 };
@@ -141,7 +149,7 @@ struct RobotModel {
 struct OutpostModel {
     using Scalar            = double;
     static constexpr int NX = util::O_STATE_MAX;
-    static constexpr int NZ = util::MEASURE_MAX; // 量测 [px,py,pz,yaw]
+    static constexpr int NZ = util::MEASURE_MAX; // 量测（球坐标）[yaw, pitch, distance, armor_yaw]
 
     using VecX = Eigen::Matrix<Scalar, NX, 1>;
     using VecZ = Eigen::Matrix<Scalar, NZ, 1>;
@@ -191,13 +199,17 @@ struct OutpostModel {
         assert(id >= 0 && id <= ARMORS_NUM - 1);
         const Scalar angle_step = 2.0 * M_PI / static_cast<Scalar>(ARMORS_NUM);
 
-        double tmp_yaw = x(O_YAW) + angle_step * id;
+        const double tmp_yaw = x(O_YAW) + angle_step * id;
 
-        z[3] = tmp_yaw;
+        const Scalar armor_x = x(O_XC) - OUTPOST_RADIUS * std::cos(tmp_yaw);
+        const Scalar armor_y = x(O_YC) - OUTPOST_RADIUS * std::sin(tmp_yaw);
+        const Scalar armor_z = x(O_Z0 + id);
 
-        z[0] = x(O_XC) - OUTPOST_RADIUS * std::cos(tmp_yaw);
-        z[1] = x(O_YC) - OUTPOST_RADIUS * std::sin(tmp_yaw);
-        z[2] = x(O_Z0 + id);
+        const auto ypd = util::xyz2ypd({armor_x, armor_y, armor_z});
+        z[0]           = ypd[0];
+        z[1]           = ypd[1];
+        z[2]           = ypd[2];
+        z[3]           = tmp_yaw;
 
         return z;
     }
@@ -242,16 +254,17 @@ struct OutpostModel {
         return S;
     }
 
+    Eigen::Matrix<Scalar, NZ, 1> R_diag(const VecZ& z) const {
+        const double delta_angle = util::shortest_rad(z[0], z[3]);
+        Eigen::Matrix<Scalar, NZ, 1> R_dig;
+        R_dig << 4e-3, 4e-3, std::log(std::abs(delta_angle) + 1.0) + 1.0,
+            std::log(std::abs(z[2]) + 1.0) / 200.0 + 9e-2;
+        return R_dig;
+    }
+
     Eigen::Matrix<Scalar, NZ, Eigen::Dynamic> R_sqrt(const VecZ& z) const {
-        auto ypd         = util::xyz2ypd({z[0], z[1], z[2]});
-        double delta_yaw = util::shortest_deg(ypd[0], z[3]);
-
-        const double K = params.meas_dist_k;
-        double weight  = std::log(K * ypd[2] + 1.0);
-
         Eigen::Matrix<Scalar, NZ, NZ> Rs = Eigen::Matrix<Scalar, NZ, NZ>::Zero();
-        Rs.diagonal() << weight + std::abs(delta_yaw / 3 + 1), weight + std::abs(delta_yaw / 3 + 1),
-            weight, log(std::abs(ypd[2]) + 1) / 600 + 9e-2;
+        Rs.diagonal()                    = R_diag(z).cwiseSqrt();
         return Rs;
     }
 };

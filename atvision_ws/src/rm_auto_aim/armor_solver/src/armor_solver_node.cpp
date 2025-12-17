@@ -212,8 +212,8 @@ Tracker::Params ArmorSolverNode::declareTrackerParameters() {
     this->declare_parameter(name, default_val, makeDoubleDescriptor(desc_zh, min, max, step))
 
     // clang-format off
-    params.lost_thres = DECLARE_INT_ZH("tracker.lost_threshold", 60,
-        "丢失阈值：连续丢失帧数超过此值则重置跟踪器", 0, 240);
+    params.lost_thres = DECLARE_DOUBLE_ZH("tracker.lost_threshold", 1.0,
+        "丢失阈值：TEMP_LOST持续时间超过此值（秒）则重置跟踪器", 0.0, 10.0, 0.001);
     params.tracking_thres = DECLARE_INT_ZH("tracker.tracking_threshold", 5,
         "确认跟踪所需的连续检测帧数", 0, 120);
     params.matcher_gate = DECLARE_DOUBLE_ZH("tracker.matcher_gate", 30.0,
@@ -258,7 +258,7 @@ bool ArmorSolverNode::applyTrackerParamUpdate(
     const rclcpp::Parameter& param, Tracker::Params& params) {
     const auto& name = param.get_name();
     if (name == "tracker.lost_threshold") {
-        params.lost_thres = param.as_int();
+        params.lost_thres = param.as_double();
         return true;
     }
     if (name == "tracker.tracking_threshold") {
