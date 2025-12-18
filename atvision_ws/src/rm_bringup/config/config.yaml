@@ -24,30 +24,50 @@
 
 /armor_detector_ov:
   ros__parameters:
-    debug: true
-    target_frame: odom
-    detect_color: "BLUE"
-    model_path: package://armor_detector_ov/model/opt-1208-001.onnx
-    model_name: armor_tup
-    # model_name: armor_at
-    # model_path: package://armor_detector_ov/model/pose_simplified.onnx
+    armor_detector:
+      result_img:
+        enable_pub_plugins:
+        - image_transport/compressed
+        format: jpeg
+        jpeg_quality: 95
+        png_level: 3
+        tiff:
+          res_unit: inch
+          xdpi: -1
+          ydpi: -1
+    bbox_timeout_s: 0.2
+    camera_frame: camera_optical_frame
+    debug: false
+    detect_color: BLUE
     device_name: AUTO
-    device_priorities: "GPU,CPU"
+    device_priorities: GPU,CPU
+    draw_latency: true
+    drop_out_of_order: true
     enable_multi_thread: true
     enable_pipeline: true
-    pipeline_queue_size: 4
+    model_name: armor_tup
+    model_path: package://armor_detector_ov/model/opt-1208-001.onnx
     pipeline_num_requests: 4
-    draw_latency: true
-    use_roi: true
-    roi_timeout_s: 0.2
-    bbox_timeout_s: 0.2
-    roi_future_tolerance_s: 0.02
-    roi_disable_dist_m: 1.5
-    roi_scale: 1.15
-    roi_smooth_alpha: 0.35
+    pipeline_queue_size: 4
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
     roi_clear_on_miss: true
+    roi_disable_dist_m: 2.0
+    roi_future_tolerance_s: 0.02
     roi_miss_disable_s: 0.12
-    drop_out_of_order: true
+    roi_scale: 1.
+    roi_smooth_alpha: 0.35
+    roi_timeout_s: 0.2
+    target_frame: odom
+    use_ba: true
+    use_gpu: false
+    use_roi: true
+    use_sim_time: false
 
 /armor_solver:
   ros__parameters:
@@ -79,13 +99,13 @@
       measure_distance_k: 0.1
       outpost:
         measure_distance_k: 0.2
-        sigma_a_yaw: 1.5
-        sigma_q_xy: 8.0
+        sigma_a_yaw: 10.0
+        sigma_q_xy: 10.0
         sigma_q_z: 1.7
         yaw_log_k: 0.005
       outpost_matcher_gate: 1.5
       sigma_a_xy: 10.0
-      sigma_a_yaw: 10.0
+      sigma_a_yaw: 20.0
       sigma_a_z: 2.0
       sigma_h: 0.8
       sigma_r: 1.0

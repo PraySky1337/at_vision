@@ -226,7 +226,7 @@ Tracker::Params ArmorSolverNode::declareTrackerParameters() {
     rbp.sigma_a_z = DECLARE_DOUBLE_ZH("tracker.sigma_a_z", 1.0,
         "过程噪声：z方向加速度", 0.0, 10.0, 0.001);
     rbp.sigma_a_yaw = DECLARE_DOUBLE_ZH("tracker.sigma_a_yaw", 1.0,
-        "过程噪声：yaw角加速度", 0.0, 10.0, 0.001);
+        "过程噪声：yaw角加速度", 0.0, 40.0, 0.001);
     rbp.sigma_h = DECLARE_DOUBLE_ZH("tracker.sigma_h", 0.5,
         "过程噪声：装甲板高度漂移", 0.0, 5.0, 0.001);
     rbp.sigma_r0 = DECLARE_DOUBLE_ZH("tracker.sigma_r", 1.0,

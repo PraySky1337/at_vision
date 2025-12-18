@@ -59,7 +59,7 @@ private:
     std::string device_name_  = "AUTO";
     std::string device_priorities_ = "GPU,CPU";
     bool debug_               = true;
-    bool use_ba_              = false;
+    bool use_ba_              = true;
     bool enable_multi_thread_ = false;
     bool enable_pipeline_     = true;
     int pipeline_queue_size_  = 4;
