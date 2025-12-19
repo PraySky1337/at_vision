@@ -1,7 +1,6 @@
 import sys
 import os
 from launch import LaunchDescription
-from launch_ros.actions import Node
 from launch.substitutions import Command
 from ament_index_python.packages import get_package_share_directory
 sys.path.append(os.path.join(get_package_share_directory('rm_bringup'), 'launch'))
@@ -26,6 +25,7 @@ def generate_launch_description():
             common.rsp_component,
             common.gimbal_node(node_params),
             common.camera_node(node_params),
+            common.calibration_node(node_params),
         ],
         output='both',
         emulate_tty=True,
@@ -34,5 +34,4 @@ def generate_launch_description():
 
     return LaunchDescription([
         rest_container,
-        common.calibration_node(node_params),
     ])

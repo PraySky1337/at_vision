@@ -1,238 +1,62 @@
-# Camera-IMU Calibration Package
+# rm_calibration
 
-ROS2功能包，用于相机与IMU的联合标定。
+基于 ROS2 的相机标定工具，按本项目（圆点阵列 + OpenCV calibrateCamera/solvePnP/calibrateHandEye）的逻辑实现：
 
-## 功能特性
+- 订阅 `image_topic`（默认 `/image_raw`）
+- 订阅 `camera_info_topic`（默认 `/camera_info`，外参标定会使用其中的内参/畸变）
+- 通过 TF2 查询 `base_frame`（默认 `odom`）到 `gimbal_frame`（默认 `gimbal_link`）的变换（实际使用 `lookupTransform(base_frame, gimbal_frame, stamp)`）
+- 提供两个服务：`capture`、`calibrate`
 
-- **双模式支持**：内参标定和外参标定
-- **基于OpenCV**：使用成熟的标定算法
-- **ROS2集成**：完全集成TF2和标准ROS2接口
-- **实时反馈**：提供可视化反馈和进度显示
+标定板检测：默认同时兼容 **对称圆点阵列**（`findCirclesGrid`）和 **棋盘格角点**（`findChessboardCorners`），任一成功即可参与标定；`board_width/board_height` 表示“圆心/内角点”的列数/行数。
 
-## 依赖项
-
-```bash
-sudo apt install ros-${ROS_DISTRO}-cv-bridge \
-                 ros-${ROS_DISTRO}-image-transport \
-                 ros-${ROS_DISTRO}-tf2 \
-                 ros-${ROS_DISTRO}-tf2-ros \
-                 libopencv-dev
-```
-
-## 编译
+## 运行
 
 ```bash
-cd ~/ros2_ws/src
-git clone <repository_url> camera_imu_calibration
-cd ~/ros2_ws
-colcon build --packages-select camera_imu_calibration
-source install/setup.bash
+ros2 launch rm_calibration calibration.launch.py
 ```
 
-## 使用方法
+默认参数见 `rm_calibration/config/calibration_params.yaml`。
 
-### 步骤1: 准备标定板
+## 服务
 
-准备一个棋盘格标定板（推荐：10x7格子，每格2.5cm）
+### 1) Capture
 
-### 步骤2: 内参标定
-
-1. **启动内参标定模式**：
+采集一帧图像，并查询该图像时间戳对应的 TF（`base_frame <- gimbal_frame`），保存到本地目录 `data_dir`。
 
 ```bash
-ros2 launch camera_imu_calibration calibration.launch.py mode:=intrinsic
+ros2 service call /calibration_node/capture std_srvs/srv/Trigger {}
 ```
 
-2. **采集图像**：
-   - 节点启动后会持续检测棋盘格并实时显示角点，但不会自动保存
-   - 每次调用`~/capture_sample`服务时，会立即尝试将当前画面存为一个样本
-   - 采样间隔完全由人工控制，建议在每次采样前移动标定板以覆盖不同距离、角度和位置
-   - 默认保留质量最高的25帧（可在配置文件中调整）
+输出文件：
+- `data_dir/000001.<image_ext>`：图像
+- `data_dir/000001.txt`：对应 TF（平移 + 四元数，四元数顺序为 `wxyz`）
+
+### 2) Calibrate
+
+对 `data_dir` 内的文件进行标定；由参数 `mode` 决定标定类型：
+- `mode=intrinsic`：内参标定（仅使用图像）
+- `mode=extrinsic`：外参标定（使用图像 + `*.txt` + `/camera_info` 的内参）
 
 ```bash
-ros2 service call /calibration_node/capture_sample std_srvs/srv/Trigger
+ros2 param set /calibration_node mode intrinsic
+ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger {}
 ```
-
-3. **执行标定**：
 
 ```bash
-ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger
-```
-
-   服务直接使用已采集的样本进行求解（至少需要3个样本）。
-
-4. **保存结果**：
-   - 标定结果会输出到终端
-   - 将`camera_matrix`和`dist_coeffs`复制到配置文件中
-
-示例输出：
-```
-=== Camera Intrinsic Calibration Results ===
-Camera Matrix K:
-[800.123, 0.000, 320.456]
-[0.000, 799.876, 240.321]
-[0.000, 0.000, 1.000]
-
-Distortion Coefficients D:
-[-0.123, 0.045, 0.001, -0.002, 0.000]
-```
-
-### 步骤3: 外参标定
-
-1. **更新配置文件**：
-   - 将内参标定的结果填入`config/calibration_params.yaml`
-   - 设置正确的TF frame名称
-
-```yaml
-camera_matrix: [800.123, 0.0, 320.456, 0.0, 799.876, 240.321, 0.0, 0.0, 1.0]
-dist_coeffs: [-0.123, 0.045, 0.001, -0.002, 0.000]
-imu_frame: "gimbal_link"
-base_frame: "odom"
-```
-
-2. **启动外参标定模式**：
-
-```bash
-ros2 launch camera_imu_calibration calibration.launch.py mode:=extrinsic
-```
-
-3. **采集样本**：
-   - 确保IMU在发布TF变换（`odom` → `gimbal_link`）
-   - 每次调用`~/capture_sample`服务都会基于当前画面尝试保存一个样本
-   - 标定板应在整个采样过程中保持相对`base_frame`静止（hand-eye 的必要前提）；通过转动云台/IMU（建议同时覆盖不同 yaw/pitch）来产生相对运动并保证姿态多样性
-   - 默认目标25个高质量样本（可参数化）
-
-4. **执行标定**：
-
-```bash
-ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger
-```
-
-   服务直接对已经采集的样本执行标定（至少需要3个样本）。
-
-5. **查看结果**：
-
-```
-=== Camera-IMU Extrinsic Calibration Results ===
-Rotation Matrix R (Camera to IMU):
-[0.999, -0.012, 0.034]
-[0.013, 0.999, -0.045]
-[-0.033, 0.045, 0.998]
-
-Translation Vector t (Camera to IMU):
-[0.050, 0.020, -0.030]
-```
-
-说明：
-- 外参求解中的相机坐标系默认是 OpenCV 光学系（x 右、y 下、z 前），等价于 ROS 的`camera_optical_frame`约定。
-- 程序会同时打印`camera_link`风格（x 前、y 左、z 上）的等价结果，并给出可直接粘贴的 TF `static_transform_publisher` 命令与 URDF/xacro `camera_xyz/camera_rpy` 片段（用于更新云台 URDF 中`gimbal_link`↔`camera_link`固定外参）。
-
-## 话题和服务
-
-### 订阅的话题
-
-- `/image_raw` (sensor_msgs/Image): 相机图像
-
-### TF变换（仅外参模式）
-
-- `odom` → `gimbal_link`: IMU姿态
-
-### 服务
-
-- `~/capture_sample` (std_srvs/Trigger): 手动采样当前画面
-- `~/calibrate` (std_srvs/Trigger): 使用已采集的数据执行标定计算
-- `~/reset` (std_srvs/Trigger): 清除已采集的数据
-
-## 参数配置
-
-在`config/calibration_params.yaml`中配置：
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| mode | 标定模式：intrinsic/extrinsic | intrinsic |
-| board_width | 棋盘格内部角点列数 | 9 |
-| board_height | 棋盘格内部角点行数 | 6 |
-| square_size | 每个方格的边长（米） | 0.025 |
-| target_samples | 目标样本数量（Top-N保存） | 25 |
-| quality_threshold | 样本质量阈值（0-1） | 0.6 |
-| display_fps | 叠加状态刷新率 | 10 |
-| required_frames | 兼容旧配置，不再直接使用 | 20 |
-| imu_frame | IMU的TF frame | gimbal_link |
-| base_frame | 基础TF frame | odom |
-| camera_matrix | 相机内参矩阵（3x3展开） | - |
-| dist_coeffs | 畸变系数（5个） | - |
-| weight_corner_quality | 内参：角点质量权重 | 0.3 |
-| weight_board_size | 内参：标定板大小权重 | 0.2 |
-| weight_board_angle | 内参：角度/分布权重 | 0.3 |
-| weight_image_sharpness | 内参：清晰度权重 | 0.2 |
-| weight_reprojection_error | 外参：重投影误差权重 | 0.4 |
-| weight_imu_diversity | 外参：IMU姿态多样性权重 | 0.3 |
-| weight_board_pose | 外参：标定板姿态权重 | 0.3 |
-
-## 运行时切换模式
-
-```bash
-# 切换到外参标定模式
 ros2 param set /calibration_node mode extrinsic
-
-# 重置数据
-ros2 service call /calibration_node/reset std_srvs/srv/Trigger
+ros2 service call /calibration_node/calibrate std_srvs/srv/Trigger {}
 ```
 
-## 标定建议
+输出：
+- 内参：默认写入 `data_dir/intrinsic.yaml`（可用 `intrinsic_output_path` 覆盖）
+- 外参：默认写入 `data_dir/extrinsic.yaml`（可用 `extrinsic_output_path` 覆盖），包含 `R_camera2gimbal` / `t_camera2gimbal`
 
-### 内参标定技巧
+## 主要参数
 
-1. 采集覆盖整个图像区域的图像
-2. 包含不同距离的图像（近、中、远）
-3. 包含不同角度的图像（正面、倾斜）
-4. 确保标定板清晰可见，无模糊
-
-### 外参标定技巧
-
-1. 确保IMU数据稳定可靠
-2. 移动标定板时保持IMU相对稳定
-3. 采集多种IMU姿态下的数据
-4. 标定板应在相机视野内清晰可见
-
-## 故障排除
-
-### 问题：无法检测到标定板
-
-**解决方案**：
-- 确保光照充足
-- 调整标定板大小参数
-- 检查图像是否清晰
-
-### 问题：标定精度不高
-
-**解决方案**：
-- 增加采集的帧数/样本数
-- 确保数据多样性
-- 检查标定板尺寸测量是否准确
-
-### 问题：无法获取TF变换
-
-**解决方案**：
-- 检查TF frame名称是否正确
-- 确认IMU节点正在发布TF
-- 使用`ros2 run tf2_tools view_frames`查看TF树
-
-## 输出格式
-
-标定结果可以直接用于：
-- ROS camera_info消息
-- OpenCV相机模型
-- SLAM/视觉惯导系统
-
-## 许可证
-
-MIT License
-
-## 作者
-
-PraySky && Claude && Codex
-
-## 贡献
-
-欢迎提交Issue和Pull Request！
+- `base_frame`：如 `odom`
+- `gimbal_frame`：如 `gimbal_link`（兼容旧参数名 `imu_frame`）
+- `image_topic`：如 `/image_raw`
+- `camera_info_topic`：如 `/camera_info`
+- `board_width`/`board_height`：圆点阵列列数/行数（默认 `10x7`）
+- `square_size`：相邻圆心距离（单位 m）
+- `use_gripper_translation`：外参标定是否使用 TF 的平移量

@@ -20,6 +20,15 @@
           xdpi: -1
           ydpi: -1
     camera_info_topic: /camera_info
+    image_topic: /image_raw
+    data_dir: ~/rm_calibration_data
+    image_ext: jpg
+    jpeg_quality: 95
+    png_level: 3
+    capture_timeout_s: 2.0
+    tf_timeout_s: 0.2
+    fix_k3: true
+    use_gripper_translation: true
     camera_info_url: ''
     camera_name: camera
     display_fps: 10.0

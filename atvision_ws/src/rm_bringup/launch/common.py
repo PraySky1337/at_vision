@@ -3,7 +3,6 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import Command
-from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode
 
 xacro_file = os.path.join(
@@ -79,10 +78,10 @@ def pub_video_node(node_params) :
 )
 
 def calibration_node(node_params) :
-    return Node(
+    return ComposableNode(
     package='rm_calibration',
-    executable='calibration_node',
+    plugin='rm_calibration::CalibrationNode',
     name='calibration_node',
-    output='screen',
     parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': True}]
 )

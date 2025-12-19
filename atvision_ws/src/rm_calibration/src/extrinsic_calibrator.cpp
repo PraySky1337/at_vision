@@ -1,303 +1,270 @@
 #include "rm_calibration/extrinsic_calibrator.hpp"
 
-#include <algorithm>
-#include <iostream>
+#include <Eigen/Dense>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/core/eigen.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
-namespace camera_imu_calibration {
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
-ExtrinsicCalibrator::ExtrinsicCalibrator(
-    int board_width, int board_height, double square_size, const cv::Mat& camera_matrix,
-    const cv::Mat& dist_coeffs, int target_samples)
-    : board_width_(board_width)
-    , board_height_(board_height)
-    , square_size_(square_size)
-    , target_samples_(target_samples)
-    , quality_threshold_(0.0)
-    , camera_matrix_(camera_matrix.clone())
-    , dist_coeffs_(dist_coeffs.clone()) {}
+namespace rm_calibration {
+namespace {
 
-bool ExtrinsicCalibrator::detectSample(
-    const cv::Mat& image, const Eigen::Matrix3d& R_imu, std::vector<cv::Point2f>& corners,
-    cv::Mat& display_image, cv::Mat& rvec, cv::Mat& tvec, double& reprojection_error) const {
-    (void)R_imu;
-    cv::Size board_size(board_width_, board_height_);
-    rvec               = cv::Mat();
-    tvec               = cv::Mat();
-    reprojection_error = 0.0;
+constexpr double kRad2Deg = 180.0 / 3.14159265358979323846;
 
-    bool found = cv::findChessboardCorners(
-        image, board_size, corners,
-        cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
+Eigen::Vector3d yxz_euler(const Eigen::Matrix3d& R) {
+    // Decompose R = Ry(yaw) * Rx(pitch) * Rz(roll)
+    // Return (yaw, pitch, roll) in radians.
+    const double r12   = R(1, 2);
+    const double sx    = std::clamp(-r12, -1.0, 1.0);
+    const double pitch = std::asin(sx);
+    const double cx    = std::cos(pitch);
 
-    if (found) {
-        // Refine corners
-        cv::Mat gray;
-        if (image.channels() == 3) {
-            cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-        } else {
-            gray = image;
+    double yaw  = 0.0;
+    double roll = 0.0;
+
+    if (std::abs(cx) > 1e-9) {
+        yaw  = std::atan2(R(0, 2), R(2, 2));
+        roll = std::atan2(R(1, 0), R(1, 1));
+    } else {
+        // Gimbal lock: choose roll=0 and solve yaw from remaining terms.
+        yaw  = std::atan2(-R(2, 0), R(0, 0));
+        roll = 0.0;
+    }
+
+    return {yaw, pitch, roll};
+}
+
+std::vector<double> mat_to_vector_rowmajor(const cv::Mat& m) {
+    std::vector<double> v;
+    if (m.empty()) {
+        return v;
+    }
+
+    v.reserve(static_cast<std::size_t>(m.total()));
+    for (int r = 0; r < m.rows; r++) {
+        for (int c = 0; c < m.cols; c++) {
+            v.push_back(m.at<double>(r, c));
         }
+    }
+    return v;
+}
 
-        cv::cornerSubPix(
-            gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
-            cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.1));
+std::string format_flow(const std::vector<double>& vals) {
+    std::ostringstream ss;
+    ss.setf(std::ios::fixed);
+    ss << std::setprecision(12);
+    ss << "[";
+    for (std::size_t i = 0; i < vals.size(); i++) {
+        ss << vals[i];
+        if (i + 1 < vals.size()) {
+            ss << ", ";
+        }
+    }
+    ss << "]";
+    return ss.str();
+}
 
-        // Solve PnP to get camera pose relative to checkerboard
-        std::vector<cv::Point3f> object_points = createObjectPoints();
-        bool success                           = cv::solvePnP(
-            object_points, corners, camera_matrix_, dist_coeffs_, rvec, tvec, false,
-            cv::SOLVEPNP_ITERATIVE);
+} // namespace
 
-        if (success) {
-            reprojection_error = computeReprojectionError(object_points, corners, rvec, tvec);
+ExtrinsicCalibrator::ExtrinsicCalibrator(cv::Size pattern_size, double center_distance_m)
+    : pattern_size_(pattern_size)
+    , center_distance_m_(center_distance_m) {}
 
-            const bool aliases_input = !display_image.empty() && display_image.data == image.data
-                                    && display_image.rows == image.rows
-                                    && display_image.cols == image.cols
-                                    && display_image.type() == image.type();
-            if (display_image.empty() || aliases_input) {
-                // Avoid drawing directly on the input image (callers may score using the original
-                // pixels).
-                display_image = image.clone();
-            } else {
-                image.copyTo(display_image);
-            }
+std::vector<cv::Point3f> ExtrinsicCalibrator::make_object_points() const {
+    std::vector<cv::Point3f> points;
+    points.reserve(static_cast<std::size_t>(pattern_size_.width * pattern_size_.height));
 
-            cv::drawChessboardCorners(display_image, board_size, corners, found);
-            return true;
+    for (int i = 0; i < pattern_size_.height; i++) {
+        for (int j = 0; j < pattern_size_.width; j++) {
+            points.emplace_back(
+                static_cast<float>(j * center_distance_m_),
+                static_cast<float>(i * center_distance_m_), 0.0F);
         }
     }
 
-    if (display_image.empty()) {
-        display_image = image;
-    }
-    return false;
+    return points;
 }
 
-void ExtrinsicCalibrator::configureCollection(int target_samples, double quality_threshold) {
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    target_samples_    = target_samples;
-    quality_threshold_ = quality_threshold;
-}
-
-bool ExtrinsicCalibrator::tryAddSample(
-    const cv::Mat& rvec, const cv::Mat& tvec, const Eigen::Matrix3d& R_imu,
-    const Eigen::Vector3d& t_imu, const std::vector<cv::Point2f>& corners, double score,
-    double reprojection_error) {
-    if (score < quality_threshold_ && !best_samples_.empty()) {
+bool ExtrinsicCalibrator::detect(const cv::Mat& image, std::vector<cv::Point2f>& centers_2d) const {
+    if (image.empty()) {
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    CalibrationSample sample;
-    sample.rvec_camera        = rvec.clone();
-    sample.tvec_camera        = tvec.clone();
-    sample.R_imu              = R_imu;
-    sample.t_imu              = t_imu;
-    sample.corners            = corners;
-    sample.score              = score;
-    sample.reprojection_error = reprojection_error;
+    cv::Mat gray;
+    if (image.channels() == 1) {
+        gray = image;
+    } else {
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    }
 
-    if (best_samples_.size() < static_cast<size_t>(target_samples_)) {
-        best_samples_.push(sample);
+    centers_2d.clear();
+    if (cv::findCirclesGrid(gray, pattern_size_, centers_2d, cv::CALIB_CB_SYMMETRIC_GRID)) {
         return true;
     }
 
-    if (!best_samples_.empty() && score > best_samples_.top().score) {
-        best_samples_.pop();
-        best_samples_.push(sample);
-        return true;
-    }
-
-    return false;
-}
-
-bool ExtrinsicCalibrator::calibrate(cv::Mat& R_cam_to_imu, cv::Mat& t_cam_to_imu, double& error) {
-    const auto samples = getSamplesSnapshot();
-    if (samples.size() < 3) {
-        std::cerr << "Not enough samples. Need at least 3, have " << samples.size() << std::endl;
+    std::vector<cv::Point2f> corners;
+    const bool ok = cv::findChessboardCorners(
+        gray, pattern_size_, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+    if (!ok) {
         return false;
     }
 
-    std::vector<cv::Mat> R_gripper2base, t_gripper2base;
-    std::vector<cv::Mat> R_target2cam, t_target2cam;
-    R_gripper2base.reserve(samples.size());
-    t_gripper2base.reserve(samples.size());
-    R_target2cam.reserve(samples.size());
-    t_target2cam.reserve(samples.size());
-
-    for (const auto& sample : samples) {
-        // gripper (IMU) -> base (world) as rotation matrix/translation (from TF)
-        cv::Mat R_imu_base = eigenToCvMat(sample.R_imu);
-        R_imu_base.convertTo(R_imu_base, CV_64F);
-        if (R_imu_base.rows != 3 || R_imu_base.cols != 3) {
-            throw std::runtime_error("Invalid R_imu_base size: expected 3x3");
-        }
-        R_gripper2base.push_back(R_imu_base.clone()); // 3x3
-        cv::Mat t_imu_base =
-            (cv::Mat_<double>(3, 1) << sample.t_imu.x(), sample.t_imu.y(), sample.t_imu.z());
-        t_gripper2base.push_back(t_imu_base);         // 3x1
-
-        // target (checkerboard) -> camera (PnP result) as rotation matrix
-        cv::Mat R_target;
-        cv::Rodrigues(sample.rvec_camera, R_target);
-        R_target.convertTo(R_target, CV_64F);
-        if (R_target.rows != 3 || R_target.cols != 3) {
-            throw std::runtime_error("Invalid R_target size: expected 3x3");
-        }
-        R_target2cam.push_back(R_target); // 3x3
-
-        cv::Mat tvec_cam = sample.tvec_camera.clone();
-        tvec_cam.convertTo(tvec_cam, CV_64F);
-        if (tvec_cam.rows == 1 && tvec_cam.cols == 3) {
-            tvec_cam = tvec_cam.t();
-        }
-        if (tvec_cam.rows != 3 || tvec_cam.cols != 1) {
-            throw std::runtime_error("Invalid tvec size: expected 3x1");
-        }
-        t_target2cam.push_back(tvec_cam);
-    }
-
-    cv::Mat R_cam2imu, tvec_cam2imu;
-    cv::calibrateHandEye(
-        R_gripper2base, t_gripper2base, R_target2cam, t_target2cam, R_cam2imu, tvec_cam2imu,
-        cv::CALIB_HAND_EYE_TSAI);
-
-    R_cam2imu.convertTo(R_cam_to_imu, CV_64F);
-    tvec_cam2imu.convertTo(t_cam_to_imu, CV_64F);
-    if (R_cam_to_imu.rows != 3 || R_cam_to_imu.cols != 3) {
-        throw std::runtime_error("Hand-eye rotation output has unexpected size");
-    }
-    if (t_cam_to_imu.rows == 1 && t_cam_to_imu.cols == 3) {
-        t_cam_to_imu = t_cam_to_imu.t();
-    }
-    if (t_cam_to_imu.rows != 3 || t_cam_to_imu.cols != 1) {
-        throw std::runtime_error("Hand-eye translation output has unexpected size");
-    }
-
-    // Consistency metric based on AX=XB residuals between consecutive poses
-    auto computeInvMul = [](const cv::Mat& R1, const cv::Mat& t1, const cv::Mat& R2,
-                            const cv::Mat& t2, cv::Mat& R_rel, cv::Mat& t_rel) {
-        // inv(T2) * T1
-        R_rel = R2.t() * R1;
-        t_rel = R2.t() * (t1 - t2);
-    };
-    auto computeMulInv = [](const cv::Mat& R1, const cv::Mat& t1, const cv::Mat& R2,
-                            const cv::Mat& t2, cv::Mat& R_rel, cv::Mat& t_rel) {
-        // T2 * inv(T1)
-        R_rel = R2 * R1.t();
-        t_rel = t2 - R_rel * t1;
-    };
-
-    double rotation_error_sum    = 0.0;
-    double translation_error_sum = 0.0;
-    int pair_count               = 0;
-
-    for (size_t i = 1; i < samples.size(); ++i) {
-        cv::Mat R_A, t_A, R_B, t_B;
-        computeInvMul(
-            R_gripper2base[i - 1], t_gripper2base[i - 1], R_gripper2base[i], t_gripper2base[i], R_A,
-            t_A);
-        computeMulInv(
-            R_target2cam[i - 1], t_target2cam[i - 1], R_target2cam[i], t_target2cam[i], R_B, t_B);
-
-        cv::Mat rot_res = R_A * R_cam_to_imu - R_cam_to_imu * R_B;
-        rotation_error_sum += cv::norm(rot_res, cv::NORM_L2);
-
-        cv::Mat lhs_t = t_A + R_A * t_cam_to_imu;
-        cv::Mat rhs_t = R_cam_to_imu * t_B + t_cam_to_imu;
-        translation_error_sum += cv::norm(lhs_t - rhs_t);
-        ++pair_count;
-    }
-
-    error = (pair_count > 0)
-              ? (rotation_error_sum + translation_error_sum) / static_cast<double>(pair_count)
-              : 0.0;
-
+    cv::cornerSubPix(
+        gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
+        cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.1));
+    centers_2d = std::move(corners);
     return true;
 }
 
-std::vector<cv::Point3f> ExtrinsicCalibrator::createObjectPoints() const {
-    std::vector<cv::Point3f> corners;
-    for (int i = 0; i < board_height_; i++) {
-        for (int j = 0; j < board_width_; j++) {
-            corners.push_back(cv::Point3f(j * square_size_, i * square_size_, 0.0f));
+bool ExtrinsicCalibrator::load_gripper2base_from_txt(
+    const std::filesystem::path& path, Pose& out_pose) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        return false;
+    }
+
+    std::vector<double> vals;
+    vals.reserve(7);
+
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        std::istringstream ss(line);
+        double v = 0.0;
+        while (ss >> v) {
+            vals.push_back(v);
+        }
+
+        if (vals.size() >= 7U) {
+            break;
         }
     }
-    return corners;
+
+    if (vals.size() < 7U) {
+        return false;
+    }
+
+    const double tx = vals[0];
+    const double ty = vals[1];
+    const double tz = vals[2];
+    const double qw = vals[3];
+    const double qx = vals[4];
+    const double qy = vals[5];
+    const double qz = vals[6];
+
+    Eigen::Quaterniond q(qw, qx, qy, qz);
+    if (q.norm() <= 0.0) {
+        return false;
+    }
+    q.normalize();
+
+    out_pose.R = q.toRotationMatrix();
+    out_pose.t = Eigen::Vector3d(tx, ty, tz);
+    return true;
 }
 
-Eigen::Matrix3d ExtrinsicCalibrator::cvMatToEigen(const cv::Mat& mat) const {
-    Eigen::Matrix3d eigen_mat;
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            eigen_mat(i, j) = mat.at<double>(i, j);
+ExtrinsicCalibrationResult ExtrinsicCalibrator::calibrate(
+    const std::vector<SampleFile>& samples, const cv::Mat& camera_matrix,
+    const cv::Mat& dist_coeffs, bool use_gripper_translation) const {
+    ExtrinsicCalibrationResult out;
+
+    std::vector<cv::Mat> R_gripper2base_list;
+    std::vector<cv::Mat> t_gripper2base_list;
+    std::vector<cv::Mat> rvecs;
+    std::vector<cv::Mat> tvecs;
+
+    const auto obj_template = make_object_points();
+
+    for (const auto& sample : samples) {
+        const cv::Mat img = cv::imread(sample.image_path.string(), cv::IMREAD_COLOR);
+        if (img.empty()) {
+            continue;
         }
-    }
-    return eigen_mat;
-}
 
-cv::Mat ExtrinsicCalibrator::eigenToCvMat(const Eigen::Matrix3d& mat) const {
-    cv::Mat cv_mat(3, 3, CV_64F);
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            cv_mat.at<double>(i, j) = mat(i, j);
+        Pose gripper2base;
+        if (!load_gripper2base_from_txt(sample.tf_path, gripper2base)) {
+            continue;
         }
-    }
-    return cv_mat;
-}
 
-double ExtrinsicCalibrator::computeReprojectionError(
-    const std::vector<cv::Point3f>& object_points, const std::vector<cv::Point2f>& image_points,
-    const cv::Mat& rvec, const cv::Mat& tvec) const {
-    std::vector<cv::Point2f> projected;
-    cv::projectPoints(object_points, rvec, tvec, camera_matrix_, dist_coeffs_, projected);
+        std::vector<cv::Point2f> centers_2d;
+        const bool success = detect(img, centers_2d);
+        if (!success) {
+            continue;
+        }
 
-    double sum_error = 0.0;
-    for (size_t i = 0; i < projected.size(); ++i) {
-        sum_error += cv::norm(projected[i] - image_points[i]);
-    }
-    return projected.empty() ? 0.0 : sum_error / static_cast<double>(projected.size());
-}
+        cv::Mat rvec, tvec;
+        const bool pnp_ok = cv::solvePnP(
+            obj_template, centers_2d, camera_matrix, dist_coeffs, rvec, tvec, false,
+            cv::SOLVEPNP_IPPE);
+        if (!pnp_ok) {
+            continue;
+        }
 
-ExtrinsicCalibrator::SampleContainer ExtrinsicCalibrator::getSamplesSnapshot() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    auto queue_copy = best_samples_;
-    SampleContainer samples;
-    while (!queue_copy.empty()) {
-        samples.push_back(queue_copy.top());
-        queue_copy.pop();
-    }
+        cv::Mat R_gripper2base_cv;
+        cv::eigen2cv(gripper2base.R, R_gripper2base_cv);
 
-    std::sort(
-        samples.begin(), samples.end(),
-        [](const CalibrationSample& a, const CalibrationSample& b) { return a.score > b.score; });
-    return samples;
-}
+        cv::Mat t_gripper2base_cv =
+            (cv::Mat_<double>(3, 1) << gripper2base.t.x(), gripper2base.t.y(), gripper2base.t.z());
+        if (!use_gripper_translation) {
+            t_gripper2base_cv = cv::Mat::zeros(3, 1, CV_64F);
+        }
 
-int ExtrinsicCalibrator::getCollectedSamples() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    return static_cast<int>(best_samples_.size());
-}
-
-double ExtrinsicCalibrator::getAverageQuality() const {
-    const auto samples = getSamplesSnapshot();
-    if (samples.empty()) {
-        return 0.0;
+        R_gripper2base_list.emplace_back(std::move(R_gripper2base_cv));
+        t_gripper2base_list.emplace_back(std::move(t_gripper2base_cv));
+        rvecs.emplace_back(std::move(rvec));
+        tvecs.emplace_back(std::move(tvec));
     }
 
-    double sum = 0.0;
-    for (const auto& s : samples) {
-        sum += s.score;
+    if (rvecs.size() < 3U) {
+        out.used_samples = rvecs.size();
+        return out;
     }
-    return sum / static_cast<double>(samples.size());
+
+    cv::calibrateHandEye(
+        R_gripper2base_list, t_gripper2base_list, rvecs, tvecs, out.R_camera2gimbal,
+        out.t_camera2gimbal);
+
+    Eigen::Matrix3d R_camera2gimbal_eigen = Eigen::Matrix3d::Identity();
+    cv::cv2eigen(out.R_camera2gimbal, R_camera2gimbal_eigen);
+
+    Eigen::Matrix3d R_gimbal2ideal;
+    R_gimbal2ideal << 0, -1, 0, 0, 0, -1, 1, 0, 0;
+    const Eigen::Matrix3d R_camera2ideal = R_gimbal2ideal * R_camera2gimbal_eigen;
+    const Eigen::Vector3d ypr_rad        = yxz_euler(R_camera2ideal);
+    out.misalignment_ypr_deg             = ypr_rad * kRad2Deg;
+
+    out.used_samples = rvecs.size();
+    return out;
 }
 
-void ExtrinsicCalibrator::reset() {
-    std::lock_guard<std::mutex> lock(data_mutex_);
-    while (!best_samples_.empty()) {
-        best_samples_.pop();
-    }
+std::string ExtrinsicCalibrator::format_extrinsic_yaml(
+    const ExtrinsicCalibrationResult& result, const std::string& base_frame,
+    const std::string& gimbal_frame) {
+    (void)base_frame;
+    (void)gimbal_frame;
+
+    std::ostringstream ss;
+    ss.setf(std::ios::fixed);
+
+    ss << std::setprecision(2);
+    ss << "# 相机同理想情况的偏角: yaw" << result.misalignment_ypr_deg[0] << " pitch"
+       << result.misalignment_ypr_deg[1] << " roll" << result.misalignment_ypr_deg[2]
+       << " degree\n";
+
+    ss << std::setprecision(12);
+    ss << "R_camera2gimbal: " << format_flow(mat_to_vector_rowmajor(result.R_camera2gimbal))
+       << "\n";
+    ss << "t_camera2gimbal: " << format_flow(mat_to_vector_rowmajor(result.t_camera2gimbal))
+       << "\n";
+
+    return ss.str();
 }
 
-} // namespace camera_imu_calibration
+} // namespace rm_calibration

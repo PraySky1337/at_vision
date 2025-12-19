@@ -1,57 +1,28 @@
 #pragma once
-#include <mutex>
-#include <opencv2/opencv.hpp>
-#include <queue>
+
+#include <opencv2/core.hpp>
+
+#include <filesystem>
 #include <vector>
 
-namespace camera_imu_calibration {
+#include "rm_calibration/types.hpp"
+
+namespace rm_calibration {
 
 class IntrinsicCalibrator {
 public:
-    IntrinsicCalibrator(
-        int board_width, int board_height, double square_size, int target_samples = 20);
+    IntrinsicCalibrator(cv::Size pattern_size, double center_distance_m);
 
-    bool detectCorners(
-        const cv::Mat& image, std::vector<cv::Point2f>& corners, cv::Mat& display_image) const;
+    bool detect(const cv::Mat& image, std::vector<cv::Point2f>& centers_2d) const;
 
-    void configureCollection(int target_samples, double quality_threshold);
-    bool tryAddSample(
-        const std::vector<cv::Point2f>& corners, const cv::Size& image_size, double score);
-
-    bool calibrate(cv::Mat& camera_matrix, cv::Mat& dist_coeffs, double& rms_error);
-
-    int getCollectedFrames() const;
-    int getRequiredFrames() const { return target_samples_; }
-    double getAverageQuality() const;
-
-    void reset();
+    IntrinsicCalibrationResult
+        calibrate(const std::vector<std::filesystem::path>& image_paths, bool fix_k3) const;
 
 private:
-    struct ScoredFrame {
-        double score{0.0};
-        std::vector<cv::Point2f> corners;
-        cv::Size image_size;
-    };
+    std::vector<cv::Point3f> make_object_points() const;
 
-    struct FrameCompare {
-        bool operator()(const ScoredFrame& a, const ScoredFrame& b) const {
-            return a.score > b.score; // min-heap
-        }
-    };
-
-    // Checkerboard parameters
-    int board_width_;
-    int board_height_;
-    double square_size_;
-    int target_samples_;
-    double quality_threshold_;
-
-    std::priority_queue<ScoredFrame, std::vector<ScoredFrame>, FrameCompare> best_frames_;
-    mutable std::mutex data_mutex_;
-
-    // Helper methods
-    std::vector<cv::Point3f> createObjectPoints() const;
-    std::vector<ScoredFrame> getSamplesSnapshot() const;
+    cv::Size pattern_size_;
+    double center_distance_m_ = 0.0;
 };
 
-} // namespace camera_imu_calibration
+} // namespace rm_calibration

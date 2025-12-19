@@ -137,10 +137,9 @@ HikCameraNode::HikCameraNode(const rclcpp::NodeOptions& options)
                     }
                     continue;
                 }
+                nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
                 // 此处 camera_handle_ 非空，尝试抓帧
                 image_msg_->header.stamp = this->now();
-
-                nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
             } // unlock camera_mutex_ while processing buffer conversion to reduce hold time
 
             if (MV_OK == nRet) {

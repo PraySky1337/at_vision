@@ -1,11 +1,11 @@
 /armor_detector:
   ros__parameters:
-    debug: false
+    debug: true
     target_frame: odom
     detect_color: "RED"
     binary_thres: 50
 
-    use_pca: true # 使用PCA算法矫正灯条的角点
+    use_pca: false # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
 
     light.min_ratio: 0.0001
@@ -24,20 +24,9 @@
 
 /armor_detector_ov:
   ros__parameters:
-    armor_detector:
-      result_img:
-        enable_pub_plugins:
-        - image_transport/compressed
-        format: jpeg
-        jpeg_quality: 95
-        png_level: 3
-        tiff:
-          res_unit: inch
-          xdpi: -1
-          ydpi: -1
     bbox_timeout_s: 0.2
     camera_frame: camera_optical_frame
-    debug: false
+    debug: true
     detect_color: BLUE
     device_name: AUTO
     device_priorities: GPU,CPU
@@ -57,7 +46,7 @@
           history: keep_last
           reliability: reliable
     roi_clear_on_miss: true
-    roi_disable_dist_m: 2.0
+    roi_disable_dist_m: 3.0
     roi_future_tolerance_s: 0.02
     roi_miss_disable_s: 0.12
     roi_scale: 1.
@@ -80,10 +69,10 @@
           history: keep_last
           reliability: reliable
     solver:
-      bullet_speed: 25.0
+      bullet_speed: 22.0
       compensator_type: resistance
       controller_delay: 0.0
-      gravity: 9.81
+      gravity: 0.81
       iteration_times: 20
       max_tracking_v_yaw: 60.0
       min_switching_v_yaw: 1.0
@@ -95,15 +84,15 @@
     target_frame: odom
     tracker:
       lost_threshold: 1.0
-      matcher_gate: 5.0
-      measure_distance_k: 0.1
+      matcher_gate: 10.0
+      measure_distance_k: 1.0
       outpost:
         measure_distance_k: 0.2
-        sigma_a_yaw: 10.0
+        sigma_a_yaw: 0.5
         sigma_q_xy: 10.0
         sigma_q_z: 1.7
         yaw_log_k: 0.005
-      outpost_matcher_gate: 1.5
+      outpost_matcher_gate: 10.0
       sigma_a_xy: 10.0
       sigma_a_yaw: 20.0
       sigma_a_z: 2.0
@@ -112,6 +101,7 @@
       tracking_threshold: 5
       yaw_log_k: 0.005
     use_sim_time: false
+
 
 /camera_node:
   ros__parameters:
@@ -138,6 +128,51 @@
     #   nearest | bilinear | optimized (Hamilton)
     bayer_demosaic_method: bilinear
 
+
+/calibration_node:
+  ros__parameters:
+    base_frame: odom
+    board_height: 6
+    board_width: 9
+    square_size: 0.026
+    camera_info_topic: /camera_info
+    camera_info_url: ''
+    camera_name: camera
+    capture_timeout_s: 2.0
+    data_dir: ~/rm_calibration_data
+    display_fps: 40.0
+    enable_preview_window: false
+    extrinsic_output_path: ''
+    fix_k3: true
+    gimbal_frame: ''
+    image_ext: jpg
+    image_topic: /image_raw
+    imu_frame: gimbal_link
+    intrinsic_output_path: ''
+    jpeg_quality: 95
+    max_tf_time_diff: 0.1
+    mode: intrinsic
+    png_level: 3
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    quality_threshold: 0.1
+    required_frames: 20
+    target_samples: 25
+    tf_timeout_s: 0.2
+    use_gripper_translation: true
+    use_sim_time: false
+    weight_board_angle: 0.3
+    weight_board_pose: 0.3
+    weight_board_size: 0.2
+    weight_corner_quality: 0.3
+    weight_image_sharpness: 0.2
+    weight_imu_diversity: 0.3
+    weight_reprojection_error: 0.4
 
 /rm_gimbal:
   ros__parameters:
