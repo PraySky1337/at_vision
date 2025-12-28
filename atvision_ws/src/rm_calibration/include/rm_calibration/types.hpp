@@ -29,6 +29,11 @@ struct ExtrinsicCalibrationResult
   cv::Mat t_camera2gimbal;
   Eigen::Vector3d misalignment_ypr_deg = Eigen::Vector3d::Zero();
   std::size_t used_samples = 0;
+
+  // URDF-compatible output (gimbal_link -> camera_link in ROS frame)
+  Eigen::Vector3d urdf_xyz = Eigen::Vector3d::Zero();   // translation [m]
+  Eigen::Vector3d urdf_rpy = Eigen::Vector3d::Zero();   // roll, pitch, yaw [rad]
+  Eigen::Vector3d assembly_error_deg = Eigen::Vector3d::Zero(); // human-readable error
 };
 
 }  // namespace rm_calibration

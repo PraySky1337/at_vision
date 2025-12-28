@@ -60,13 +60,13 @@ public:
     explicit ArmorDetectorNode(const rclcpp::NodeOptions& options);
 
 private:
-    void imageCallback(sensor_msgs::msg::Image::UniquePtr img_msg);
+    void imageCallback(sensor_msgs::msg::Image::SharedPtr img_msg);
     // void targetCallback(const rm_interfaces::msg::Target::SharedPtr
     // target_msg);
 
     std::unique_ptr<Detector> initDetector();
 
-    std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::UniquePtr& img_msg);
+    std::vector<Armor> detectArmors(const sensor_msgs::msg::Image::SharedPtr& img_msg);
 
     void createDebugPublishers() noexcept;
     void destroyDebugPublishers() noexcept;

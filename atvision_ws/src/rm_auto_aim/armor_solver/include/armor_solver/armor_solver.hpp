@@ -32,14 +32,16 @@
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_utils/math/trajectory_compensator.hpp"
+#include "solver_params.hpp"
 #include "util.hpp"
 
 namespace rm_auto_aim {
+
 // Solver class used to solve the gimbal command from tracked target
 class Solver {
 public:
-    explicit Solver(std::weak_ptr<rclcpp::Node> node);
-    // explicit Solver(std::string trajectory_compensator_type, float max_tracking_v_yaw);
+    // Construct with initial parameters and atomic params reference for hot-reload
+    explicit Solver(const SolverParams& params, AtomicSolverParams& atomic_params);
     ~Solver() = default;
 
     // Solve the gimbal command from tracked target
@@ -48,14 +50,15 @@ public:
         const rm_interfaces::msg::Target& target_msg, const rclcpp::Time& current_time,
         std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
 
-    enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state;
+    enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state{TRACKING_ARMOR};
 
     std::vector<std::pair<double, double>> getTrajectory() const noexcept;
 
     std::optional<Eigen::Vector3d> getPredictedPosition() const noexcept;
 
 private:
-
+    // State transition helper - resets overflow_count on any state change
+    void transitionTo(State new_state);
 
     // Select the best armor to shoot
     // Return: selected idx in {0, 1, ..., armors_num - 1}
@@ -74,23 +77,21 @@ private:
     Eigen::Vector3d rpy_;
     Eigen::Vector4d xyza_;
 
-    double prediction_delay_;
-    double controller_delay_;
-
+    // Immutable params (set at construction)
     double shooting_range_w_;
     double shooting_range_h_;
-
-    double max_tracking_v_yaw_;
-    int overflow_count_;
     int transfer_thresh_;
 
-    double side_angle_;
-    double min_switching_v_yaw_;
+    // Reference to atomic params for hot-reload (no get_parameter calls in solve())
+    AtomicSolverParams& atomic_params_;
 
-    std::weak_ptr<rclcpp::Node> node_;
+    // State machine
+    int overflow_count_{0};
 
     Eigen::Vector3d predicted_position_{Eigen::Vector3d::Zero()};
     bool has_prediction_{false};
 };
-} // namespace fyt::auto_aim
+
+} // namespace rm_auto_aim
+
 #endif // ARMOR_SOLVER_SOLVER_HPP_

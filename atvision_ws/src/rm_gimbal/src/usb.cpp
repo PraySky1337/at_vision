@@ -59,16 +59,16 @@ public:
 
     explicit Impl(DeviceParser& parser)
         : device_parser_(parser) {}
-    ~Impl() {
-        handling_events_ = false;
-        cleanup();
-        if (ctx_)
-            libusb_exit(ctx_);
-    }
+    ~Impl() { shutdown(); }
 
     bool open(uint16_t vid, uint16_t pid = 0);
     void process_once(); // handle_events() 调用的封装
     bool sync_send(uint8_t* data, std::size_t size, unsigned tout_ms = 500) const;
+    void stop() {
+        shutdown_requested_ = true;
+        handling_events_    = false;
+    }
+    void shutdown();  // 安全关闭，等待transfer完成
 
 private:
     uint16_t find_device(uint16_t vid) const;
@@ -90,6 +90,8 @@ private:
 
     std::atomic_bool handling_events_{false};
     std::atomic_bool disconnected_{false};
+    std::atomic_bool transfer_cancelled_{false};
+    std::atomic_bool shutdown_requested_{false};
     bool first_rx_{true};
 };
 
@@ -172,11 +174,24 @@ void Device::Impl::alloc_transfer() {
         rx_transfer_, handle_, EP_IN, reinterpret_cast<uint8_t*>(rx_buf_), sizeof(rx_buf_),
         [](libusb_transfer* tr) {
             auto self = static_cast<Impl*>(tr->user_data);
-            if (!self->handling_events_)
+
+            // 检查是否正在关闭
+            if (self->shutdown_requested_) {
+                self->transfer_cancelled_ = true;
                 return;
+            }
+
+            if (!self->handling_events_) {
+                self->transfer_cancelled_ = true;
+                return;
+            }
 
             // 设备中途中断
             if (tr->status != LIBUSB_TRANSFER_COMPLETED) {
+                if (tr->status == LIBUSB_TRANSFER_CANCELLED) {
+                    self->transfer_cancelled_ = true;
+                    return;
+                }
                 self->disconnected_ = true;
                 return;
             }
@@ -191,9 +206,13 @@ void Device::Impl::alloc_transfer() {
             }
 
             // 继续提交
-            int rc = libusb_submit_transfer(tr);
-            if (rc != 0)
-                self->disconnected_ = true;
+            if (!self->shutdown_requested_ && self->handling_events_) {
+                int rc = libusb_submit_transfer(tr);
+                if (rc != 0)
+                    self->disconnected_ = true;
+            } else {
+                self->transfer_cancelled_ = true;
+            }
         },
         this, 0);
 }
@@ -204,10 +223,9 @@ void Device::Impl::submit_transfer() const {
         throw error(LIBUSB_ERROR_IO);
 }
 
-// 清理所有资源
+// 清理所有资源 (内部使用，不处理事件循环)
 void Device::Impl::cleanup() {
     if (rx_transfer_) {
-        libusb_cancel_transfer(rx_transfer_);
         libusb_free_transfer(rx_transfer_);
         rx_transfer_ = nullptr;
     }
@@ -218,13 +236,82 @@ void Device::Impl::cleanup() {
     }
 }
 
+// 安全关闭，等待transfer完成后再清理
+void Device::Impl::shutdown() {
+    // 标记关闭请求
+    shutdown_requested_ = true;
+    handling_events_    = false;
+
+    if (!ctx_) {
+        return;
+    }
+
+    // 如果有活跃的transfer，取消它并等待完成
+    if (rx_transfer_ && handle_) {
+        transfer_cancelled_ = false;
+
+        // 取消transfer
+        int rc = libusb_cancel_transfer(rx_transfer_);
+        if (rc == 0 || rc == LIBUSB_ERROR_NOT_FOUND) {
+            // 等待transfer回调完成，最多等待500ms
+            auto start = std::chrono::steady_clock::now();
+            while (!transfer_cancelled_) {
+                timeval tv{0, 10000}; // 10ms
+                libusb_handle_events_timeout_completed(ctx_, &tv, nullptr);
+
+                auto elapsed = std::chrono::steady_clock::now() - start;
+                if (elapsed > std::chrono::milliseconds(500)) {
+                    RCLCPP_WARN(
+                        rclcpp::get_logger("gimbal_node"),
+                        "Timeout waiting for transfer cancellation");
+                    break;
+                }
+            }
+        }
+    }
+
+    // 现在可以安全清理
+    cleanup();
+
+    if (ctx_) {
+        libusb_exit(ctx_);
+        ctx_ = nullptr;
+    }
+}
+
 // 事件循环里调用 — 单线程
 void Device::Impl::process_once() {
+    if (shutdown_requested_) {
+        return;
+    }
+
     timeval tv{0, 0};
     libusb_handle_events_timeout_completed(ctx_, &tv, nullptr);
 
-    if (disconnected_) {
-        cleanup();
+    if (disconnected_ && !shutdown_requested_) {
+        // 需要安全地清理当前transfer
+        if (rx_transfer_) {
+            transfer_cancelled_ = false;
+            int rc              = libusb_cancel_transfer(rx_transfer_);
+            if (rc == 0) {
+                // 等待取消完成
+                auto start = std::chrono::steady_clock::now();
+                while (!transfer_cancelled_ && !shutdown_requested_) {
+                    timeval tv2{0, 10000};
+                    libusb_handle_events_timeout_completed(ctx_, &tv2, nullptr);
+                    if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(200)) {
+                        break;
+                    }
+                }
+            }
+            libusb_free_transfer(rx_transfer_);
+            rx_transfer_ = nullptr;
+        }
+        if (handle_) {
+            libusb_release_interface(handle_, INTERFACE_NUM);
+            libusb_close(handle_);
+            handle_ = nullptr;
+        }
         try_reopen();
     }
 }
@@ -243,7 +330,7 @@ void Device::Impl::on_hotplug(libusb_hotplug_event ev) {
 
 // 重连
 bool Device::Impl::try_reopen() {
-    while (handling_events_) {
+    while (handling_events_ && !shutdown_requested_) {
         try {
             if (open(VID)) {
                 disconnected_ = false;
@@ -275,5 +362,10 @@ Device::~Device() = default;
 bool Device::open(uint16_t vid, uint16_t pid) const { return impl_->open(vid, pid); }
 bool Device::send_data(uint8_t* d, std::size_t s) const { return impl_->sync_send(d, s); }
 void Device::handle_events() const { impl_->process_once(); }
+void Device::stop() {
+    // 只设置标志，不做完整清理
+    // 完整清理由析构函数完成（在事件循环线程退出后）
+    impl_->stop();
+}
 
 } // namespace rm_gimbal

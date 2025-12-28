@@ -6,6 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // ROS2
@@ -20,7 +21,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 
 // 项目
-#include "armor_detector_ov/ov_model_base.hpp"
+#include "armor_detector_ov/detector_backend.hpp"
 #include "pnp_solver.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
@@ -33,8 +34,6 @@ public:
     ~ArmorDetectorOVNode() override;
 
 private:
-    class Pipeline;
-
     // 回调
     void imageCallback(sensor_msgs::msg::Image::ConstSharedPtr img_msg);
     void targetCallback(rm_interfaces::msg::Target::ConstSharedPtr target_msg);
@@ -45,27 +44,42 @@ private:
         handleDets(std::vector<ArmorObject>& armors, const Eigen::Matrix3d* imu_to_camera);
     void filteredArmors(std::vector<ArmorObject>& armors);
 
+    // 发布检测结果
+    void publishArmors(std::vector<ArmorObject>& armors,
+                       const rclcpp::Time& stamp,
+                       const std::string& frame_id);
+
     // 可视化
     static void drawResults(
         cv::Mat& src, const std::vector<ArmorObject>& armor_objects, const cv::Rect& roi) noexcept;
     static std::string color_letter_(int color);
 
+    // 工厂方法：创建后端
+    std::unique_ptr<DetectorBackend> createBackend();
+
 private:
-    // 推理（通过管理器创建具体模型）
-    std::unique_ptr<OVModelBase> model_;
+    // 统一后端接口
+    std::unique_ptr<DetectorBackend> detector_;
+
+    // PnP求解器
     std::unique_ptr<PnPSolver> pnp_solver_;
+
+    // 后端类型选择: "nn" 或 "traditional"
+    std::string backend_type_ = "nn";
+
+    // NN后端参数
     std::string model_name_;
     std::string model_path_;
     std::string device_name_  = "AUTO";
     std::string device_priorities_ = "GPU,CPU";
-    bool debug_               = true;
-    bool use_ba_              = true;
     bool enable_multi_thread_ = false;
-    bool enable_pipeline_     = true;
     int pipeline_queue_size_  = 4;
     int pipeline_num_requests_ = 4;
-    bool draw_latency_        = true;
 
+    // 通用参数
+    bool debug_               = true;
+    bool use_ba_              = true;
+    bool draw_latency_        = true;
     std::string detect_color_ = "RED";
 
     // 回调组
@@ -105,7 +119,7 @@ private:
     // Armors（若需发布）
     rm_interfaces::msg::Armors armors_msg_;
 
-    // ROI 生成/使用（基于 armor_solver/target）
+    // ROI 生成/使用（基于 armor_solver/target）- 仅 NN 后端使用
     bool use_roi_ = true;
     std::string camera_frame_ = "camera_optical_frame";
     double roi_timeout_s_ = 0.2;
@@ -127,8 +141,9 @@ private:
     rclcpp::Time last_bbox_stamp_{0, 0, RCL_ROS_TIME};
     cv::Size last_image_size_{0, 0};
 
-    // 异步流水线（需要最后析构，确保线程先停再析构 pub/model）
-    std::unique_ptr<Pipeline> pipeline_;
+    // 帧时间戳映射（用于异步模式结果匹配）
+    std::mutex stamp_map_mutex_;
+    std::unordered_map<uint64_t, std::pair<rclcpp::Time, std::string>> frame_stamp_map_;
 };
 
 } // namespace rm_auto_aim

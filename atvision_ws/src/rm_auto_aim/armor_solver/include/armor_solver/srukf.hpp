@@ -72,6 +72,7 @@ inline Eigen::Matrix<Scalar, N, N> chol_from_ldlt(
             jitter = std::max(jitter, Scalar(1e-12) + Scalar(1e-3) * std::abs(min_d));
         }
     }
+
     // 多次退避增加 jitter
     for (int t = 0; t < max_try; ++t) {
         Mat Pj = P;

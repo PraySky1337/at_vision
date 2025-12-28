@@ -139,13 +139,13 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions& options)
     tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
 }
 
-void ArmorDetectorNode::imageCallback(sensor_msgs::msg::Image::UniquePtr img_msg) {
+void ArmorDetectorNode::imageCallback(sensor_msgs::msg::Image::SharedPtr img_msg) {
     // Get the transform from odom to gimbal
     try {
         rclcpp::Time target_time = img_msg->header.stamp;
         auto odom_to_gimbal      = tf2_buffer_->lookupTransform(
             odom_frame_, img_msg->header.frame_id, target_time,
-            rclcpp::Duration::from_seconds(0.01));
+            rclcpp::Duration::from_seconds(0.001));
         auto msg_q = odom_to_gimbal.transform.rotation;
         tf2::Quaternion tf_q;
         tf2::fromMsg(msg_q, tf_q);
@@ -272,7 +272,7 @@ std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
 }
 
 std::vector<Armor>
-    ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::UniquePtr& img_msg) {
+    ArmorDetectorNode::detectArmors(const sensor_msgs::msg::Image::SharedPtr& img_msg) {
     // Convert ROS img to cv::Mat
     auto img = cv_bridge::toCvCopy(*img_msg, "rgb8")->image;
 

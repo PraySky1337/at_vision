@@ -3,6 +3,7 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import Command
+from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode
 
 xacro_file = os.path.join(
@@ -14,15 +15,14 @@ robot_description = Command([
     # ' rpy:=' + rpy
 ])
 
-rsp_component = ComposableNode(
+rsp_node = Node(
     package='robot_state_publisher',
-    plugin='robot_state_publisher::RobotStatePublisher',
+    executable='robot_state_publisher',
     name='robot_state_publisher',
     parameters=[{
         'robot_description': robot_description,
         'publish_frequency': 1000.0
     }],
-    extra_arguments=[{'use_intra_process_comms': False}]
 )
 
 def camera_node(node_params):
@@ -49,7 +49,7 @@ def armor_detector_ov_node(node_params):
     plugin='rm_auto_aim::ArmorDetectorOVNode',
     name='armor_detector_ov',
     parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': True}])
+    extra_arguments=[{'use_intra_process_comms': False}])
 
 def armor_solver_node(node_params):
     return ComposableNode(
@@ -57,6 +57,7 @@ def armor_solver_node(node_params):
     plugin='rm_auto_aim::ArmorSolverNode',
     name='armor_solver',
     parameters=[node_params],
+    extra_arguments=[{'use_intra_process_comms': False}],
 )
 
 def gimbal_node(node_params) :

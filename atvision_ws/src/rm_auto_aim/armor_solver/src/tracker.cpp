@@ -18,10 +18,10 @@ void Tracker::reset_tracker_() {
 }
 
 bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
-    std::vector<int> idx;
-    const bool is_outpost = name == "outpost";
-
     measurement_.fill(0.0);
+
+    const bool is_outpost = name == "outpost";
+    const int armors_num = util::armors_num(name);
 
     if (is_outpost && !outpost_ukf) {
         return false;
@@ -31,24 +31,37 @@ bool Tracker::update(const rm_interfaces::msg::Armors& armors) {
         return false;
     }
 
-    auto matched = is_outpost ? match_all_outpost(armors, idx, outpost_ukf->x(), outpost_ukf->Sx())
-                              : match_all(armors, idx, robot_ukf->x(), robot_ukf->Sx());
+    // Use template-based DataAssociator (eliminates code duplication)
+    typename DataAssociator<RobotModel>::MatchResult match_result;
+    std::vector<int> idx;
 
-    if (matched.empty()) {
-        // 没有任何通过门控的观测，这一帧只做 predict
+    if (is_outpost) {
+        auto result = outpost_associator_.match(
+            armors, outpost_ukf->x(), outpost_ukf->Sx(),
+            outpost_model_, name, params.outpost_matcher_gate, armors_num);
+        // Convert to compatible format
+        for (size_t i = 0; i < result.armors.size(); ++i) {
+            match_result.armors.push_back(result.armors[i]);
+            idx.push_back(result.armor_ids[i]);
+        }
+    } else {
+        auto result = robot_associator_.match(
+            armors, robot_ukf->x(), robot_ukf->Sx(),
+            robot_model_, name, params.matcher_gate, armors_num);
+        match_result.armors = result.armors;
+        idx = result.armor_ids;
+    }
+
+    if (match_result.armors.empty()) {
         state_machine(false);
         return false;
     }
 
-    // 有观测，就认为 found = true
     state_machine(true);
-    // if (matched.size() > 1) {
-    //     RCLCPP_INFO(rclcpp::get_logger("armor_solver"), "update 2 armors!");
-    // }
 
-    for (size_t i = 0; i < matched.size(); ++i) {
+    for (size_t i = 0; i < match_result.armors.size(); ++i) {
         RoboUKF::VecZ z;
-        auto& ia = matched[i];
+        auto& ia = match_result.armors[i];
 
         const auto& p = ia.pose.position;
         const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
@@ -219,321 +232,6 @@ std::string Tracker::first_meet_u(const rm_interfaces::msg::Armors& armors) {
     }
     state_machine(true);
     return tgt.number;
-}
-
-std::vector<rm_interfaces::msg::Armor> Tracker::match_all(
-    const rm_interfaces::msg::Armors& armors, std::vector<int>& idx, const RoboUKF::VecX& x_pre,
-    const RoboUKF::MatXX& Sx_pre) {
-
-    std::vector<rm_interfaces::msg::Armor> matched;
-    idx.clear();
-
-    if (armors.armors.empty()) {
-        return matched;
-    }
-
-    const int n_obs      = static_cast<int>(armors.armors.size());
-    const int armors_num = util::armors_num(name);
-
-    // 代价矩阵：观测 j 与 armor_id k 的匹配代价
-    std::vector<std::vector<double>> cost(
-        n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
-
-    using VecZ = RobotModel::VecZ;
-    using MatZ = Eigen::Matrix<double, RobotModel::NZ, RobotModel::NZ>;
-
-    // 预计算每个观测的量测向量
-    std::vector<VecZ> meas_list(n_obs);
-    for (int j = 0; j < n_obs; ++j) {
-        const auto& a = armors.armors[j];
-        VecZ z;
-        const auto& p  = a.pose.position;
-        const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
-        z[0]           = ypd[0];
-        z[1]           = ypd[1];
-        z[2]           = ypd[2];
-        z[3]           = util::orientation2yaw(a.pose.orientation);
-
-        meas_list[j] = z;
-    }
-
-    // 预计算每个 armor_id 的量测预测与协方差（HPH^T），用于马氏距离门控
-    struct PredMeas {
-        VecZ z_pred;
-        MatZ Pzz;
-    };
-    std::vector<PredMeas> pred_cache(armors_num);
-    {
-        constexpr int NX = RobotModel::NX;
-        const double gamma = std::sqrt(static_cast<double>(NX));
-        const double w     = 1.0 / (2.0 * static_cast<double>(NX));
-        for (int id = 0; id < armors_num; ++id) {
-            const VecZ z0 = robot_model_.h(x_pre, id);
-
-            std::array<VecZ, 2 * NX> z_sig{};
-            for (int k = 0; k < NX; ++k) {
-                const RoboUKF::VecX xp = x_pre + gamma * Sx_pre.col(k);
-                const RoboUKF::VecX xm = x_pre - gamma * Sx_pre.col(k);
-
-                VecZ zp = robot_model_.h(xp, id);
-                VecZ zm = robot_model_.h(xm, id);
-
-                zp[0] = util::unwrap_rad(z0[0], zp[0]);
-                zp[1] = util::unwrap_rad(z0[1], zp[1]);
-                zp[3] = util::unwrap_rad(z0[3], zp[3]);
-
-                zm[0] = util::unwrap_rad(z0[0], zm[0]);
-                zm[1] = util::unwrap_rad(z0[1], zm[1]);
-                zm[3] = util::unwrap_rad(z0[3], zm[3]);
-
-                z_sig[k]      = zp;
-                z_sig[NX + k] = zm;
-            }
-
-            VecZ z_bar = VecZ::Zero();
-            for (const auto& zs : z_sig) {
-                z_bar.noalias() += w * zs;
-            }
-
-            MatZ Pzz = MatZ::Zero();
-            for (const auto& zs : z_sig) {
-                VecZ dz;
-                dz[0] = util::shortest_rad(z_bar[0], zs[0]);
-                dz[1] = zs[1] - z_bar[1];
-                dz[2] = zs[2] - z_bar[2];
-                dz[3] = util::shortest_rad(z_bar[3], zs[3]);
-                Pzz.noalias() += w * (dz * dz.transpose());
-            }
-
-            pred_cache[id] = {z_bar, Pzz};
-        }
-    }
-
-    // 给每个 (观测, armor_id) 计算残差 + 代价
-    for (int j = 0; j < n_obs; ++j) {
-        if (armors.armors[j].number != name)
-            continue; // 只匹配目标编号一致的装甲板
-        for (int id = 0; id < armors_num; ++id) {
-            const auto& z_pred = pred_cache[id].z_pred;
-
-            VecZ nu;
-            nu[0] = util::shortest_rad(z_pred[0], meas_list[j][0]);
-            nu[1] = meas_list[j][1] - z_pred[1];
-            nu[2] = meas_list[j][2] - z_pred[2];
-            nu[3] = util::shortest_rad(z_pred[3], meas_list[j][3]);
-
-            const Eigen::Matrix<double, RobotModel::NZ, 1> R_diag =
-                robot_model_.R_diag(meas_list[j]);
-            MatZ S = pred_cache[id].Pzz;
-            S.diagonal() += R_diag;
-            S      = (S + S.transpose()) * 0.5;
-            S.diagonal().array() += 1e-9;
-
-            const Eigen::LDLT<MatZ> ldlt(S);
-            if (ldlt.info() != Eigen::Success) {
-                continue;
-            }
-
-            double d2 = nu.transpose() * ldlt.solve(nu);
-
-            // 门控
-            if (std::isfinite(d2) && d2 < params.matcher_gate) {
-                cost[j][id] = d2;
-            }
-        }
-    }
-
-    // 一对一贪心分配：每个观测最多配一个 armor_id，每个 armor_id 只用一次
-    std::vector<bool> used_obs(n_obs, false);
-    std::vector<bool> used_id(armors_num, false);
-
-    while (true) {
-        double best = std::numeric_limits<double>::infinity();
-        int best_j  = -1;
-        int best_id = -1;
-
-        for (int j = 0; j < n_obs; ++j) {
-            if (used_obs[j])
-                continue;
-            for (int id = 0; id < armors_num; ++id) {
-                if (used_id[id])
-                    continue;
-                if (cost[j][id] < best) {
-                    best    = cost[j][id];
-                    best_j  = j;
-                    best_id = id;
-                }
-            }
-        }
-
-        if (best_j < 0 || best_id < 0) {
-            break; // 没有更多合格的匹配
-        }
-
-        used_obs[best_j] = true;
-        used_id[best_id] = true;
-
-        matched.push_back(armors.armors[best_j]);
-        idx.push_back(best_id);
-    }
-
-    return matched;
-}
-
-std::vector<rm_interfaces::msg::Armor> Tracker::match_all_outpost(
-    const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
-    const OutpostUKF::VecX& x_pre, const OutpostUKF::MatXX& Sx_pre) {
-
-    std::vector<rm_interfaces::msg::Armor> matched;
-    idx.clear();
-
-    if (armors.armors.empty()) {
-        return matched;
-    }
-
-    const int n_obs      = static_cast<int>(armors.armors.size());
-    const int armors_num = util::armors_num(name);
-
-    // 代价矩阵：观测 j 与 armor_id k 的匹配代价
-    std::vector<std::vector<double>> cost(
-        n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
-
-    using VecZ = OutpostModel::VecZ;
-    using MatZ = Eigen::Matrix<double, OutpostModel::NZ, OutpostModel::NZ>;
-
-    std::vector<VecZ> meas_list(n_obs);
-    // 构建测量（球坐标系）
-    for (int j = 0; j < n_obs; ++j) {
-        const auto& a = armors.armors[j];
-        VecZ z;
-        const auto& p  = a.pose.position;
-        const auto ypd = util::xyz2ypd({p.x, p.y, p.z});
-        z[0]           = ypd[0];
-        z[1]           = ypd[1];
-        z[2]           = ypd[2];
-        z[3]           = util::orientation2yaw(a.pose.orientation);
-        meas_list[j]   = z;
-    }
-
-    // 预计算每个 armor_id 的量测预测与协方差（HPH^T）
-    struct PredMeas {
-        VecZ z_pred;
-        MatZ Pzz;
-    };
-    std::vector<PredMeas> pred_cache(armors_num);
-    {
-        constexpr int NX = OutpostModel::NX;
-        const double gamma = std::sqrt(static_cast<double>(NX));
-        const double w     = 1.0 / (2.0 * static_cast<double>(NX));
-        for (int id = 0; id < armors_num; ++id) {
-            const VecZ z0 = outpost_model_.h(x_pre, id);
-
-            std::array<VecZ, 2 * NX> z_sig{};
-            for (int k = 0; k < NX; ++k) {
-                const OutpostUKF::VecX xp = x_pre + gamma * Sx_pre.col(k);
-                const OutpostUKF::VecX xm = x_pre - gamma * Sx_pre.col(k);
-
-                VecZ zp = outpost_model_.h(xp, id);
-                VecZ zm = outpost_model_.h(xm, id);
-
-                zp[0] = util::unwrap_rad(z0[0], zp[0]);
-                zp[1] = util::unwrap_rad(z0[1], zp[1]);
-                zp[3] = util::unwrap_rad(z0[3], zp[3]);
-
-                zm[0] = util::unwrap_rad(z0[0], zm[0]);
-                zm[1] = util::unwrap_rad(z0[1], zm[1]);
-                zm[3] = util::unwrap_rad(z0[3], zm[3]);
-
-                z_sig[k]      = zp;
-                z_sig[NX + k] = zm;
-            }
-
-            VecZ z_bar = VecZ::Zero();
-            for (const auto& zs : z_sig) {
-                z_bar.noalias() += w * zs;
-            }
-
-            MatZ Pzz = MatZ::Zero();
-            for (const auto& zs : z_sig) {
-                VecZ dz;
-                dz[0] = util::shortest_rad(z_bar[0], zs[0]);
-                dz[1] = zs[1] - z_bar[1];
-                dz[2] = zs[2] - z_bar[2];
-                dz[3] = util::shortest_rad(z_bar[3], zs[3]);
-                Pzz.noalias() += w * (dz * dz.transpose());
-            }
-
-            pred_cache[id] = {z_bar, Pzz};
-        }
-    }
-
-    for (int j = 0; j < n_obs; ++j) {
-        if (armors.armors[j].number != name)
-            continue;
-
-        for (int id = 0; id < armors_num; ++id) {
-            const auto& z_pred = pred_cache[id].z_pred;
-
-            VecZ nu;
-            nu[0] = util::shortest_rad(z_pred[0], meas_list[j][0]);
-            nu[1] = meas_list[j][1] - z_pred[1];
-            nu[2] = meas_list[j][2] - z_pred[2];
-            nu[3] = util::shortest_rad(z_pred[3], meas_list[j][3]);
-
-            const Eigen::Matrix<double, OutpostModel::NZ, 1> R_diag =
-                outpost_model_.R_diag(meas_list[j]);
-            MatZ S = pred_cache[id].Pzz;
-            S.diagonal() += R_diag;
-            S      = (S + S.transpose()) * 0.5;
-            S.diagonal().array() += 1e-9;
-
-            const Eigen::LDLT<MatZ> ldlt(S);
-            if (ldlt.info() != Eigen::Success) {
-                continue;
-            }
-
-            double d2 = nu.transpose() * ldlt.solve(nu);
-
-            if (std::isfinite(d2) && d2 < params.outpost_matcher_gate) {
-                cost[j][id] = d2;
-            }
-        }
-    }
-
-    std::vector<bool> used_obs(n_obs, false);
-    std::vector<bool> used_id(armors_num, false);
-
-    while (true) {
-        double best = std::numeric_limits<double>::infinity();
-        int best_j  = -1;
-        int best_id = -1;
-
-        for (int j = 0; j < n_obs; ++j) {
-            if (used_obs[j])
-                continue;
-            for (int id = 0; id < armors_num; ++id) {
-                if (used_id[id])
-                    continue;
-                if (cost[j][id] < best) {
-                    best    = cost[j][id];
-                    best_j  = j;
-                    best_id = id;
-                }
-            }
-        }
-
-        if (best_j < 0 || best_id < 0) {
-            break;
-        }
-
-        used_obs[best_j] = true;
-        used_id[best_id] = true;
-
-        matched.push_back(armors.armors[best_j]);
-        idx.push_back(best_id);
-    }
-
-    return matched;
 }
 
 void Tracker::state_machine(bool found) {

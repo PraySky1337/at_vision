@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <mutex>
 #include <optional>
@@ -247,7 +248,8 @@ public:
         tf_buffer_->setCreateTimerInterface(timer_interface);
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        sub_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+        // Use Reentrant callback group for image subscriber to prevent blocking
+        sub_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         srv_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
         rclcpp::SubscriptionOptions sub_opt;
@@ -336,19 +338,107 @@ private:
         return write_text_file(path, ss.str());
     }
 
-    CaptureResult capture_from_image(const sensor_msgs::msg::Image::ConstSharedPtr& msg) {
-        CaptureResult res;
+    void on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg) {
+        // Lightweight callback - just store image data, don't do any disk I/O
+        bool should_store = false;
+        {
+            std::lock_guard<std::mutex> lock(capture_mutex_);
+            image_seq_++;
+            if (capture_pending_ && !capture_in_process_ && image_seq_ > capture_from_seq_) {
+                capture_in_process_ = true;
+                should_store        = true;
+            }
+        }
 
+        if (!should_store) {
+            return;
+        }
+
+        // Copy image data (fast) - don't do disk I/O here
         cv_bridge::CvImageConstPtr cv_ptr;
         try {
             cv_ptr = cv_bridge::toCvShare(msg, "bgr8");
         } catch (const cv_bridge::Exception& e) {
-            res.success = false;
-            res.message = std::string("cv_bridge: ") + e.what();
-            return res;
+            std::lock_guard<std::mutex> lock(capture_mutex_);
+            capture_pending_    = false;
+            capture_in_process_ = false;
+            capture_done_       = true;
+            capture_success_    = false;
+            capture_message_    = std::string("cv_bridge: ") + e.what();
+            capture_cv_.notify_all();
+            return;
         }
 
-        const auto stamp  = rclcpp::Time(msg->header.stamp);
+        // Store image copy and timestamp for processing in service callback
+        {
+            std::lock_guard<std::mutex> lock(capture_mutex_);
+            pending_image_       = cv_ptr->image.clone();
+            pending_image_stamp_ = rclcpp::Time(msg->header.stamp);
+            capture_image_ready_ = true;
+        }
+        capture_cv_.notify_all();
+    }
+
+    void on_capture(
+        const std_srvs::srv::Trigger::Request::SharedPtr,
+        const std_srvs::srv::Trigger::Response::SharedPtr response) {
+        std::unique_lock<std::mutex> lock(capture_mutex_);
+        if (capture_pending_ || capture_in_process_) {
+            response->success = false;
+            response->message = "capture already in progress";
+            return;
+        }
+
+        capture_pending_     = true;
+        capture_in_process_  = false;
+        capture_done_        = false;
+        capture_success_     = false;
+        capture_image_ready_ = false;
+        capture_message_.clear();
+        capture_from_seq_ = image_seq_;
+
+        const auto timeout = std::chrono::duration<double>(capture_timeout_s_);
+        const auto deadline =
+            std::chrono::steady_clock::now()
+            + std::chrono::duration_cast<std::chrono::steady_clock::duration>(timeout);
+
+        // Wait for image to be ready (not for full capture completion)
+        const bool ok =
+            capture_cv_.wait_until(lock, deadline, [this]() { return capture_image_ready_; });
+
+        if (!ok) {
+            capture_pending_    = false;
+            capture_in_process_ = false;
+            response->success   = false;
+            response->message   = "timeout waiting for next image";
+            return;
+        }
+
+        // Image is ready, copy data out of mutex scope
+        cv::Mat image_copy        = pending_image_.clone();
+        rclcpp::Time image_stamp  = pending_image_stamp_;
+        capture_image_ready_      = false;
+        lock.unlock();
+
+        // Do TF lookup and disk I/O outside of image callback (non-blocking for subscriber)
+        CaptureResult result = process_captured_image(image_copy, image_stamp);
+
+        // Update state
+        lock.lock();
+        capture_pending_    = false;
+        capture_in_process_ = false;
+        capture_done_       = true;
+        capture_success_    = result.success;
+        capture_message_    = result.message;
+        lock.unlock();
+
+        response->success = result.success;
+        response->message = result.message;
+    }
+
+    CaptureResult process_captured_image(const cv::Mat& image, const rclcpp::Time& stamp) {
+        CaptureResult res;
+
         const auto tf_opt = lookup_gripper2base(stamp);
         if (!tf_opt) {
             res.success = false;
@@ -370,7 +460,7 @@ private:
             imwrite_params = {cv::IMWRITE_PNG_COMPRESSION, png_level_};
         }
 
-        if (!cv::imwrite(img_path.string(), cv_ptr->image, imwrite_params)) {
+        if (!cv::imwrite(img_path.string(), image, imwrite_params)) {
             res.success = false;
             res.message = "failed to write image: " + img_path.string();
             return res;
@@ -385,69 +475,6 @@ private:
         res.success = true;
         res.message = "saved: " + img_path.string() + " and " + tf_path.string();
         return res;
-    }
-
-    void on_image(const sensor_msgs::msg::Image::ConstSharedPtr msg) {
-        bool do_capture = false;
-        {
-            std::lock_guard<std::mutex> lock(capture_mutex_);
-            image_seq_++;
-            if (capture_pending_ && !capture_in_process_ && image_seq_ > capture_from_seq_) {
-                capture_in_process_ = true;
-                do_capture          = true;
-            }
-        }
-
-        if (!do_capture) {
-            return;
-        }
-
-        const auto result = capture_from_image(msg);
-
-        {
-            std::lock_guard<std::mutex> lock(capture_mutex_);
-            capture_pending_    = false;
-            capture_in_process_ = false;
-            capture_done_       = true;
-            capture_success_    = result.success;
-            capture_message_    = result.message;
-        }
-        capture_cv_.notify_all();
-    }
-
-    void on_capture(
-        const std_srvs::srv::Trigger::Request::SharedPtr,
-        const std_srvs::srv::Trigger::Response::SharedPtr response) {
-        std::unique_lock<std::mutex> lock(capture_mutex_);
-        if (capture_pending_ || capture_in_process_) {
-            response->success = false;
-            response->message = "capture already in progress";
-            return;
-        }
-
-        capture_pending_    = true;
-        capture_in_process_ = false;
-        capture_done_       = false;
-        capture_success_    = false;
-        capture_message_.clear();
-        capture_from_seq_ = image_seq_;
-
-        const auto timeout = std::chrono::duration<double>(capture_timeout_s_);
-        const auto deadline =
-            std::chrono::steady_clock::now()
-            + std::chrono::duration_cast<std::chrono::steady_clock::duration>(timeout);
-
-        const bool ok = capture_cv_.wait_until(lock, deadline, [this]() { return capture_done_; });
-        if (!ok) {
-            capture_pending_    = false;
-            capture_in_process_ = false;
-            response->success   = false;
-            response->message   = "timeout waiting for next image";
-            return;
-        }
-
-        response->success = capture_success_;
-        response->message = capture_message_;
     }
 
     void on_calibrate(
@@ -615,6 +642,9 @@ private:
     bool capture_in_process_ = false;
     bool capture_done_       = false;
     bool capture_success_    = false;
+    bool capture_image_ready_ = false;
+    cv::Mat pending_image_;
+    rclcpp::Time pending_image_stamp_;
     std::string capture_message_;
     std::uint64_t image_seq_        = 0;
     std::uint64_t capture_from_seq_ = 0;

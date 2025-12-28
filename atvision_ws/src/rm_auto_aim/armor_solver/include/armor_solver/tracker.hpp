@@ -1,4 +1,5 @@
 #pragma once
+#include "data_associator.hpp"
 #include "motion_model.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/target.hpp"
@@ -64,16 +65,14 @@ struct Tracker {
     bool update(const rm_interfaces::msg::Armors& armors);
 
 private:
-    std::vector<rm_interfaces::msg::Armor> match_all(
-        const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
-        const RoboUKF::VecX& x_pre, const RoboUKF::MatXX& Sx_pre);
-    std::vector<rm_interfaces::msg::Armor> match_all_outpost(
-        const rm_interfaces::msg::Armors& armors, std::vector<int>& idx,
-        const OutpostUKF::VecX& x_pre, const OutpostUKF::MatXX& Sx_pre);
     void state_machine(bool found);
     void reset_tracker_();
     void set_measurement(const RoboUKF::VecZ& z, bool another_pair);
     std::array<double, RobotModel::NZ * 2> measurement_;
+
+    // Data associators (template-based, eliminates code duplication)
+    DataAssociator<RobotModel> robot_associator_;
+    DataAssociator<OutpostModel> outpost_associator_;
 
     // motion_model
     RobotModel robot_model_;

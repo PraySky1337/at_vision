@@ -98,6 +98,11 @@ ArmorSolverNode::ArmorSolverNode(const rclcpp::NodeOptions& options)
 
     tracker_params_ = declareTrackerParameters();
     tracker_.set_params(tracker_params_);
+
+    // Declare and initialize solver parameters
+    solver_params_ = declareSolverParameters();
+    atomic_solver_params_.update(solver_params_);
+
     tracker_param_cb_handle_ = this->add_on_set_parameters_callback(
         std::bind(&ArmorSolverNode::onSetParameters, this, std::placeholders::_1));
 
@@ -254,6 +259,44 @@ Tracker::Params ArmorSolverNode::declareTrackerParameters() {
     return params;
 }
 
+SolverParams ArmorSolverNode::declareSolverParameters() {
+    SolverParams params{};
+
+#define DECLARE_DOUBLE_ZH(name, default_val, desc_zh, min, max, step) \
+    this->declare_parameter(name, default_val, makeDoubleDescriptor(desc_zh, min, max, step))
+
+    // clang-format off
+    params.shooting_range_w = DECLARE_DOUBLE_ZH("solver.shooting_range_width", 0.135,
+        "射击窗口宽度（米）", 0.0, 1.0, 0.001);
+    params.shooting_range_h = DECLARE_DOUBLE_ZH("solver.shooting_range_height", 0.135,
+        "射击窗口高度（米）", 0.0, 1.0, 0.001);
+    params.max_tracking_v_yaw = DECLARE_DOUBLE_ZH("solver.max_tracking_v_yaw", 6.0,
+        "跟踪装甲板模式的最大角速度阈值", 0.0, 60.0, 0.01);
+    params.prediction_delay = DECLARE_DOUBLE_ZH("solver.prediction_delay", 0.0,
+        "额外预测延迟（秒）", -1.0, 1.0, 0.001);
+    params.side_angle = DECLARE_DOUBLE_ZH("solver.side_angle", 15.0,
+        "侧向角度阈值（度）", 0.0, 90.0, 0.1);
+    params.min_switching_v_yaw = DECLARE_DOUBLE_ZH("solver.min_switching_v_yaw", 1.0,
+        "最小切换角速度", 0.0, 10.0, 0.01);
+    params.transfer_thresh = static_cast<int>(this->declare_parameter("solver.transfer_thresh", 5));
+
+    // Trajectory compensator parameters
+    params.compensator_type = this->declare_parameter("solver.compensator_type", "resistance");
+    params.trajectory.iteration_times = static_cast<int>(
+        this->declare_parameter("solver.iteration_times", 20));
+    params.trajectory.bullet_speed = DECLARE_DOUBLE_ZH("solver.bullet_speed", 20.0,
+        "弹丸速度（米/秒）", 5.0, 50.0, 0.1);
+    params.trajectory.gravity = DECLARE_DOUBLE_ZH("solver.gravity", 9.8,
+        "重力加速度", 9.0, 10.0, 0.00001);
+    params.trajectory.resistance = DECLARE_DOUBLE_ZH("solver.resistance", 0.001,
+        "空气阻力系数", 0.0, 0.1, 0.0000001);
+    // clang-format on
+
+#undef DECLARE_DOUBLE_ZH
+
+    return params;
+}
+
 bool ArmorSolverNode::applyTrackerParamUpdate(
     const rclcpp::Parameter& param, Tracker::Params& params) {
     const auto& name = param.get_name();
@@ -327,17 +370,39 @@ bool ArmorSolverNode::applyTrackerParamUpdate(
     return false;
 }
 
+bool ArmorSolverNode::applySolverParamUpdate(const rclcpp::Parameter& param) {
+    const auto& name = param.get_name();
+    bool updated = false;
+
+    if (name == "solver.max_tracking_v_yaw") {
+        atomic_solver_params_.max_tracking_v_yaw.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.prediction_delay") {
+        atomic_solver_params_.prediction_delay.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.side_angle") {
+        atomic_solver_params_.side_angle.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.min_switching_v_yaw") {
+        atomic_solver_params_.min_switching_v_yaw.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    }
+
+    return updated;
+}
+
 rcl_interfaces::msg::SetParametersResult
     ArmorSolverNode::onSetParameters(const std::vector<rclcpp::Parameter>& parameters) {
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
-    bool updated      = false;
+    bool tracker_updated = false;
     {
         std::lock_guard<std::mutex> lock(tracker_mutex_);
         for (const auto& param : parameters) {
-            updated = applyTrackerParamUpdate(param, tracker_params_) || updated;
+            tracker_updated = applyTrackerParamUpdate(param, tracker_params_) || tracker_updated;
+            applySolverParamUpdate(param);  // Atomic updates, no lock needed
         }
-        if (updated) {
+        if (tracker_updated) {
             tracker_.set_params(tracker_params_);
         }
     }
@@ -351,9 +416,9 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
         ps.header = armors_msg->header;
         ps.pose   = armor.pose;
         try {
-            armor.pose = tf2_buffer_->transform(ps, target_frame_).pose;
-        } catch (const tf2::TransformException& ex) {
-            RCLCPP_ERROR(get_logger(), "Transform error: %s", ex.what());
+            armor.pose = tf2_buffer_->transform(ps, target_frame_, tf2::durationFromSec(0.001)).pose;
+        } catch (...) {
+            RCLCPP_ERROR(get_logger(), "Transform error");
             return;
         }
     }
@@ -411,9 +476,9 @@ void ArmorSolverNode::armorsCallback(rm_interfaces::msg::Armors::SharedPtr armor
     // Store and Publish the target_msg
     {
         std::lock_guard<std::mutex> lock(target_mutex_);
-        // Lazy initialize solver owing to weak_from_this() can't be called in constructor
+        // Lazy initialize solver
         if (solver_ == nullptr) {
-            solver_ = std::make_unique<Solver>(weak_from_this());
+            solver_ = std::make_unique<Solver>(solver_params_, atomic_solver_params_);
         }
         armor_target_ = target_msg;
     }

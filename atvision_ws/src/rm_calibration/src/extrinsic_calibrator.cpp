@@ -14,6 +14,7 @@ namespace rm_calibration {
 namespace {
 
 constexpr double kRad2Deg = 180.0 / 3.14159265358979323846;
+constexpr double kDeg2Rad = 3.14159265358979323846 / 180.0;
 
 Eigen::Vector3d yxz_euler(const Eigen::Matrix3d& R) {
     // Decompose R = Ry(yaw) * Rx(pitch) * Rz(roll)
@@ -36,6 +37,24 @@ Eigen::Vector3d yxz_euler(const Eigen::Matrix3d& R) {
     }
 
     return {yaw, pitch, roll};
+}
+
+// Extract roll, pitch, yaw from rotation matrix (XYZ Euler convention, i.e., R = Rz(yaw) * Ry(pitch) * Rx(roll))
+Eigen::Vector3d xyz_euler_rpy(const Eigen::Matrix3d& R) {
+    double pitch = std::asin(std::clamp(-R(2, 0), -1.0, 1.0));
+    double cp    = std::cos(pitch);
+
+    double roll, yaw;
+    if (std::abs(cp) > 1e-9) {
+        roll = std::atan2(R(2, 1), R(2, 2));
+        yaw  = std::atan2(R(1, 0), R(0, 0));
+    } else {
+        // Gimbal lock
+        roll = std::atan2(-R(1, 2), R(1, 1));
+        yaw  = 0.0;
+    }
+
+    return {roll, pitch, yaw};
 }
 
 std::vector<double> mat_to_vector_rowmajor(const cv::Mat& m) {
@@ -234,6 +253,55 @@ ExtrinsicCalibrationResult ExtrinsicCalibrator::calibrate(
     Eigen::Matrix3d R_camera2gimbal_eigen = Eigen::Matrix3d::Identity();
     cv::cv2eigen(out.R_camera2gimbal, R_camera2gimbal_eigen);
 
+    Eigen::Vector3d t_camera2gimbal_eigen;
+    t_camera2gimbal_eigen << out.t_camera2gimbal.at<double>(0, 0),
+        out.t_camera2gimbal.at<double>(1, 0), out.t_camera2gimbal.at<double>(2, 0);
+
+    // --- Compute URDF-compatible output ---
+    // cv::calibrateHandEye gives: camera_optical_frame -> gimbal_link
+    // URDF needs: gimbal_link -> camera_link (in ROS frame)
+    //
+    // ROS coordinate frame convention (REP-103): x-forward, y-left, z-up
+    // Camera optical frame convention: x-right, y-down, z-forward
+    //
+    // From URDF: camera_link -> camera_optical_frame has rpy=(-π/2, 0, -π/2)
+    // This means: R_ros_to_optical = Rz(-π/2) * Ry(0) * Rx(-π/2)
+
+    // Build R_ros_to_optical (camera_link -> camera_optical_frame rotation)
+    Eigen::Matrix3d R_ros_to_optical;
+    // After applying Rx(-π/2) then Rz(-π/2):
+    // x_optical =  y_ros
+    // y_optical =  z_ros
+    // z_optical =  x_ros
+    // So: R_ros_to_optical maps [1,0,0] -> [0,0,1], [0,1,0] -> [1,0,0], [0,0,1] -> [0,1,0]
+    R_ros_to_optical << 0, 1, 0, 0, 0, 1, 1, 0, 0;
+
+    // T_gimbal_to_camera_optical = T_camera_optical_to_gimbal^(-1)
+    // R_gimbal_to_camera_optical = R_camera2gimbal^T
+    // t_gimbal_to_camera_optical = -R_camera2gimbal^T * t_camera2gimbal
+    Eigen::Matrix3d R_gimbal_to_optical = R_camera2gimbal_eigen.transpose();
+    Eigen::Vector3d t_gimbal_to_optical = -R_gimbal_to_optical * t_camera2gimbal_eigen;
+
+    // T_gimbal_to_camera_link = T_gimbal_to_camera_optical * T_camera_optical_to_camera_link
+    // where T_camera_optical_to_camera_link = T_camera_link_to_camera_optical^(-1)
+    // R_optical_to_ros = R_ros_to_optical^T
+    Eigen::Matrix3d R_optical_to_ros  = R_ros_to_optical.transpose();
+    Eigen::Matrix3d R_gimbal_to_camera = R_gimbal_to_optical * R_optical_to_ros;
+
+    // Translation: t_gimbal_to_camera = R_gimbal_to_optical * t_optical_to_ros + t_gimbal_to_optical
+    // But t_optical_to_ros = 0 (same origin), so:
+    Eigen::Vector3d t_gimbal_to_camera = t_gimbal_to_optical;
+
+    // Extract URDF xyz and rpy
+    out.urdf_xyz = t_gimbal_to_camera;
+    out.urdf_rpy = xyz_euler_rpy(R_gimbal_to_camera);
+
+    // Compute assembly error: deviation from ideal mounting
+    // Ideal: camera_link is aligned with gimbal_link (R = I, t = some nominal offset)
+    // Assembly error = actual rotation in human-readable form
+    out.assembly_error_deg = out.urdf_rpy * kRad2Deg;
+
+    // Also compute original misalignment metric
     Eigen::Matrix3d R_gimbal2ideal;
     R_gimbal2ideal << 0, -1, 0, 0, 0, -1, 1, 0, 0;
     const Eigen::Matrix3d R_camera2ideal = R_gimbal2ideal * R_camera2gimbal_eigen;
@@ -253,12 +321,65 @@ std::string ExtrinsicCalibrator::format_extrinsic_yaml(
     std::ostringstream ss;
     ss.setf(std::ios::fixed);
 
+    // Header with human-readable summary
+    ss << "# ============================================================\n";
+    ss << "# 外参标定结果 (Extrinsic Calibration Result)\n";
+    ss << "# ============================================================\n";
+    ss << "#\n";
+    ss << "# 使用样本数: " << result.used_samples << "\n";
+    ss << "#\n";
+
+    // URDF-compatible output (what users actually need)
+    ss << "# ============================================================\n";
+    ss << "# URDF参数 (直接复制到urdf文件即可)\n";
+    ss << "# gimbal_link -> camera_link 变换\n";
+    ss << "# ============================================================\n";
+    ss << std::setprecision(6);
+    ss << "#\n";
+    ss << "# camera_xyz: \"" << result.urdf_xyz.x() << " " << result.urdf_xyz.y() << " "
+       << result.urdf_xyz.z() << "\"\n";
+    ss << "# camera_rpy: \"" << result.urdf_rpy.x() << " " << result.urdf_rpy.y() << " "
+       << result.urdf_rpy.z() << "\"\n";
+    ss << "#\n";
+
+    // Human-readable assembly error
+    ss << "# ============================================================\n";
+    ss << "# 装配偏差 (Assembly Error)\n";
+    ss << "# ============================================================\n";
+    ss << std::setprecision(3);
+    ss << "#\n";
+    ss << "# 平移偏差 (Translation Error):\n";
+    ss << "#   X (前后): " << std::showpos << result.urdf_xyz.x() * 1000.0 << " mm"
+       << (result.urdf_xyz.x() > 0 ? " (相机靠前)" : " (相机靠后)") << "\n";
+    ss << "#   Y (左右): " << std::showpos << result.urdf_xyz.y() * 1000.0 << " mm"
+       << (result.urdf_xyz.y() > 0 ? " (相机靠左)" : " (相机靠右)") << "\n";
+    ss << "#   Z (上下): " << std::showpos << result.urdf_xyz.z() * 1000.0 << " mm"
+       << (result.urdf_xyz.z() > 0 ? " (相机靠上)" : " (相机靠下)") << "\n";
+    ss << std::noshowpos;
+    ss << "#\n";
+    ss << "# 旋转偏差 (Rotation Error):\n";
+    ss << "#   Roll  (绕X轴): " << std::showpos << result.assembly_error_deg.x() << " deg\n";
+    ss << "#   Pitch (绕Y轴): " << std::showpos << result.assembly_error_deg.y() << " deg\n";
+    ss << "#   Yaw   (绕Z轴): " << std::showpos << result.assembly_error_deg.z() << " deg\n";
+    ss << std::noshowpos;
+    ss << "#\n";
+
+    // Legacy output for compatibility
+    ss << "# ============================================================\n";
+    ss << "# 原始标定数据 (Raw Calibration Data)\n";
+    ss << "# camera_optical_frame -> gimbal_link\n";
+    ss << "# ============================================================\n";
     ss << std::setprecision(2);
-    ss << "# 相机同理想情况的偏角: yaw" << result.misalignment_ypr_deg[0] << " pitch"
-       << result.misalignment_ypr_deg[1] << " roll" << result.misalignment_ypr_deg[2]
+    ss << "# 相机同理想情况的偏角: yaw " << result.misalignment_ypr_deg[0] << " pitch "
+       << result.misalignment_ypr_deg[1] << " roll " << result.misalignment_ypr_deg[2]
        << " degree\n";
 
     ss << std::setprecision(12);
+    ss << "\n# 以下为YAML格式数据:\n";
+    ss << "urdf_camera_xyz: [" << result.urdf_xyz.x() << ", " << result.urdf_xyz.y() << ", "
+       << result.urdf_xyz.z() << "]\n";
+    ss << "urdf_camera_rpy: [" << result.urdf_rpy.x() << ", " << result.urdf_rpy.y() << ", "
+       << result.urdf_rpy.z() << "]\n";
     ss << "R_camera2gimbal: " << format_flow(mat_to_vector_rowmajor(result.R_camera2gimbal))
        << "\n";
     ss << "t_camera2gimbal: " << format_flow(mat_to_vector_rowmajor(result.t_camera2gimbal))

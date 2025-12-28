@@ -22,63 +22,44 @@
 // ros2
 #include <rclcpp/rclcpp.hpp>
 // project
-#include "armor_solver/armor_solver_node.hpp"
-#include "rm_utils/logger/log.hpp"
 #include "rm_utils/math/utils.hpp"
 
 namespace rm_auto_aim {
-Solver::Solver(std::weak_ptr<rclcpp::Node> n)
-    : node_(n) {
-    auto node = node_.lock();
 
-    shooting_range_w_    = node->declare_parameter("solver.shooting_range_width", 0.135);
-    shooting_range_h_    = node->declare_parameter("solver.shooting_range_height", 0.135);
-    max_tracking_v_yaw_  = node->declare_parameter("solver.max_tracking_v_yaw", 6.0);
-    prediction_delay_    = node->declare_parameter("solver.prediction_delay", 0.0);
-    controller_delay_    = node->declare_parameter("solver.controller_delay", 0.0);
-    side_angle_          = node->declare_parameter("solver.side_angle", 15.0);
-    min_switching_v_yaw_ = node->declare_parameter("solver.min_switching_v_yaw", 1.0);
+Solver::Solver(const SolverParams& params, AtomicSolverParams& atomic_params)
+    : atomic_params_(atomic_params)
+    , shooting_range_w_(params.shooting_range_w)
+    , shooting_range_h_(params.shooting_range_h)
+    , transfer_thresh_(params.transfer_thresh) {
 
-    std::string compensator_type = node->declare_parameter("solver.compensator_type", "resistance");
-    if (compensator_type == "rk4") {
-        RCLCPP_WARN(
-            node->get_logger(),
-            "solver.compensator_type='rk4' has been removed; falling back to 'resistance'");
-        compensator_type = "resistance";
-    }
-    trajectory_compensator_ = fyt::CompensatorFactory::createCompensator(compensator_type);
+    // Create trajectory compensator
+    trajectory_compensator_ = fyt::CompensatorFactory::createCompensator(params.compensator_type);
     if (!trajectory_compensator_) {
-        throw std::runtime_error("invalid trajectory compensator type: " + compensator_type);
+        throw std::runtime_error("invalid trajectory compensator type: " + params.compensator_type);
     }
-    trajectory_compensator_->iteration_times =
-        node->declare_parameter("solver.iteration_times", 20);
-    trajectory_compensator_->velocity   = node->declare_parameter("solver.bullet_speed", 20.0);
-    trajectory_compensator_->gravity    = node->declare_parameter("solver.gravity", 9.8);
-    trajectory_compensator_->resistance = node->declare_parameter("solver.resistance", 0.001);
+    trajectory_compensator_->iteration_times = params.trajectory.iteration_times;
+    trajectory_compensator_->velocity        = params.trajectory.bullet_speed;
+    trajectory_compensator_->gravity         = params.trajectory.gravity;
+    trajectory_compensator_->resistance      = params.trajectory.resistance;
+}
 
-    auto angle_offset = node->declare_parameter("solver.angle_offset", std::vector<std::string>{});
-    overflow_count_   = 0;
-    transfer_thresh_  = 5;
-
-    node.reset();
+void Solver::transitionTo(State new_state) {
+    if (state != new_state) {
+        overflow_count_ = 0;
+        state           = new_state;
+    }
 }
 
 rm_interfaces::msg::GimbalCmd Solver::solve(
     const rm_interfaces::msg::Target& target, const rclcpp::Time& current_time,
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_) {
     has_prediction_ = false;
-    // Get newest parameters
-    try {
-        auto node            = node_.lock();
-        max_tracking_v_yaw_  = node->get_parameter("solver.max_tracking_v_yaw").as_double();
-        prediction_delay_    = node->get_parameter("solver.prediction_delay").as_double();
-        controller_delay_    = node->get_parameter("solver.controller_delay").as_double();
-        side_angle_          = node->get_parameter("solver.side_angle").as_double();
-        min_switching_v_yaw_ = node->get_parameter("solver.min_switching_v_yaw").as_double();
-        node.reset();
-    } catch (const std::runtime_error& e) {
-        // nothing
-    }
+
+    // Read atomic params (lock-free, no ROS parameter calls)
+    const double max_tracking_v_yaw  = atomic_params_.max_tracking_v_yaw.load(std::memory_order_relaxed);
+    const double prediction_delay    = atomic_params_.prediction_delay.load(std::memory_order_relaxed);
+    const double side_angle          = atomic_params_.side_angle.load(std::memory_order_relaxed);
+    const double min_switching_v_yaw = atomic_params_.min_switching_v_yaw.load(std::memory_order_relaxed);
 
     // Get current roll, yaw and pitch of gimbal
     try {
@@ -100,21 +81,25 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         throw ex;
     }
 
-    // Use flying time to approximately predict the position of target
+    // Calculate target center position
     double target_z = target.armors_num == 3 ? (target.position.z + target.z1 + target.z2) / 3.0
                                              : (target.position.z + target.z1) / 2;
     Eigen::Vector3d target_position(target.position.x, target.position.y, target_z);
-    double target_yaw  = target.yaw;
+    double target_yaw = target.yaw;
+
+    // Step 1: Initial flying time estimate based on target center
     double flying_time = trajectory_compensator_->getFlyingTime(target_position);
     rclcpp::Time target_stamp(target.header.stamp, current_time.get_clock_type());
-    double dt = (current_time - target_stamp).seconds() + flying_time + prediction_delay_;
+    double dt = (current_time - target_stamp).seconds() + flying_time + prediction_delay;
+
+    // Step 2: Predict target state
     target_position.x() += dt * target.velocity.x;
     target_position.y() += dt * target.velocity.y;
     target_position.z() += dt * target.velocity.z;
     target_yaw += dt * target.v_yaw;
 
-    // Choose the best armor to shoot
-    std::vector<Eigen::Vector4d> armor_pose(4);
+    // Step 3: Get armor positions
+    std::vector<Eigen::Vector4d> armor_pose;
     if (target.armors_num == 4) {
         armor_pose = util::get_robo_armor_poses(
             target_position, target_yaw, target.radius0, target.radius1, target.z1, target.z2,
@@ -124,8 +109,10 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
             target_position, target_yaw, target.radius0, target.position.z, target.z1, target.z2);
     }
 
-    int idx =
-        selectBestArmor(armor_pose, target_position, target_yaw, target.v_yaw, target.armors_num);
+    // Step 4: Select best armor
+    int idx = selectBestArmor(armor_pose, target_position, target_yaw, target.v_yaw, target.armors_num);
+
+    // Step 5: Get chosen armor position relative to muzzle
     auto chosen_armor_pose_world      = armor_pose.at(idx);
     Eigen::Vector4d chosen_armor_pose = chosen_armor_pose_world - xyza_;
     Eigen::Vector3d armor_position{
@@ -134,7 +121,35 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         chosen_armor_pose_world.x(), chosen_armor_pose_world.y(), chosen_armor_pose_world.z());
     double distance = chosen_armor_pose.norm();
 
-    // Calculate yaw, pitch, distance
+    // Step 6: Refine flying time based on actual armor position (fixes systematic error)
+    double refined_flying_time = trajectory_compensator_->getFlyingTime(armor_position);
+    if (std::abs(refined_flying_time - flying_time) > 0.001) {
+        // Re-predict with refined time
+        double dt_diff = refined_flying_time - flying_time;
+        target_position.x() += dt_diff * target.velocity.x;
+        target_position.y() += dt_diff * target.velocity.y;
+        target_position.z() += dt_diff * target.velocity.z;
+        target_yaw += dt_diff * target.v_yaw;
+
+        // Recalculate armor position
+        if (target.armors_num == 4) {
+            armor_pose = util::get_robo_armor_poses(
+                target_position, target_yaw, target.radius0, target.radius1, target.z1, target.z2,
+                target.armors_num);
+        } else if (target.armors_num == 3) {
+            armor_pose = util::get_outpost_armor_poses(
+                target_position, target_yaw, target.radius0, target.position.z, target.z1, target.z2);
+        }
+        chosen_armor_pose_world = armor_pose.at(idx);
+        chosen_armor_pose       = chosen_armor_pose_world - xyza_;
+        armor_position          = Eigen::Vector3d(
+            chosen_armor_pose.x(), chosen_armor_pose.y(), chosen_armor_pose.z());
+        predicted_position = Eigen::Vector3d(
+            chosen_armor_pose_world.x(), chosen_armor_pose_world.y(), chosen_armor_pose_world.z());
+        distance = armor_position.norm();
+    }
+
+    // Step 7: Calculate yaw and pitch with ballistic compensation
     double yaw, pitch;
     calcYawAndPitch(armor_position, yaw, pitch);
 
@@ -144,47 +159,29 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
     gimbal_cmd.distance    = distance;
     gimbal_cmd.fire_advice = isOnTarget(rpy_[2], rpy_[1], yaw, pitch, distance);
 
+    // State machine for tracking mode
     switch (state) {
     case TRACKING_ARMOR: {
-        if (std::abs(target.v_yaw) > max_tracking_v_yaw_) {
+        if (std::abs(target.v_yaw) > max_tracking_v_yaw) {
             overflow_count_++;
         } else {
             overflow_count_ = 0;
         }
 
         if (overflow_count_ > transfer_thresh_) {
-            state = TRACKING_CENTER;
-        }
-
-        // If isOnTarget() never returns true, adjust controller_delay to force the gimbal to move
-        if (controller_delay_ != 0) {
-            target_position.x() += controller_delay_ * target.velocity.x;
-            target_position.y() += controller_delay_ * target.velocity.y;
-            target_position.z() += controller_delay_ * target.velocity.z;
-            target_yaw += controller_delay_ * target.v_yaw;
-            armor_pose              = util::get_robo_armor_poses(target);
-            chosen_armor_pose_world = armor_pose.at(idx);
-            chosen_armor_pose       = chosen_armor_pose_world - xyza_;
-            armor_position          = Eigen::Vector3d(
-                chosen_armor_pose.x(), chosen_armor_pose.y(), chosen_armor_pose.z());
-            predicted_position = Eigen::Vector3d(
-                chosen_armor_pose_world.x(), chosen_armor_pose_world.y(),
-                chosen_armor_pose_world.z());
-            gimbal_cmd.distance = armor_position.norm();
-            calcYawAndPitch(armor_position, yaw, pitch);
+            transitionTo(TRACKING_CENTER);
         }
         break;
     }
     case TRACKING_CENTER: {
-        if (std::abs(target.v_yaw) < max_tracking_v_yaw_) {
+        if (std::abs(target.v_yaw) < max_tracking_v_yaw) {
             overflow_count_++;
         } else {
             overflow_count_ = 0;
         }
 
         if (overflow_count_ > transfer_thresh_) {
-            state           = TRACKING_ARMOR;
-            overflow_count_ = 0;
+            transitionTo(TRACKING_ARMOR);
         }
         gimbal_cmd.fire_advice = true;
         calcYawAndPitch(target_position, yaw, pitch);
@@ -192,6 +189,7 @@ rm_interfaces::msg::GimbalCmd Solver::solve(
         break;
     }
     }
+
     double cmd_pitch = pitch;
     double cmd_yaw   = angles::normalize_angle(yaw);
 
@@ -210,8 +208,7 @@ bool Solver::isOnTarget(
     // Judge whether to shoot
     double shooting_range_yaw   = std::abs(atan2(shooting_range_w_ / 2, distance));
     double shooting_range_pitch = std::abs(atan2(shooting_range_h_ / 2, distance));
-    // Limit the shooting area to 1 degree to avoid not shooting when distance is
-    // too large
+    // Limit the shooting area to 1 degree to avoid not shooting when distance is too large
     shooting_range_yaw   = std::max(shooting_range_yaw, 1.0 * M_PI / 180);
     shooting_range_pitch = std::max(shooting_range_pitch, 1.0 * M_PI / 180);
     if (std::abs(cur_yaw - target_yaw) < shooting_range_yaw
@@ -225,6 +222,10 @@ bool Solver::isOnTarget(
 int Solver::selectBestArmor(
     const std::vector<Eigen::Vector4d>& armor_positions, const Eigen::Vector3d& target_center,
     const double target_yaw, const double target_v_yaw, const size_t armors_num) const noexcept {
+
+    const double side_angle          = atomic_params_.side_angle.load(std::memory_order_relaxed);
+    const double min_switching_v_yaw = atomic_params_.min_switching_v_yaw.load(std::memory_order_relaxed);
+
     // Angle between the car's center and the X-axis
     double alpha = std::atan2(target_center.y(), target_center.x());
     // Angle between the front of observed armor and the X-axis
@@ -233,9 +234,9 @@ int Solver::selectBestArmor(
     // clang-format off
     Eigen::Matrix2d R_odom2center;
     Eigen::Matrix2d R_odom2armor;
-    R_odom2center << std::cos(alpha), std::sin(alpha), 
+    R_odom2center << std::cos(alpha), std::sin(alpha),
                   -std::sin(alpha), std::cos(alpha);
-    R_odom2armor << std::cos(beta), std::sin(beta), 
+    R_odom2armor << std::cos(beta), std::sin(beta),
                  -std::sin(beta), std::cos(beta);
     // clang-format on
     Eigen::Matrix2d R_center2armor = R_odom2center.transpose() * R_odom2armor;
@@ -244,10 +245,10 @@ int Solver::selectBestArmor(
     double decision_angle = std::atan2(R_center2armor(1, 0), R_center2armor(0, 0));
 
     // Angle thresh of the armor jump
-    double theta = (target_v_yaw > 0 ? side_angle_ : -side_angle_) / 180.0 * M_PI;
+    double theta = (target_v_yaw > 0 ? side_angle : -side_angle) / 180.0 * M_PI;
 
     // Avoid the frequent switch between two armor
-    if (std::abs(target_v_yaw) < min_switching_v_yaw_) {
+    if (std::abs(target_v_yaw) < min_switching_v_yaw) {
         theta = 0;
     }
 

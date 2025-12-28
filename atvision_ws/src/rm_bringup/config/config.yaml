@@ -5,7 +5,7 @@
     detect_color: "RED"
     binary_thres: 50
 
-    use_pca: false # 使用PCA算法矫正灯条的角点
+    use_pca: true # 使用PCA算法矫正灯条的角点
     use_ba: true # 使用BA优化算法求解装甲板的Yaw角 
 
     light.min_ratio: 0.0001
@@ -69,15 +69,15 @@
           history: keep_last
           reliability: reliable
     solver:
-      bullet_speed: 22.0
+      bullet_speed: 25.0
       compensator_type: resistance
-      controller_delay: 0.0
-      gravity: 0.81
+      controller_delay: 0.050
+      gravity: 9.7997
       iteration_times: 20
       max_tracking_v_yaw: 60.0
       min_switching_v_yaw: 1.0
       prediction_delay: 0.0
-      resistance: 0.092
+      resistance: 0.00005 # 验证过
       shooting_range_height: 0.135
       shooting_range_width: 0.135
       side_angle: 10.0
@@ -177,22 +177,9 @@
 /rm_gimbal:
   ros__parameters:
     debug: true
-    planner:
-      N: 20
-      T: 0.01
-      amax: 50.0
-      dt_ema_alpha: 0.2
-      dt_max: 0.03
-      dt_min: 0.002
-      q_pitch_pos: 9000000.0
-      q_pitch_vel: 0.0
-      q_yaw_pos: 9000000.0
-      q_yaw_vel: 0.0
-      r_pitch_acc: 1.0
-      r_yaw_acc: 1.0
     timestamp_offset: 0.006
     target_component_name: armor_detector
-    use_planner: true
+    use_planner: false
     use_roll: false
     use_sim_time: false
     qos_overrides:

@@ -61,6 +61,7 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
 
 GimbalNode::~GimbalNode() {
     running_ = false;
+    device_.stop();
     if (thread_.joinable()) {
         thread_.join();
     }
@@ -69,7 +70,7 @@ GimbalNode::~GimbalNode() {
 void GimbalNode::set_params(const std::string& color) {
     if (detector_client_->wait_for_service()) {
         std::vector<rclcpp::Parameter> params;
-        params.emplace_back(rclcpp::Parameter{"detect_color", color});
+        params.emplace_back("detect_color", color);
         auto result = detector_client_->set_parameters(params);
         try {
             if (result.get()[0].successful) {

@@ -1,17 +1,26 @@
 /armor_detector_ov:
   ros__parameters:
+    # Backend selection: "nn" or "traditional"
+    backend_type: "nn"
+
+    # Common parameters
     debug: true
     target_frame: odom
     camera_frame: camera_optical_frame
     detect_color: "BLUE"
+    use_ba: true
+    draw_latency: true
+
+    # NN backend parameters (only used when backend_type == "nn")
+    model_name: armor_tup
     model_path: package://armor_detector_ov/model/opt-1208-001.onnx
     device_name: AUTO
     device_priorities: "GPU,CPU"
     enable_multi_thread: true
-    enable_pipeline: true
     pipeline_queue_size: 4
     pipeline_num_requests: 4
-    draw_latency: true
+
+    # ROI parameters (NN backend only, auto-disabled for traditional)
     use_roi: true
     roi_timeout_s: 0.2
     bbox_timeout_s: 0.2
@@ -22,3 +31,25 @@
     roi_clear_on_miss: true
     roi_miss_disable_s: 0.12
     drop_out_of_order: true
+
+    # Traditional backend parameters (only used when backend_type == "traditional")
+    binary_thres: 160
+
+    # Light detection params
+    light.min_ratio: 0.1
+    light.max_ratio: 0.55
+    light.max_angle: 45.0
+    light.color_diff_thresh: 50
+
+    # Armor matching params
+    armor.min_light_ratio: 0.7
+    armor.min_small_center_distance: 0.8
+    armor.max_small_center_distance: 3.2
+    armor.min_large_center_distance: 3.2
+    armor.max_large_center_distance: 5.5
+    armor.max_angle: 35.0
+
+    # Number classifier params (traditional backend)
+    classifier.model_path: package://armor_detector_ov/model/mlp.onnx
+    classifier.label_path: package://armor_detector_ov/model/label.txt
+    classifier.threshold: 0.7

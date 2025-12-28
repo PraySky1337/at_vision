@@ -20,6 +20,7 @@
 #include <vector>
 // project
 #include "armor_solver.hpp"
+#include "solver_params.hpp"
 #include "tracker.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/measurement.hpp"
@@ -41,10 +42,12 @@ private:
     void initMarkers() noexcept;
 
     Tracker::Params declareTrackerParameters();
+    SolverParams declareSolverParameters();
     rcl_interfaces::msg::SetParametersResult
         onSetParameters(const std::vector<rclcpp::Parameter>& parameters);
     bool applyTrackerParamUpdate(
         const rclcpp::Parameter& param, Tracker::Params& params);
+    bool applySolverParamUpdate(const rclcpp::Parameter& param);
 
     void publishMarkers(
         const rm_interfaces::msg::Target& target_msg,
@@ -66,6 +69,8 @@ private:
     double lost_time_thres_;
 
     // Armor Solver
+    SolverParams solver_params_;
+    AtomicSolverParams atomic_solver_params_;
     std::unique_ptr<Solver> solver_;
     std::mutex target_mutex_;
     std::mutex tracker_mutex_;
