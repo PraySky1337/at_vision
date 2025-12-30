@@ -95,19 +95,19 @@
           durability: volatile
           history: keep_last
           reliability: reliable
-    solver:
-      bullet_speed: 22.0
-      compensator_type: resistance
-      controller_delay: 0.085
-      gravity: 9.7997
-      iteration_times: 20
-      max_tracking_v_yaw: 60.0
-      min_switching_v_yaw: 1.0
-      prediction_delay: 0.0
-      resistance: 0.00005 # 验证过
-      shooting_range_height: 0.135
-      shooting_range_width: 0.135
-      side_angle: 10.0
+    # solver:
+    #   bullet_speed: 22.0
+    #   compensator_type: resistance
+    #   controller_delay: 0.085
+    #   gravity: 9.7997
+    #   iteration_times: 20
+    #   max_tracking_v_yaw: 60.0
+    #   min_switching_v_yaw: 1.0
+    #   prediction_delay: 0.0
+    #   resistance: 0.00005 # 验证过
+    #   shooting_range_height: 0.135
+    #   shooting_range_width: 0.135
+    #   side_angle: 10.0
     target_frame: odom
     tracker:
       lost_threshold: 1.0
@@ -120,7 +120,7 @@
         sigma_q_z: 1.7
         yaw_log_k: 0.005
       outpost_matcher_gate: 10.0
-      sigma_a_xy: 10.0
+      sigma_a_xy: 7.5
       sigma_a_yaw: 20.0
       sigma_a_z: 2.0
       sigma_h: 0.8

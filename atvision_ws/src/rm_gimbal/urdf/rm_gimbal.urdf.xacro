@@ -6,7 +6,7 @@
   <!-- 参数 -->
   <xacro:arg name="camera_xyz"  default="0.04444 0.0 -0.0444" />
   <xacro:arg name="camera_rpy"  default="0 0 0" />
-  <xacro:arg name="muzzle_xyz"  default="0.0874 0.0 -0.0874" /> 
+  <xacro:arg name="muzzle_xyz"  default="0.0874 -0.009 -0.0874" /> 
   <xacro:arg name="muzzle_rpy"  default="0 0 0" />
 
   <!-- 主体 -->

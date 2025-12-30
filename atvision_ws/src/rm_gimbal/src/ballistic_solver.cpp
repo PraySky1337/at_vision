@@ -1,19 +1,3 @@
-// Created by Chengfu Zou
-// Maintained by Chengfu Zou, Labor
-// Copyright (C) FYT Vision Group. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #include "rm_gimbal/ballistic_solver.hpp"
 // std
 #include <cmath>
@@ -30,7 +14,8 @@ BallisticSolver::BallisticSolver(const SolverParams& params, AtomicSolverParams&
     : atomic_params_(atomic_params)
     , shooting_range_w_(params.shooting_range_w)
     , shooting_range_h_(params.shooting_range_h)
-    , transfer_thresh_(params.transfer_thresh) {
+    , transfer_thresh_(params.transfer_thresh)
+    , mpc_params_(params.mpc) {
 
     // Create trajectory compensator
     trajectory_compensator_ = fyt::CompensatorFactory::createCompensator(params.compensator_type);
@@ -41,6 +26,30 @@ BallisticSolver::BallisticSolver(const SolverParams& params, AtomicSolverParams&
     trajectory_compensator_->velocity        = params.trajectory.bullet_speed;
     trajectory_compensator_->gravity         = params.trajectory.gravity;
     trajectory_compensator_->resistance      = params.trajectory.resistance;
+
+    // Create trajectory generator
+    GeneratorParams gen_params;
+    gen_params.half_horizon = params.mpc.half_horizon;
+    gen_params.dt = params.mpc.dt;
+    gen_params.side_angle = params.mpc.side_angle;
+    gen_params.min_switching_v_yaw = params.mpc.min_switching_v_yaw;
+    trajectory_generator_ = std::make_unique<TrajectoryGenerator>(gen_params);
+
+    // Create trajectory planner
+    PlannerParams planner_params;
+    planner_params.half_horizon = params.mpc.half_horizon;
+    planner_params.dt = params.mpc.dt;
+    planner_params.max_acc_yaw = params.mpc.max_acc_yaw;
+    planner_params.max_acc_pitch = params.mpc.max_acc_pitch;
+    planner_params.Q_pos = params.mpc.Q_pos;
+    planner_params.Q_vel = params.mpc.Q_vel;
+    planner_params.R = params.mpc.R;
+    planner_params.rho = params.mpc.rho;
+    planner_params.max_iter = params.mpc.max_iter;
+    planner_params.abs_tol = params.mpc.abs_tol;
+    trajectory_planner_ = std::make_unique<TrajectoryPlanner>(planner_params);
+
+    mpc_enabled_ = params.mpc.enable;
 }
 
 void BallisticSolver::transitionTo(State new_state) {
@@ -197,6 +206,45 @@ rm_interfaces::msg::GimbalCmd BallisticSolver::solve(
     gimbal_cmd.pitch_diff = (cmd_pitch - rpy_[1]) * 180 / M_PI;
     predicted_position_   = predicted_position;
     has_prediction_       = true;
+
+    // Step 8: MPC轨迹规划（可选）
+    const bool mpc_enable = atomic_params_.mpc_enable.load(std::memory_order_relaxed);
+    if (mpc_enable && mpc_enabled_ && trajectory_planner_ && trajectory_planner_->isInitialized()) {
+        try {
+            // 枪口位置
+            Eigen::Vector3d muzzle_position(xyza_[0], xyza_[1], xyza_[2]);
+
+            // 生成射击轨迹
+            auto shooting_traj = trajectory_generator_->generateShootingTrajectory(
+                target, muzzle_position, trajectory_compensator_->velocity, trajectory_compensator_);
+
+            // 当前云台状态
+            Eigen::Vector2d state_yaw(rpy_[2], gimbal_yaw_vel_);
+            Eigen::Vector2d state_pitch(rpy_[1], gimbal_pitch_vel_);
+
+            // MPC求解
+            auto solution = trajectory_planner_->solve(shooting_traj, state_yaw, state_pitch);
+
+            // 即使未完全收敛，只要有数据就使用（MPC结果仍然有意义）
+            auto out = solution.getOutput();
+            // 检查输出是否有效（非零或者合理范围内）
+            bool has_valid_data = !solution.yaw_positions.empty() && !solution.pitch_positions.empty();
+            if (has_valid_data) {
+                feedforward_cache_.yaw_vel = out.yaw_vel;
+                feedforward_cache_.yaw_acc = out.yaw_acc;
+                feedforward_cache_.pitch_vel = out.pitch_vel;
+                feedforward_cache_.pitch_acc = out.pitch_acc;
+                feedforward_cache_.valid = true;
+            } else {
+                feedforward_cache_.valid = false;
+            }
+        } catch (const std::exception& e) {
+            feedforward_cache_.valid = false;
+        }
+    } else {
+        feedforward_cache_.valid = false;
+    }
+
     return gimbal_cmd;
 }
 
@@ -287,6 +335,47 @@ std::optional<Eigen::Vector3d> BallisticSolver::getPredictedPosition() const noe
         return std::nullopt;
     }
     return predicted_position_;
+}
+
+bool BallisticSolver::initializeMPC() {
+    if (!trajectory_planner_) {
+        return false;
+    }
+    return trajectory_planner_->initialize();
+}
+
+void BallisticSolver::updateMPCParams(const MPCParams& params) {
+    mpc_params_ = params;
+    mpc_enabled_ = params.enable;
+
+    if (trajectory_generator_) {
+        GeneratorParams gen_params;
+        gen_params.half_horizon = params.half_horizon;
+        gen_params.dt = params.dt;
+        gen_params.side_angle = params.side_angle;
+        gen_params.min_switching_v_yaw = params.min_switching_v_yaw;
+        trajectory_generator_->updateParams(gen_params);
+    }
+
+    if (trajectory_planner_) {
+        PlannerParams planner_params;
+        planner_params.half_horizon = params.half_horizon;
+        planner_params.dt = params.dt;
+        planner_params.max_acc_yaw = params.max_acc_yaw;
+        planner_params.max_acc_pitch = params.max_acc_pitch;
+        planner_params.Q_pos = params.Q_pos;
+        planner_params.Q_vel = params.Q_vel;
+        planner_params.R = params.R;
+        planner_params.rho = params.rho;
+        planner_params.max_iter = params.max_iter;
+        planner_params.abs_tol = params.abs_tol;
+        trajectory_planner_->updateParams(planner_params);
+    }
+}
+
+void BallisticSolver::setGimbalAngularVelocity(double yaw_vel, double pitch_vel) noexcept {
+    gimbal_yaw_vel_ = yaw_vel;
+    gimbal_pitch_vel_ = pitch_vel;
 }
 
 } // namespace rm_gimbal

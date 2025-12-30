@@ -27,6 +27,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
+#include "rm_interfaces/msg/plan_gimbal_cmd.hpp"
 #include "rm_interfaces/msg/target.hpp"
 
 namespace rm_gimbal {
@@ -105,6 +106,12 @@ private:
     visualization_msgs::msg::Marker trajectory_marker_;
     visualization_msgs::msg::Marker selection_marker_;
     visualization_msgs::msg::Marker predicted_marker_;
+
+    // Debug publisher for GimbalCmd
+    rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_cmd_pub_;
+
+    // Debug publisher for PlanGimbalCmd (MPC planning data)
+    rclcpp::Publisher<rm_interfaces::msg::PlanGimbalCmd>::SharedPtr plan_cmd_pub_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
 

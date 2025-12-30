@@ -1,19 +1,3 @@
-// Created by Chengfu Zou
-// Maintained by Chengfu Zou, Labor
-// Copyright (C) FYT Vision Group. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #ifndef RM_GIMBAL_BALLISTIC_SOLVER_HPP_
 #define RM_GIMBAL_BALLISTIC_SOLVER_HPP_
 
@@ -34,6 +18,8 @@
 #include "rm_utils/math/trajectory_compensator.hpp"
 #include "rm_gimbal/solver_params.hpp"
 #include "rm_gimbal/util.hpp"
+#include "rm_gimbal/trajectory_generator.hpp"
+#include "rm_gimbal/trajectory_planner.hpp"
 
 namespace rm_gimbal {
 
@@ -55,6 +41,18 @@ public:
     std::vector<std::pair<double, double>> getTrajectory() const noexcept;
 
     std::optional<Eigen::Vector3d> getPredictedPosition() const noexcept;
+
+    // 获取MPC前馈量
+    FeedforwardCache getFeedforward() const noexcept { return feedforward_cache_; }
+
+    // 初始化MPC（需要在参数加载后调用）
+    bool initializeMPC();
+
+    // 更新MPC参数
+    void updateMPCParams(const MPCParams& params);
+
+    // 设置云台角速度（从IMU获取）
+    void setGimbalAngularVelocity(double yaw_vel, double pitch_vel) noexcept;
 
 private:
     // State transition helper - resets overflow_count on any state change
@@ -90,6 +88,17 @@ private:
 
     Eigen::Vector3d predicted_position_{Eigen::Vector3d::Zero()};
     bool has_prediction_{false};
+
+    // MPC轨迹规划模块
+    std::unique_ptr<TrajectoryGenerator> trajectory_generator_;
+    std::unique_ptr<TrajectoryPlanner> trajectory_planner_;
+    FeedforwardCache feedforward_cache_;
+    MPCParams mpc_params_;
+    bool mpc_enabled_{false};
+
+    // 云台角速度（从IMU获取）
+    double gimbal_yaw_vel_{0.0};
+    double gimbal_pitch_vel_{0.0};
 };
 
 } // namespace rm_gimbal

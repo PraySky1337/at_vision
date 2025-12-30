@@ -134,7 +134,7 @@ struct RobotModel {
     Eigen::Matrix<Scalar, NZ, 1> R_diag(const VecZ& z) const {
         const double delta_angle = util::shortest_rad(z[0], z[3]);
         Eigen::Matrix<Scalar, NZ, 1> R_dig;
-        R_dig << 4e-3, 4e-3, std::log(std::abs(delta_angle) + 1.0) + 1.0,
+        R_dig << 4e-3, 4e-3, std::log(std::abs(delta_angle) + 1.0) + 0.3,
             std::log(std::abs(z[2]) + 1.0) / 200.0 + 9e-2;
         return R_dig;
     }

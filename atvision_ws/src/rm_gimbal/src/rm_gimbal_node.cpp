@@ -85,6 +85,14 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     marker_pub_ =
         this->create_publisher<visualization_msgs::msg::MarkerArray>("rm_gimbal/marker", 10);
 
+    // Debug publisher for GimbalCmd monitoring
+    if (debug_) {
+        gimbal_cmd_pub_ =
+            this->create_publisher<rm_interfaces::msg::GimbalCmd>("rm_gimbal/cmd", rclcpp::SensorDataQoS());
+        plan_cmd_pub_ =
+            this->create_publisher<rm_interfaces::msg::PlanGimbalCmd>("rm_gimbal/plan_cmd", rclcpp::SensorDataQoS());
+    }
+
     on_set_params_cb_ = add_on_set_parameters_callback(
         std::bind(&GimbalNode::on_params, this, std::placeholders::_1));
 
@@ -137,6 +145,31 @@ SolverParams GimbalNode::declare_solver_parameters() {
         "重力加速度", 9.0, 10.0, 0.00001);
     params.trajectory.resistance = DECLARE_DOUBLE_ZH("solver.resistance", 0.001,
         "空气阻力系数", 0.0, 0.1, 0.0000001);
+
+    // MPC轨迹规划参数
+    params.mpc.enable = this->declare_parameter("solver.mpc.enable", true);
+    params.mpc.half_horizon = static_cast<int>(this->declare_parameter("solver.mpc.half_horizon", 50));
+    params.mpc.dt = DECLARE_DOUBLE_ZH("solver.mpc.dt", 0.01,
+        "MPC时间步长（秒）", 0.001, 0.02, 0.0001);
+    params.mpc.max_acc_yaw = DECLARE_DOUBLE_ZH("solver.mpc.max_acc_yaw", 30.0,
+        "yaw最大加速度（rad/s²）- 关键参数，需匹配实际云台能力", 5.0, 200.0, 1.0);
+    params.mpc.max_acc_pitch = DECLARE_DOUBLE_ZH("solver.mpc.max_acc_pitch", 30.0,
+        "pitch最大加速度（rad/s²）- 关键参数，需匹配实际云台能力", 5.0, 200.0, 1.0);
+    params.mpc.Q_pos = DECLARE_DOUBLE_ZH("solver.mpc.Q_pos", 100.0,
+        "MPC位置跟踪权重", 1.0, 1000.0, 1.0);
+    params.mpc.Q_vel = DECLARE_DOUBLE_ZH("solver.mpc.Q_vel", 1.0,
+        "MPC速度跟踪权重", 0.1, 100.0, 0.1);
+    params.mpc.R = DECLARE_DOUBLE_ZH("solver.mpc.R", 1.0,
+        "MPC控制量权重（增大使轨迹更平滑）", 0.01, 100.0, 0.1);
+    params.mpc.rho = DECLARE_DOUBLE_ZH("solver.mpc.rho", 1.0,
+        "ADMM罚参数", 0.001, 10.0, 0.001);
+    params.mpc.max_iter = static_cast<int>(this->declare_parameter("solver.mpc.max_iter", 10));
+    params.mpc.abs_tol = DECLARE_DOUBLE_ZH("solver.mpc.abs_tol", 1e-3,
+        "MPC收敛容差", 1e-6, 1e-1, 1e-6);
+    params.mpc.side_angle = DECLARE_DOUBLE_ZH("solver.mpc.side_angle", 15.0,
+        "MPC轨迹生成侧向角度（度）", 0.0, 45.0, 0.1);
+    params.mpc.min_switching_v_yaw = DECLARE_DOUBLE_ZH("solver.mpc.min_switching_v_yaw", 1.0,
+        "MPC轨迹生成最小切换角速度", 0.0, 10.0, 0.01);
     // clang-format on
 
 #undef DECLARE_DOUBLE_ZH
@@ -159,6 +192,33 @@ bool GimbalNode::apply_solver_param_update(const rclcpp::Parameter& param) {
         updated = true;
     } else if (name == "solver.min_switching_v_yaw") {
         atomic_solver_params_.min_switching_v_yaw.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    }
+    // MPC参数热更新
+    else if (name == "solver.mpc.enable") {
+        atomic_solver_params_.mpc_enable.store(param.as_bool(), std::memory_order_relaxed);
+        // 运行时启用MPC时，尝试初始化
+        if (param.as_bool() && solver_ != nullptr) {
+            if (!solver_->initializeMPC()) {
+                RCLCPP_WARN(get_logger(), "Failed to initialize MPC on parameter change");
+            } else {
+                RCLCPP_INFO(get_logger(), "MPC initialized via parameter change");
+            }
+        }
+        updated = true;
+    } else if (name == "solver.mpc.max_acc_yaw") {
+        atomic_solver_params_.mpc_max_acc_yaw.store(param.as_double(), std::memory_order_relaxed);
+        if (solver_) {
+            solver_params_.mpc.max_acc_yaw = param.as_double();
+            solver_->updateMPCParams(solver_params_.mpc);
+        }
+        updated = true;
+    } else if (name == "solver.mpc.max_acc_pitch") {
+        atomic_solver_params_.mpc_max_acc_pitch.store(param.as_double(), std::memory_order_relaxed);
+        if (solver_) {
+            solver_params_.mpc.max_acc_pitch = param.as_double();
+            solver_->updateMPCParams(solver_params_.mpc);
+        }
         updated = true;
     }
 
@@ -238,7 +298,7 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
     if (std::isnan(q.x()) || std::isnan(q.y()) || std::isnan(q.z())) [[unlikely]] {
         RCLCPP_WARN(get_logger(), "roll, pitch or yaw is invalid nan");
     }
-    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000, "Bullet speed: %.2f", d.bullet_speed);
+    // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000, "Bullet speed: %.2f", d.bullet_speed);
 
     double offset_ms = timestamp_offset_ms_.load();
     auto duration    = rclcpp::Duration(
@@ -262,6 +322,14 @@ void GimbalNode::target_callback(rm_interfaces::msg::Target::ConstSharedPtr targ
     // Lazy initialize solver
     if (solver_ == nullptr) {
         solver_ = std::make_unique<BallisticSolver>(solver_params_, atomic_solver_params_);
+        // Initialize MPC if enabled
+        if (solver_params_.mpc.enable) {
+            if (solver_->initializeMPC()) {
+                RCLCPP_INFO(get_logger(), "MPC trajectory planner initialized");
+            } else {
+                RCLCPP_WARN(get_logger(), "Failed to initialize MPC trajectory planner");
+            }
+        }
     }
     armor_target_ = *target_msg;
 }
@@ -302,6 +370,55 @@ void GimbalNode::solve_timer_callback() {
     // Send directly to device via USB (no ROS msg)
     send_to_device(gimbal_cmd);
 
+    // Publish GimbalCmd for debug monitoring
+    if (debug_ && gimbal_cmd_pub_ != nullptr) {
+        gimbal_cmd_pub_->publish(gimbal_cmd);
+    }
+
+    // Publish PlanGimbalCmd for MPC debug monitoring
+    if (debug_ && plan_cmd_pub_ != nullptr && solver_ != nullptr) {
+        rm_interfaces::msg::PlanGimbalCmd plan_cmd;
+        plan_cmd.header = target_snapshot.header;
+
+        // 原始弹道解算结果（弧度）
+        plan_cmd.raw_yaw = static_cast<float>(gimbal_cmd.yaw * M_PI / 180.0);
+        plan_cmd.raw_pitch = static_cast<float>(gimbal_cmd.pitch * M_PI / 180.0);
+
+        // MPC前馈
+        auto ff = solver_->getFeedforward();
+        plan_cmd.mpc_valid = ff.valid;
+        if (ff.valid) {
+            plan_cmd.ref_yaw = static_cast<float>(plan_cmd.raw_yaw);  // MPC目标位置
+            plan_cmd.ref_yaw_vel = static_cast<float>(ff.yaw_vel);
+            plan_cmd.ref_yaw_acc = static_cast<float>(ff.yaw_acc);
+            plan_cmd.ref_pitch = static_cast<float>(plan_cmd.raw_pitch);
+            plan_cmd.ref_pitch_vel = static_cast<float>(ff.pitch_vel);
+            plan_cmd.ref_pitch_acc = static_cast<float>(ff.pitch_acc);
+        }
+
+        // 当前云台状态（从TF获取）
+        try {
+            auto gimbal_tf = tf_buffer_->lookupTransform(
+                target_snapshot.header.frame_id, "gimbal_link", tf2::TimePointZero);
+            tf2::Quaternion q;
+            tf2::fromMsg(gimbal_tf.transform.rotation, q);
+            double roll, pitch, yaw;
+            tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+            plan_cmd.cur_yaw = static_cast<float>(yaw);
+            plan_cmd.cur_pitch = static_cast<float>(-pitch);
+        } catch (const tf2::TransformException&) {
+            plan_cmd.cur_yaw = 0.0f;
+            plan_cmd.cur_pitch = 0.0f;
+        }
+        plan_cmd.cur_yaw_vel = 0.0f;   // TODO: 从IMU获取
+        plan_cmd.cur_pitch_vel = 0.0f;
+
+        plan_cmd.fire_advice = gimbal_cmd.fire_advice;
+        plan_cmd.distance = static_cast<float>(gimbal_cmd.distance);
+
+        plan_cmd_pub_->publish(plan_cmd);
+    }
+
     // Publish visualization markers
     if (debug_ && marker_pub_ != nullptr) {
         publish_markers(target_snapshot, gimbal_cmd);
@@ -318,10 +435,28 @@ void GimbalNode::send_to_device(const rm_interfaces::msg::GimbalCmd& cmd) {
     vision_data.data.distance     = static_cast<float>(cmd.distance);
     vision_data.data.target_pitch = -static_cast<float>(cmd.pitch);
     vision_data.data.target_yaw   = static_cast<float>(cmd.yaw);
-    vision_data.data.ref_yaw_v    = 0.;
-    vision_data.data.ref_pitch_v  = 0.;
-    vision_data.data.ref_yaw_a    = 0.;
-    vision_data.data.ref_pitch_a  = 0.;
+
+    // 填充MPC前馈量
+    // 注意：pitch方向与下位机约定相反，需要取反（历史遗留问题）
+    if (solver_ != nullptr) {
+        auto ff = solver_->getFeedforward();
+        if (ff.valid) {
+            vision_data.data.ref_yaw_v   = static_cast<float>(ff.yaw_vel);
+            vision_data.data.ref_pitch_v = -static_cast<float>(ff.pitch_vel);
+            vision_data.data.ref_yaw_a   = static_cast<float>(ff.yaw_acc);
+            vision_data.data.ref_pitch_a = -static_cast<float>(ff.pitch_acc);
+        } else {
+            vision_data.data.ref_yaw_v   = 0.0f;
+            vision_data.data.ref_pitch_v = 0.0f;
+            vision_data.data.ref_yaw_a   = 0.0f;
+            vision_data.data.ref_pitch_a = 0.0f;
+        }
+    } else {
+        vision_data.data.ref_yaw_v   = 0.0f;
+        vision_data.data.ref_pitch_v = 0.0f;
+        vision_data.data.ref_yaw_a   = 0.0f;
+        vision_data.data.ref_pitch_a = 0.0f;
+    }
 
     std::memcpy(buffer_, &vision_data, sizeof(SendVisionData));
     if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
