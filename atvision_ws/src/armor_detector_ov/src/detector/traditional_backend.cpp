@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <execution>
 #include <vector>
 
 #include <opencv2/core.hpp>
@@ -42,15 +41,13 @@ std::vector<ArmorObject> TraditionalBackend::detect(const cv::Mat& input, const 
     armors_ = matchLights(lights_);
 
     if (!armors_.empty() && classifier_ != nullptr) {
-        // Parallel processing for number classification
-        std::for_each(
-            std::execution::par, armors_.begin(), armors_.end(),
-            [this, &input](ClassifiableArmor& armor) {
-                // 4. Extract the number image
-                armor.number_img = classifier_->extractNumber(input, armor);
-                // 5. Do classification
-                classifier_->classify(input, armor);
-            });
+        // Sequential processing for number classification
+        for (auto& armor : armors_) {
+            // 4. Extract the number image
+            armor.number_img = classifier_->extractNumber(input, armor);
+            // 5. Do classification
+            classifier_->classify(input, armor);
+        }
 
         // 6. Erase the armors with ignore classes
         classifier_->eraseIgnoreClasses(armors_);

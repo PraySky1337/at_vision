@@ -49,7 +49,7 @@ def armor_detector_ov_node(node_params):
     plugin='rm_auto_aim::ArmorDetectorOVNode',
     name='armor_detector_ov',
     parameters=[node_params],
-    extra_arguments=[{'use_intra_process_comms': False}])
+    extra_arguments=[{'use_intra_process_comms': True}])
 
 def armor_solver_node(node_params):
     return ComposableNode(

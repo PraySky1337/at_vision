@@ -76,6 +76,7 @@ public:
 
       while (rclcpp::ok()) {
         nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
+        image_msg_.header.stamp = this->now() - rclcpp::Duration::from_nanoseconds(exposure_time / 2 * 1e3);
         if (MV_OK == nRet) {
           convert_param_.pDstBuffer = image_msg_.data.data();
           convert_param_.nDstBufferSize = image_msg_.data.size();
@@ -85,7 +86,6 @@ public:
 
           MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
 
-          image_msg_.header.stamp = this->now();
           image_msg_.height = out_frame.stFrameInfo.nHeight;
           image_msg_.width = out_frame.stFrameInfo.nWidth;
           image_msg_.step = out_frame.stFrameInfo.nWidth * 3;
@@ -136,7 +136,7 @@ private:
     MV_CC_GetFloatValue(camera_handle_, "ExposureTime", &f_value);
     param_desc.integer_range[0].from_value = f_value.fMin;
     param_desc.integer_range[0].to_value = f_value.fMax;
-    double exposure_time = this->declare_parameter("exposure_time", 5000, param_desc);
+    exposure_time = this->declare_parameter("exposure_time", 5000, param_desc);
     MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time);
     RCLCPP_INFO(this->get_logger(), "Exposure time: %f", exposure_time);
 
@@ -194,6 +194,7 @@ private:
   std::thread capture_thread_;
 
   OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
+  double exposure_time;
 };
 }  // namespace hik_camera
 

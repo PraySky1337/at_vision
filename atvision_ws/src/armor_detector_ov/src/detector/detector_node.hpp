@@ -86,9 +86,6 @@ private:
     rclcpp::CallbackGroup::SharedPtr img_callback_group_;
     rclcpp::CallbackGroup::SharedPtr other_callback_group_;
 
-    // 参数线程安全
-    std::mutex param_mutex_;
-
     // TF/坐标
     std::string odom_frame_ = "odom";
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;

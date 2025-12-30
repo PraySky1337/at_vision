@@ -5,13 +5,17 @@ project(armor_detector_ov)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
-## enforcing cleaner code.
+## Compiler flags
 add_definitions(-O3)
-
 
 ## Export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+#######################
+## Build Options     ##
+#######################
+
+option(ENABLE_OPENVINO "Enable OpenVINO NN backend" ON)
 
 #######################
 ## Find dependencies ##
@@ -19,32 +23,72 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(ament_cmake_auto REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(OpenVINO REQUIRED)
-find_package(TBB REQUIRED COMPONENTS tbb)
 find_package(Ceres REQUIRED)
 ament_auto_find_build_dependencies()
+
+# Conditionally find OpenVINO
+if(ENABLE_OPENVINO)
+  find_package(OpenVINO QUIET)
+  if(NOT OpenVINO_FOUND)
+    message(WARNING "OpenVINO not found. NN backend will be disabled.")
+    set(ENABLE_OPENVINO OFF)
+  else()
+    find_package(TBB QUIET COMPONENTS tbb)
+  endif()
+endif()
 
 ###########
 ## Build ##
 ###########
 
+# Base sources (always compiled)
+set(BASE_SOURCES
+  src/detector/detector_node.cpp
+  src/detector/pnp_solver.cpp
+  src/detector/traditional_backend.cpp
+  src/detector/number_classifier.cpp
+)
+
+# OpenVINO sources (only when enabled)
+if(ENABLE_OPENVINO)
+  set(OPENVINO_SOURCES
+    src/detector/nn_backend.cpp
+    src/detector/inference/ov_armor_tup.cpp
+    src/detector/inference/ov_armor_at.cpp
+  )
+  message(STATUS "Building with OpenVINO NN backend support")
+else()
+  set(OPENVINO_SOURCES "")
+  message(STATUS "Building WITHOUT OpenVINO (traditional backend only)")
+endif()
+
+# Build the library
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  DIRECTORY src
+  ${BASE_SOURCES}
+  ${OPENVINO_SOURCES}
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-${OpenCV_INCLUDE_DIRS}
-${EIGEN3_INCLUDE_DIRS}
-${CERES_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME}
-${OpenCV_LIBS}
-${CERES_LIBRARIES}
-openvino::runtime
-TBB::tbb
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
 )
 
+# Conditionally link OpenVINO
+if(ENABLE_OPENVINO)
+  target_link_libraries(${PROJECT_NAME}
+    openvino::runtime
+  )
+  if(TBB_FOUND)
+    target_link_libraries(${PROJECT_NAME} TBB::tbb)
+  endif()
+  target_compile_definitions(${PROJECT_NAME} PUBLIC ENABLE_OPENVINO)
+endif()
 
 rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN rm_auto_aim::ArmorDetectorOVNode
@@ -54,8 +98,9 @@ rclcpp_components_register_node(${PROJECT_NAME}
 #############
 ## Install ##
 #############
+
 install(DIRECTORY include/
-        DESTINATION include
+  DESTINATION include
 )
 
 ament_auto_package(
@@ -65,3 +110,9 @@ ament_auto_package(
   launch
   model
 )
+
+# Build summary
+message(STATUS "=== armor_detector_ov Build Configuration ===")
+message(STATUS "  OpenVINO Backend: ${ENABLE_OPENVINO}")
+message(STATUS "  OpenCV Version: ${OpenCV_VERSION}")
+message(STATUS "=============================================")

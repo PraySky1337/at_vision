@@ -18,13 +18,16 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 
-// 后端
-#include "armor_detector_ov/nn_backend.hpp"
+// 后端 - Traditional (always available)
 #include "armor_detector_ov/traditional_backend.hpp"
 
+// 后端 - NN (only when OpenVINO is enabled)
+#ifdef ENABLE_OPENVINO
+#include "armor_detector_ov/nn_backend.hpp"
 // 模型注册
 #include "inference/ov_armor_at.hpp"
 #include "inference/ov_armor_tup.hpp"
+#endif
 
 namespace {
 inline std::string resolve_pkg_url(const std::string& url) {
@@ -419,6 +422,7 @@ std::unique_ptr<DetectorBackend> ArmorDetectorOVNode::createBackend() {
 
         return backend;
     } else {
+#ifdef ENABLE_OPENVINO
         // 创建NN后端
         NNBackend::Config config;
         config.model_name = model_name_;
@@ -446,6 +450,14 @@ std::unique_ptr<DetectorBackend> ArmorDetectorOVNode::createBackend() {
                     exec_join.empty() ? device_name_.c_str() : exec_join.c_str());
 
         return backend;
+#else
+        RCLCPP_ERROR(get_logger(),
+            "NN backend requested but OpenVINO support is not compiled in. "
+            "Falling back to traditional backend.");
+        // Fallback to traditional backend
+        backend_type_ = "traditional";
+        return createBackend();
+#endif
     }
 }
 
@@ -468,10 +480,6 @@ void ArmorDetectorOVNode::imageCallback(sensor_msgs::msg::Image::ConstSharedPtr 
     const std::string frame_id = img_msg->header.frame_id;
 
     bool debug_draw = false;
-    {
-        std::lock_guard<std::mutex> lock(param_mutex_);
-        debug_draw = debug_;
-    }
 
     const int w = static_cast<int>(img_msg->width);
     const int h = static_cast<int>(img_msg->height);
@@ -771,10 +779,6 @@ void ArmorDetectorOVNode::targetCallback(rm_interfaces::msg::Target::ConstShared
 
 void ArmorDetectorOVNode::filteredArmors(std::vector<ArmorObject>& armors) {
     std::string detect_color;
-    {
-        std::lock_guard<std::mutex> lock(param_mutex_);
-        detect_color = detect_color_;
-    }
 
     if (detect_color == "RED") {
         armors.erase(
@@ -844,7 +848,6 @@ rcl_interfaces::msg::SetParametersResult
     ArmorDetectorOVNode::onSetParameters(const std::vector<rclcpp::Parameter>& parameters) {
     rcl_interfaces::msg::SetParametersResult res;
     res.successful = true;
-    std::lock_guard<std::mutex> lock(param_mutex_);
     for (const auto& p : parameters) {
         if (p.get_name() == "debug") {
             debug_ = p.as_bool();

@@ -5,7 +5,21 @@
 #include <cstring>
 #include <utility>
 
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/duration.hpp>
+
+namespace {
+rcl_interfaces::msg::ParameterDescriptor makeDoubleDescriptor(
+    const std::string& description, double from, double to, double step = 0.01) {
+    rcl_interfaces::msg::ParameterDescriptor desc;
+    desc.description = description;
+    desc.floating_point_range.resize(1);
+    desc.floating_point_range[0].from_value = from;
+    desc.floating_point_range[0].to_value   = to;
+    desc.floating_point_range[0].step       = step;
+    return desc;
+}
+} // namespace
 
 namespace rm_gimbal {
 
@@ -13,8 +27,14 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
     : rclcpp::Node("gimbal_node", options)
     , device_(parser_)
     , tf_broadcaster_(*this)
-    , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN)) {
-    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
+    , aiming_color_(static_cast<int>(EnemyColor::UNKNOWN))
+    , solver_(nullptr) {
+    RCLCPP_INFO(get_logger(), "Starting GimbalNode with ballistic solver");
+
+    // TF2 buffer and listener
+    tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
     std::string target_component_name =
         declare_parameter("target_component_name", "armor_detector");
     if (declare_parameter("use_judgement_color", false)) {
@@ -37,19 +57,38 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
         device_.open(0x0483); // 再尝试一次 如果未成功则再次触发异常
     }
 
-    use_roll_    = declare_parameter("use_roll", false);
-    use_planner_ = declare_parameter("use_planner", true);
-    debug_       = declare_parameter("debug", true);
+    use_roll_ = declare_parameter("use_roll", false);
+    debug_    = declare_parameter("debug", true);
     rcl_interfaces::msg::ParameterDescriptor param_desc;
     param_desc.description = "unit: ms";
     timestamp_offset_ms_   = this->declare_parameter("timestamp_offset", 0.1, param_desc); // s
 
-    control_cmd_sub_ = create_subscription<rm_interfaces::msg::GimbalCmd>(
-        "armor_solver/cmd_gimbal", rclcpp::SensorDataQoS(),
-        std::bind(&GimbalNode::control_cmd_callback, this, std::placeholders::_1));
+    // Declare and initialize solver parameters
+    solver_params_ = declare_solver_parameters();
+    atomic_solver_params_.update(solver_params_);
+
+    // Timer callback group (for 250Hz solve timer)
+    timer_callback_group_ =
+        this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    // Subscribe to Target from armor_solver (replaces GimbalCmd subscription)
+    target_sub_ = create_subscription<rm_interfaces::msg::Target>(
+        "armor_solver/target", rclcpp::SensorDataQoS(),
+        std::bind(&GimbalNode::target_callback, this, std::placeholders::_1));
+
+    // Create 250Hz solve timer
+    solve_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(4), std::bind(&GimbalNode::solve_timer_callback, this),
+        timer_callback_group_);
+
+    // Visualization publisher
+    marker_pub_ =
+        this->create_publisher<visualization_msgs::msg::MarkerArray>("rm_gimbal/marker", 10);
 
     on_set_params_cb_ = add_on_set_parameters_callback(
         std::bind(&GimbalNode::on_params, this, std::placeholders::_1));
+
+    init_markers();
 
     thread_ = std::thread([this] {
         running_ = true;
@@ -65,6 +104,65 @@ GimbalNode::~GimbalNode() {
     if (thread_.joinable()) {
         thread_.join();
     }
+}
+
+SolverParams GimbalNode::declare_solver_parameters() {
+    SolverParams params{};
+
+#define DECLARE_DOUBLE_ZH(name, default_val, desc_zh, min, max, step) \
+    this->declare_parameter(name, default_val, makeDoubleDescriptor(desc_zh, min, max, step))
+
+    // clang-format off
+    params.shooting_range_w = DECLARE_DOUBLE_ZH("solver.shooting_range_width", 0.135,
+        "射击窗口宽度（米）", 0.0, 1.0, 0.001);
+    params.shooting_range_h = DECLARE_DOUBLE_ZH("solver.shooting_range_height", 0.135,
+        "射击窗口高度（米）", 0.0, 1.0, 0.001);
+    params.max_tracking_v_yaw = DECLARE_DOUBLE_ZH("solver.max_tracking_v_yaw", 6.0,
+        "跟踪装甲板模式的最大角速度阈值", 0.0, 60.0, 0.01);
+    params.prediction_delay = DECLARE_DOUBLE_ZH("solver.prediction_delay", 0.0,
+        "额外预测延迟（秒）", -1.0, 1.0, 0.001);
+    params.side_angle = DECLARE_DOUBLE_ZH("solver.side_angle", 15.0,
+        "侧向角度阈值（度）", 0.0, 90.0, 0.1);
+    params.min_switching_v_yaw = DECLARE_DOUBLE_ZH("solver.min_switching_v_yaw", 1.0,
+        "最小切换角速度", 0.0, 10.0, 0.01);
+    params.transfer_thresh = static_cast<int>(this->declare_parameter("solver.transfer_thresh", 5));
+
+    // Trajectory compensator parameters
+    params.compensator_type = this->declare_parameter("solver.compensator_type", "resistance");
+    params.trajectory.iteration_times = static_cast<int>(
+        this->declare_parameter("solver.iteration_times", 20));
+    params.trajectory.bullet_speed = DECLARE_DOUBLE_ZH("solver.bullet_speed", 20.0,
+        "弹丸速度（米/秒）", 5.0, 50.0, 0.1);
+    params.trajectory.gravity = DECLARE_DOUBLE_ZH("solver.gravity", 9.8,
+        "重力加速度", 9.0, 10.0, 0.00001);
+    params.trajectory.resistance = DECLARE_DOUBLE_ZH("solver.resistance", 0.001,
+        "空气阻力系数", 0.0, 0.1, 0.0000001);
+    // clang-format on
+
+#undef DECLARE_DOUBLE_ZH
+
+    return params;
+}
+
+bool GimbalNode::apply_solver_param_update(const rclcpp::Parameter& param) {
+    const auto& name = param.get_name();
+    bool updated = false;
+
+    if (name == "solver.max_tracking_v_yaw") {
+        atomic_solver_params_.max_tracking_v_yaw.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.prediction_delay") {
+        atomic_solver_params_.prediction_delay.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.side_angle") {
+        atomic_solver_params_.side_angle.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    } else if (name == "solver.min_switching_v_yaw") {
+        atomic_solver_params_.min_switching_v_yaw.store(param.as_double(), std::memory_order_relaxed);
+        updated = true;
+    }
+
+    return updated;
 }
 
 void GimbalNode::set_params(const std::string& color) {
@@ -101,7 +199,8 @@ rcl_interfaces::msg::SetParametersResult
             if (name == "timestamp_offset") {
                 timestamp_offset_ms_.store(p.as_double());
             } else {
-                // 保持逻辑不变：其他参数忽略
+                // Try to apply solver parameter update
+                apply_solver_param_update(p);
             }
         } catch (const rclcpp::ParameterTypeException& e) {
             RCLCPP_ERROR(get_logger(), "Parameter type error: %s", e.what());
@@ -158,17 +257,67 @@ void GimbalNode::handle_imu_packet(const std::byte* data, size_t size) {
     }
 }
 
-void GimbalNode::control_cmd_callback(
-    rm_interfaces::msg::GimbalCmd::ConstSharedPtr control_cmd_msg) {
+void GimbalNode::target_callback(rm_interfaces::msg::Target::ConstSharedPtr target_msg) {
+    std::lock_guard<std::mutex> lock(target_mutex_);
+    // Lazy initialize solver
+    if (solver_ == nullptr) {
+        solver_ = std::make_unique<BallisticSolver>(solver_params_, atomic_solver_params_);
+    }
+    armor_target_ = *target_msg;
+}
+
+void GimbalNode::solve_timer_callback() {
+    rm_interfaces::msg::Target target_snapshot;
+    {
+        std::lock_guard<std::mutex> lock(target_mutex_);
+        if (solver_ == nullptr) {
+            return;
+        }
+        target_snapshot = armor_target_;
+    }
+
+    // If target never detected
+    if (target_snapshot.header.frame_id.empty()) {
+        send_empty_command();
+        return;
+    }
+
+    rm_interfaces::msg::GimbalCmd gimbal_cmd;
+
+    if (target_snapshot.tracking) {
+        try {
+            gimbal_cmd = solver_->solve(target_snapshot, now(), tf_buffer_);
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "TF error: %s", ex.what());
+            send_empty_command();
+            return;
+        }
+    } else {
+        gimbal_cmd.yaw_diff    = 0;
+        gimbal_cmd.pitch_diff  = 0;
+        gimbal_cmd.distance    = -1;
+        gimbal_cmd.fire_advice = false;
+    }
+
+    // Send directly to device via USB (no ROS msg)
+    send_to_device(gimbal_cmd);
+
+    // Publish visualization markers
+    if (debug_ && marker_pub_ != nullptr) {
+        publish_markers(target_snapshot, gimbal_cmd);
+    }
+}
+
+void GimbalNode::send_to_device(const rm_interfaces::msg::GimbalCmd& cmd) {
     SendVisionData vision_data;
     vision_data.header.id         = 0x02;
     vision_data.header.len        = sizeof(decltype(vision_data.data));
     vision_data.header.sof        = HeaderFrame::SoF();
     vision_data.eof               = HeaderFrame::EoF();
-    vision_data.data.fire_advice  = control_cmd_msg->fire_advice;
-    vision_data.data.distance     = static_cast<float>(control_cmd_msg->distance);
-    vision_data.data.target_pitch = -static_cast<float>(control_cmd_msg->pitch);
-    vision_data.data.target_yaw   = static_cast<float>(control_cmd_msg->yaw);
+    vision_data.data.fire_advice  = cmd.fire_advice;
+    vision_data.data.distance     = static_cast<float>(cmd.distance);
+    vision_data.data.target_pitch = -static_cast<float>(cmd.pitch);
+    vision_data.data.target_yaw   = static_cast<float>(cmd.yaw);
     vision_data.data.ref_yaw_v    = 0.;
     vision_data.data.ref_pitch_v  = 0.;
     vision_data.data.ref_yaw_a    = 0.;
@@ -178,6 +327,121 @@ void GimbalNode::control_cmd_callback(
     if (!device_.send_data(buffer_, sizeof(SendVisionData))) {
         RCLCPP_WARN(get_logger(), "Failed to send data");
     }
+}
+
+void GimbalNode::send_empty_command() {
+    rm_interfaces::msg::GimbalCmd empty_cmd;
+    empty_cmd.yaw_diff    = 0;
+    empty_cmd.pitch_diff  = 0;
+    empty_cmd.distance    = -1;
+    empty_cmd.pitch       = 0;
+    empty_cmd.yaw         = 0;
+    empty_cmd.fire_advice = false;
+    send_to_device(empty_cmd);
+}
+
+void GimbalNode::init_markers() noexcept {
+    selection_marker_.ns       = "selection";
+    selection_marker_.type     = visualization_msgs::msg::Marker::SPHERE;
+    selection_marker_.scale.x  = selection_marker_.scale.y = selection_marker_.scale.z = 0.1;
+    selection_marker_.color.a  = 0.3;
+    selection_marker_.color.g  = 1.0;
+    selection_marker_.color.r  = 1.0;
+
+    predicted_marker_.ns       = "predicted_position";
+    predicted_marker_.type     = visualization_msgs::msg::Marker::SPHERE;
+    predicted_marker_.scale.x  = predicted_marker_.scale.y = predicted_marker_.scale.z = 0.08;
+    predicted_marker_.color.a  = 0.6;
+    predicted_marker_.color.r  = 1.0;
+    predicted_marker_.color.g  = 0.5;
+    predicted_marker_.color.b  = 0.2;
+
+    trajectory_marker_.ns      = "trajectory";
+    trajectory_marker_.type    = visualization_msgs::msg::Marker::POINTS;
+    trajectory_marker_.scale.x = 0.01;
+    trajectory_marker_.scale.y = 0.01;
+    trajectory_marker_.color.a = 0.3;
+    trajectory_marker_.color.r = 1.0;
+    trajectory_marker_.color.g = 0.75;
+    trajectory_marker_.color.b = 0.79;
+    trajectory_marker_.points.clear();
+}
+
+void GimbalNode::publish_markers(
+    const rm_interfaces::msg::Target& target_msg,
+    const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept {
+    using visualization_msgs::msg::Marker;
+    using visualization_msgs::msg::MarkerArray;
+    MarkerArray marry;
+    int id = 0;
+
+    const std_msgs::msg::Header hdr = target_msg.header;
+
+    if (target_msg.tracking) {
+        selection_marker_.header  = hdr;
+        trajectory_marker_.header = hdr;
+
+        // Selection marker - shows where we're aiming
+        selection_marker_.action = Marker::ADD;
+        selection_marker_.id     = id++;
+        selection_marker_.points.clear();
+        selection_marker_.pose.position.y = gimbal_cmd.distance * sin(gimbal_cmd.yaw * M_PI / 180);
+        selection_marker_.pose.position.x = gimbal_cmd.distance * cos(gimbal_cmd.yaw * M_PI / 180);
+        selection_marker_.pose.position.z =
+            gimbal_cmd.distance * sin(gimbal_cmd.pitch * M_PI / 180);
+
+        // Predicted position marker
+        predicted_marker_.header = hdr;
+        predicted_marker_.id     = id++;
+        predicted_marker_.action = Marker::DELETE;
+        if (solver_ != nullptr) {
+            const auto predicted_position = solver_->getPredictedPosition();
+            if (predicted_position.has_value()) {
+                predicted_marker_.action             = Marker::ADD;
+                predicted_marker_.pose.position.x    = predicted_position->x();
+                predicted_marker_.pose.position.y    = predicted_position->y();
+                predicted_marker_.pose.position.z    = predicted_position->z();
+                predicted_marker_.pose.orientation.x = 0.0;
+                predicted_marker_.pose.orientation.y = 0.0;
+                predicted_marker_.pose.orientation.z = 0.0;
+                predicted_marker_.pose.orientation.w = 1.0;
+            }
+        }
+
+        // Trajectory marker
+        trajectory_marker_.action          = Marker::ADD;
+        trajectory_marker_.id              = id++;
+        trajectory_marker_.points.clear();
+        trajectory_marker_.header.frame_id = "muzzle_link";
+        if (solver_ != nullptr) {
+            for (const auto& point : solver_->getTrajectory()) {
+                geometry_msgs::msg::Point p;
+                p.x = point.first;
+                p.z = point.second;
+                trajectory_marker_.points.emplace_back(p);
+            }
+        }
+        if (gimbal_cmd.fire_advice) {
+            trajectory_marker_.color.r = 0;
+            trajectory_marker_.color.g = 1;
+            trajectory_marker_.color.b = 0;
+        } else {
+            trajectory_marker_.color.r = 1;
+            trajectory_marker_.color.g = 1;
+            trajectory_marker_.color.b = 1;
+        }
+    } else {
+        selection_marker_.action  = Marker::DELETE;
+        trajectory_marker_.action = Marker::DELETE;
+        predicted_marker_.action  = Marker::DELETE;
+        predicted_marker_.header  = hdr;
+    }
+
+    marry.markers.emplace_back(selection_marker_);
+    marry.markers.emplace_back(predicted_marker_);
+    marry.markers.emplace_back(trajectory_marker_);
+
+    marker_pub_->publish(marry);
 }
 
 } // namespace rm_gimbal

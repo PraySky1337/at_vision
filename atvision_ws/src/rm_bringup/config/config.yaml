@@ -24,16 +24,44 @@
 
 /armor_detector_ov:
   ros__parameters:
+    armor:
+      max_angle: 35.0
+      max_large_center_distance: 5.5
+      max_small_center_distance: 3.2
+      min_large_center_distance: 3.2
+      min_light_ratio: 0.7
+      min_small_center_distance: 0.8
+    armor_detector:
+      result_img:
+        enable_pub_plugins:
+        - image_transport/compressed
+        format: jpeg
+        jpeg_quality: 95
+        png_level: 3
+        tiff:
+          res_unit: inch
+          xdpi: -1
+          ydpi: -1
+    backend_type: traditional
     bbox_timeout_s: 0.2
+    binary_thres: 50
     camera_frame: camera_optical_frame
-    debug: true
-    detect_color: BLUE
+    classifier:
+      label_path: package://armor_detector_ov/model/label.txt
+      model_path: package://armor_detector_ov/model/lenet.onnx
+      threshold: 0.7
+    debug: false
+    detect_color: RED
     device_name: AUTO
     device_priorities: GPU,CPU
     draw_latency: true
     drop_out_of_order: true
     enable_multi_thread: true
-    enable_pipeline: true
+    light:
+      color_diff_thresh: 30
+      max_angle: 45.0
+      max_ratio: 1.0
+      min_ratio: 0.0001
     model_name: armor_tup
     model_path: package://armor_detector_ov/model/opt-1208-001.onnx
     pipeline_num_requests: 4
@@ -49,12 +77,11 @@
     roi_disable_dist_m: 3.0
     roi_future_tolerance_s: 0.02
     roi_miss_disable_s: 0.12
-    roi_scale: 1.
+    roi_scale: 1.0
     roi_smooth_alpha: 0.35
     roi_timeout_s: 0.2
     target_frame: odom
     use_ba: true
-    use_gpu: false
     use_roi: true
     use_sim_time: false
 
@@ -69,9 +96,9 @@
           history: keep_last
           reliability: reliable
     solver:
-      bullet_speed: 25.0
+      bullet_speed: 22.0
       compensator_type: resistance
-      controller_delay: 0.050
+      controller_delay: 0.085
       gravity: 9.7997
       iteration_times: 20
       max_tracking_v_yaw: 60.0

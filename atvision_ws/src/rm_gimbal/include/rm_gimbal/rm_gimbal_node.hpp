@@ -2,6 +2,8 @@
 
 #include "packet.hpp"
 #include "usb.hpp"
+#include "rm_gimbal/ballistic_solver.hpp"
+#include "rm_gimbal/solver_params.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -16,6 +18,7 @@
 #include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include <tf2/LinearMath/Transform.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -24,6 +27,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
+#include "rm_interfaces/msg/target.hpp"
 
 namespace rm_gimbal {
 
@@ -41,9 +45,33 @@ private:
 
     void handle_imu_packet(const std::byte* data, size_t size);
 
-    void control_cmd_callback(rm_interfaces::msg::GimbalCmd::ConstSharedPtr plan_control_cmd_msg);
+    // Target callback - receives tracking target from armor_solver
+    void target_callback(rm_interfaces::msg::Target::ConstSharedPtr target_msg);
+
+    // Solve timer callback - 250Hz ballistic solving
+    void solve_timer_callback();
+
+    // Send gimbal command directly to device
+    void send_to_device(const rm_interfaces::msg::GimbalCmd& cmd);
+
+    // Send empty command when not tracking
+    void send_empty_command();
 
     void set_params(const std::string& color);
+
+    // Declare solver parameters
+    SolverParams declare_solver_parameters();
+
+    // Apply solver parameter updates (atomic, for hot-reload)
+    bool apply_solver_param_update(const rclcpp::Parameter& param);
+
+    // Initialize visualization markers
+    void init_markers() noexcept;
+
+    // Publish visualization markers
+    void publish_markers(
+        const rm_interfaces::msg::Target& target_msg,
+        const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
 
 private:
     DeviceParser parser_;
@@ -52,13 +80,31 @@ private:
 
     tf2_ros::Buffer::SharedPtr tf_buffer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
-    rclcpp::CallbackGroup::SharedPtr call_back_group;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     std::atomic<uint8_t> aiming_color_;
 
     rclcpp::AsyncParametersClient::SharedPtr detector_client_;
 
-    rclcpp::Subscription<rm_interfaces::msg::GimbalCmd>::SharedPtr control_cmd_sub_;
+    // Target subscription (replaces GimbalCmd subscription)
+    rclcpp::Subscription<rm_interfaces::msg::Target>::SharedPtr target_sub_;
+    rm_interfaces::msg::Target armor_target_;
+    std::mutex target_mutex_;
+
+    // Ballistic solver
+    std::unique_ptr<BallisticSolver> solver_;
+    SolverParams solver_params_;
+    AtomicSolverParams atomic_solver_params_;
+
+    // Solve timer (250Hz)
+    rclcpp::TimerBase::SharedPtr solve_timer_;
+    rclcpp::CallbackGroup::SharedPtr timer_callback_group_;
+
+    // Visualization
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+    visualization_msgs::msg::Marker trajectory_marker_;
+    visualization_msgs::msg::Marker selection_marker_;
+    visualization_msgs::msg::Marker predicted_marker_;
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
 
@@ -70,7 +116,6 @@ private:
     std::atomic<double> timestamp_offset_ms_;
     bool debug_;
     bool use_roll_;
-    bool use_planner_;
 };
 
 } // namespace rm_gimbal

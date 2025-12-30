@@ -19,9 +19,8 @@
 #include <mutex>
 #include <vector>
 // project
-#include "armor_solver.hpp"
-#include "solver_params.hpp"
 #include "tracker.hpp"
+#include "motion_model.hpp"
 #include "rm_interfaces/msg/armors.hpp"
 #include "rm_interfaces/msg/measurement.hpp"
 #include "rm_interfaces/msg/target.hpp"
@@ -42,16 +41,12 @@ private:
     void initMarkers() noexcept;
 
     Tracker::Params declareTrackerParameters();
-    SolverParams declareSolverParameters();
     rcl_interfaces::msg::SetParametersResult
         onSetParameters(const std::vector<rclcpp::Parameter>& parameters);
     bool applyTrackerParamUpdate(
         const rclcpp::Parameter& param, Tracker::Params& params);
-    bool applySolverParamUpdate(const rclcpp::Parameter& param);
 
-    void publishMarkers(
-        const rm_interfaces::msg::Target& target_msg,
-        const rm_interfaces::msg::GimbalCmd& gimbal_cmd) noexcept;
+    void publishMarkers(const rm_interfaces::msg::Target& target_msg) noexcept;
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -68,11 +63,6 @@ private:
     // Armor tracker
     double lost_time_thres_;
 
-    // Armor Solver
-    SolverParams solver_params_;
-    AtomicSolverParams atomic_solver_params_;
-    std::unique_ptr<Solver> solver_;
-    std::mutex target_mutex_;
     std::mutex tracker_mutex_;
 
     // Subscriber with tf2 message_filter
@@ -80,7 +70,6 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf2_listener_;
     message_filters::Subscriber<rm_interfaces::msg::Armors> armors_sub_;
-    rm_interfaces::msg::Target armor_target_;
     std::shared_ptr<tf2_filter> tf2_filter_;
 
     // Measurement publisher
@@ -88,29 +77,15 @@ private:
 
     // Publisher
     rclcpp::Publisher<rm_interfaces::msg::Target>::SharedPtr target_pub_;
-    rclcpp::Publisher<rm_interfaces::msg::GimbalCmd>::SharedPtr gimbal_pub_;
-    rclcpp::TimerBase::SharedPtr pub_timer_;
-    void timerCallback();
-    rclcpp::CallbackGroup::SharedPtr timer_callback_group_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr tracker_param_cb_handle_;
 
-    struct TrackerSnapshot {
-        rm_interfaces::msg::Target target;
-        bool valid{false};
-    };
-
-    // Visualization marker publisher
+    // Visualization marker publisher (tracker-related only)
     visualization_msgs::msg::Marker position_marker_;
     visualization_msgs::msg::Marker linear_v_marker_;
     visualization_msgs::msg::Marker angular_v_marker_;
-    visualization_msgs::msg::Marker trajectory_marker_;
     visualization_msgs::msg::Marker armors_marker_;
-    visualization_msgs::msg::Marker selection_marker_;
-    visualization_msgs::msg::Marker predicted_marker_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
-
-    TrackerSnapshot tracker_snapshot_;
 };
 
-} // namespace fyt::auto_aim
+} // namespace rm_auto_aim
