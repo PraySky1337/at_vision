@@ -125,9 +125,9 @@ private:
         marker.pose.position.x    = center.x();
         marker.pose.position.y    = center.y();
         marker.pose.position.z    = center.z();
-        marker.pose.orientation.x = q.z();
+        marker.pose.orientation.x = q.x();
         marker.pose.orientation.y = q.y();
-        marker.pose.orientation.z = q.x();
+        marker.pose.orientation.z = q.z();
         marker.pose.orientation.w = q.w();
         marker.scale.x            = scale_x;
         marker.scale.y            = scale_y;
