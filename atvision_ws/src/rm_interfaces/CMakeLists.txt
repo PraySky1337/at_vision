@@ -30,6 +30,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/PlanGimbalCmd.msg"
   "srv/SetMode.srv"
   "srv/RunHandEyeCalibration.srv"
+  "msg/EnergyMeterState.msg"
   DEPENDENCIES
     std_msgs
     geometry_msgs

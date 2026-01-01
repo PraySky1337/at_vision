@@ -42,7 +42,9 @@ RuneDetectorNode::RuneDetectorNode(const rclcpp::NodeOptions& options)
     rune_detector_ = initDetector();
 
     // Debug参数
-    debug_ = declare_parameter("debug", true);
+    debug_          = declare_parameter("debug", true);
+    publish_binary_ = declare_parameter("publish_binary", true);
+
     if (debug_) {
         createDebugPublishers();
     }
@@ -71,7 +73,7 @@ RuneDetectorNode::~RuneDetectorNode() { std::cerr << "Stopping video thread..." 
 
 std::unique_ptr<RuneDetector> RuneDetectorNode::initDetector() {
 
-    arrow_threshold_   = this->declare_parameter("detector.arrow_threshold", 90);
+    arrow_threshold_   = this->declare_parameter("detector.arrow_threshold", 170);
     target_threshold_  = this->declare_parameter("detector.target_threshold", 130);
     rcenter_threshold_ = this->declare_parameter("detector.rcenter_threshold", 120);
     // Set dynamic parameter callback
@@ -92,8 +94,9 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
     // 转换 ROS 图像为 OpenCV
     cv::Mat src_img = cv_bridge::toCvCopy(msg, "bgr8")->image;
 
-     if (src_img.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Received empty image");
+    if (src_img.empty()) {
+        std::cerr << "[ERROR] imageCallback: Received empty image" << std::endl;
+        ;
         return;
     }
 
@@ -177,11 +180,71 @@ void RuneDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 
         auto&& result = cv_bridge::CvImage(msg->header, "bgr8", debug_img).toImageMsg();
         result_img_pub_.publish(std::move(result));
+
+        // Publish binary images (coordinates are relative to globalRoi)
+        if (publish_binary_) {
+            cv::Mat arrow_binary_with_roi = rune_detector_->arrowImg.clone();
+            if (arrow_binary_with_roi.channels() == 1) {
+                cv::cvtColor(arrow_binary_with_roi, arrow_binary_with_roi, cv::COLOR_GRAY2BGR);
+            }
+            // Draw centerRoi first (red), then targetROIs (green) on top
+            if (rune_detector_->centerRoi.width > 0 && rune_detector_->centerRoi.height > 0) {
+                cv::rectangle(
+                    arrow_binary_with_roi, rune_detector_->centerRoi, cv::Scalar(0, 0, 255), 2);
+            }
+            // Draw targetROIs on top (green with thicker line)
+            for (size_t i = 0; i < rune_detector_->targetROIs.size(); i++) {
+                cv::rectangle(
+                    arrow_binary_with_roi, rune_detector_->targetROIs[i], cv::Scalar(0, 255, 0), 3);
+            }
+            auto&& arrow_binary_result =
+                cv_bridge::CvImage(msg->header, "bgr8", arrow_binary_with_roi).toImageMsg();
+            arrow_binary_pub_.publish(std::move(arrow_binary_result));
+
+            cv::Mat target_binary_with_roi = rune_detector_->targetImg.clone();
+            if (target_binary_with_roi.channels() == 1) {
+                cv::cvtColor(target_binary_with_roi, target_binary_with_roi, cv::COLOR_GRAY2BGR);
+            }
+            // Draw centerRoi first (red), then targetROIs (green) on top
+            if (rune_detector_->centerRoi.width > 0 && rune_detector_->centerRoi.height > 0) {
+                cv::rectangle(
+                    target_binary_with_roi, rune_detector_->centerRoi, cv::Scalar(0, 0, 255), 2);
+            }
+            // Draw targetROIs on top (green with thicker line)
+            for (size_t i = 0; i < rune_detector_->targetROIs.size(); i++) {
+                cv::rectangle(
+                    target_binary_with_roi, rune_detector_->targetROIs[i], cv::Scalar(0, 255, 0),
+                    3);
+            }
+            auto&& target_binary_result =
+                cv_bridge::CvImage(msg->header, "bgr8", target_binary_with_roi).toImageMsg();
+            target_binary_pub_.publish(std::move(target_binary_result));
+
+            cv::Mat rcenter_binary_with_roi = rune_detector_->rCenterImg.clone();
+            if (rcenter_binary_with_roi.channels() == 1) {
+                cv::cvtColor(rcenter_binary_with_roi, rcenter_binary_with_roi, cv::COLOR_GRAY2BGR);
+            }
+            // Draw centerRoi first (red), then targetROIs (green) on top
+            if (rune_detector_->centerRoi.width > 0 && rune_detector_->centerRoi.height > 0) {
+                cv::rectangle(
+                    rcenter_binary_with_roi, rune_detector_->centerRoi, cv::Scalar(0, 0, 255), 2);
+            }
+            // Draw targetROIs on top (green with thicker line)
+            for (size_t i = 0; i < rune_detector_->targetROIs.size(); i++) {
+                cv::rectangle(
+                    rcenter_binary_with_roi, rune_detector_->targetROIs[i], cv::Scalar(0, 255, 0),
+                    3);
+            }
+            auto&& rcenter_binary_result =
+                cv_bridge::CvImage(msg->header, "bgr8", rcenter_binary_with_roi).toImageMsg();
+            rcenter_binary_pub_.publish(std::move(rcenter_binary_result));
+        }
     }
     visualization_msgs::msg::MarkerArray marker_array;
 
     // 检查R标和靶体数据是否有效
     if (pose.isZero() || pose == Eigen::Matrix4d::Identity()) {
+        std::cerr << "[ERROR] imageCallback: pose is invalid (zero or identity)" << std::endl;
         visualization_msgs::msg::Marker delete_marker;
         delete_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         marker_array.markers.push_back(delete_marker);
@@ -246,6 +309,8 @@ rcl_interfaces::msg::SetParametersResult
             rcenter_threshold_ = param.as_int();
         } else if (param.get_name() == "debug") {
             debug_ = param.as_bool();
+        } else if (param.get_name() == "publish_binary") {
+            publish_binary_ = param.as_bool();
         }
     }
     result.successful = true;
@@ -254,9 +319,26 @@ rcl_interfaces::msg::SetParametersResult
 
 void RuneDetectorNode::createDebugPublishers() {
     result_img_pub_ = image_transport::create_publisher(this, "rune_detector/result_img");
+    if (publish_binary_) {
+        arrow_binary_pub_  = image_transport::create_publisher(this, "rune_detector/arrow_binary");
+        target_binary_pub_ = image_transport::create_publisher(this, "rune_detector/target_binary");
+        rcenter_binary_pub_ =
+            image_transport::create_publisher(this, "rune_detector/rcenter_binary");
+    }
 }
 
-void RuneDetectorNode::destroyDebugPublishers() { result_img_pub_.shutdown(); }
+void RuneDetectorNode::destroyDebugPublishers() {
+    result_img_pub_.shutdown();
+    if (arrow_binary_pub_) {
+        arrow_binary_pub_.shutdown();
+    }
+    if (target_binary_pub_) {
+        target_binary_pub_.shutdown();
+    }
+    if (rcenter_binary_pub_) {
+        rcenter_binary_pub_.shutdown();
+    }
+}
 
 } // namespace fyt::rune
 #include "rclcpp_components/register_node_macro.hpp"

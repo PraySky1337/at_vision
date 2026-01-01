@@ -69,7 +69,11 @@ private:
 
     // Debug infomation
     bool debug_;
+    bool publish_binary_;
     image_transport::Publisher result_img_pub_;
+    image_transport::Publisher arrow_binary_pub_;
+    image_transport::Publisher target_binary_pub_;
+    image_transport::Publisher rcenter_binary_pub_;
 
     // //TF
     tf2_ros::Buffer tf_buffer_;
@@ -121,9 +125,9 @@ private:
         marker.pose.position.x    = center.x();
         marker.pose.position.y    = center.y();
         marker.pose.position.z    = center.z();
-        marker.pose.orientation.x = q.x();
+        marker.pose.orientation.x = q.z();
         marker.pose.orientation.y = q.y();
-        marker.pose.orientation.z = q.z();
+        marker.pose.orientation.z = q.x();
         marker.pose.orientation.w = q.w();
         marker.scale.x            = scale_x;
         marker.scale.y            = scale_y;

@@ -1,0 +1,13 @@
+energy_meter_solver_node:
+  ros__parameters:
+    # 基本参数
+    rune_type: "big"                # 符的类型: "big" 或 "small"（初始值，会被自动检测覆盖）
+    predict_time: 0.3               # 预测时间偏移（秒）
+    gimbal_frame: "gimbal"          # 目标云台参考坐标系名称
+    world_frame: "odom"             # 世界参考坐标系名称（通常为 "odom"）
+
+    # 拟合参数
+    smooth_alpha: 0.8               # 参数平滑系数（0-1），更大=更激进的平滑
+    min_data_points: 15             # 可靠模型拟合所需的最小数据点数
+    auto_detect_type: true          # 是否自动检测符的类型（大/小）
+    control_delay: 0.05             # 控制系统延迟（秒）
