@@ -87,7 +87,7 @@ private:
     int detecting_count_;
     std::map<int, std::string> voter_;
     int lost_count_;
-    int current_matched_blade_id_ = 0;  // 当前追踪的靶ID
+    int current_matched_blade_id_ = 0; // 当前追踪的靶ID
 };
 
 } // namespace energy_meter

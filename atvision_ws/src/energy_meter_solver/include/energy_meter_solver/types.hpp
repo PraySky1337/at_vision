@@ -101,6 +101,7 @@ struct AngleObservation {
     double timestamp;        // Unix时间戳(秒)
     double absolute_angle;   // 从旋转矩阵得到的原始角度(弧度)
     double continuous_angle; // 跳变补偿后的连续角度(弧度)
+    double velocity;         // 滤波后的速度 (rad/s)
     int blade_offset;        // 叶片切换偏移(72°的倍数)
 };
 
@@ -136,9 +137,8 @@ struct AngleModel {
     double raw_velocity;          // 最近一次的原始速度观测 (调试用)
 
     // 外部滤波器提供的速度（来自 ISRCKF tracker）
-    double filtered_velocity;     // 滤波后的角速度 (rad/s)
-    double filtered_acceleration; // 滤波后的角加速度 (rad/s²)
-    bool velocity_filter_valid;   // 外部滤波器是否有效
+    double filtered_velocity;   // 滤波后的角速度 (rad/s)
+    bool velocity_filter_valid; // 外部滤波器是否有效
 
     // 默认构造函数，初始化为安全的默认值
     AngleModel()
@@ -162,7 +162,6 @@ struct AngleModel {
         , last_observation_time(0.0)
         , raw_velocity(0.0)
         , filtered_velocity(0.0)
-        , filtered_acceleration(0.0)
         , velocity_filter_valid(false) {}
 };
 
@@ -196,11 +195,10 @@ struct EnergyMeterConfig {
     std::string world_frame;  // 世界参考坐标系 (通常是 "odom")
 
     // 拟合参数
-    double smooth_alpha;   // 参数平滑系数 (0-1)
-    int min_data_points;   // 可靠拟合所需的最少点数
-    bool auto_detect_type; // 自动检测大/小能量机关
+    double smooth_alpha;  // 参数平滑系数 (0-1)
+    int min_data_points;  // 可靠拟合所需的最少点数
 
-    double control_delay;  // 控制系统延迟 (秒)
+    double control_delay; // 控制系统延迟 (秒)
 };
 
 } // namespace energy_meter

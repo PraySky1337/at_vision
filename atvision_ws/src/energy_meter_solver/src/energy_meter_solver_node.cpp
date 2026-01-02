@@ -26,14 +26,14 @@ public:
         declare_parameter<double>("control_delay", 0.05);
 
         // 获取参数
-        config_.rune_type        = get_parameter("rune_type").as_string();
-        config_.predict_time     = get_parameter("predict_time").as_double();
-        config_.gimbal_frame     = get_parameter("gimbal_frame").as_string();
-        config_.world_frame      = get_parameter("world_frame").as_string();
-        config_.smooth_alpha     = get_parameter("smooth_alpha").as_double();
-        config_.min_data_points  = get_parameter("min_data_points").as_int();
-        config_.auto_detect_type = get_parameter("auto_detect_type").as_bool();
-        config_.control_delay    = get_parameter("control_delay").as_double();
+        config_.rune_type       = get_parameter("rune_type").as_string();
+        config_.predict_time    = get_parameter("predict_time").as_double();
+        config_.gimbal_frame    = get_parameter("gimbal_frame").as_string();
+        config_.world_frame     = get_parameter("world_frame").as_string();
+        config_.smooth_alpha    = get_parameter("smooth_alpha").as_double();
+        config_.min_data_points = get_parameter("min_data_points").as_int();
+
+        config_.control_delay = get_parameter("control_delay").as_double();
 
         // 初始化组件
         angle_fitter_ = std::make_shared<AngleFitter>(config_);
@@ -80,11 +80,11 @@ private:
     static constexpr int DETECTION_FRAMES = 20;    // 前20帧用于判断类型
 
     // 防误判机制
-    static constexpr double SWITCH_ERROR_THRESHOLD = 1.55; // v
-    int switch_cooldown_count_                     = 0;    // 切换后的冷却帧计数
-    static constexpr int SWITCH_COOLDOWN_FRAMES    = 30;   // 切换后等待30帧再检测
-    int frame_fps_                                 = 0;
-    static constexpr int FPS_THRESHOLD             = 100;
+    static constexpr double SWITCH_THRESHOLD    = 1.55; // v
+    int switch_cooldown_count_                  = 0;    // 切换后的冷却帧计数
+    static constexpr int SWITCH_COOLDOWN_FRAMES = 30;   // 切换后等待30帧再检测
+    int frame_fps_                              = 0;
+    static constexpr int FPS_THRESHOLD          = 100;
 
     // 速度统计（用于判断大小能量机关）
     int velocity_frame_count_                  = 0;
@@ -172,15 +172,7 @@ private:
             double loss_duration_sec = (now() - last_tracking_timestamp_).seconds();
             if (loss_duration_sec >= TRACKING_LOSS_THRESHOLD_SEC_) {
                 tracker_.state = Tracker::IDLE;
-                tracker_.energy_ukf.reset();
-                // 重置拟合器和类型判断状态
-                angle_fitter_->reset();
-                model_type_determined_ = false;
-                detection_frame_count_ = 0;
-                switch_cooldown_count_ = 0;
-                resetVelocityStats();
-                RCLCPP_INFO(
-                    get_logger(), "目标丢失超过%.1fs，重置类型判断", TRACKING_LOSS_THRESHOLD_SEC_);
+                RCLCPP_INFO(get_logger(), "目标丢失超过%.1fs", TRACKING_LOSS_THRESHOLD_SEC_);
             }
             last_tracking_timestamp_ = rclcpp::Time(0);
         }
@@ -202,6 +194,7 @@ private:
             detection_frame_count_ = 0;
             switch_cooldown_count_ = 0;
             resetVelocityStats();
+            frame_fps_ = 0;
             RCLCPP_INFO(get_logger(), "时间间隔过大(%.2fs)，重置类型判断", dt);
             return;
         }
@@ -223,17 +216,18 @@ private:
             double filtered_velocity = state(V_ROLL);
             v_                       = state(V_ROLL);
 
-            angle_fitter_->setFilteredVelocity(filtered_velocity, 0.0);
+            angle_fitter_->setFilteredVelocity(filtered_velocity);
 
-            // 添加角度观测用于参数拟合（使用KF滤波后的角度）
+            // 添加角度观测用于参数拟合（使用KF滤波后的角度和速度）
             AngleObservation obs;
             obs.timestamp        = timestamp;
             obs.continuous_angle = state(ROLL);
             obs.absolute_angle   = state(ROLL);
+            obs.velocity         = filtered_velocity;
             obs.blade_offset     = tracker_.getCurrentBladeId();
             angle_fitter_->addObservation(obs);
 
-            // 速度统计：从第10帧开始记录最大值和最小值，过滤异常值
+            // 速度统计：从第10帧开始记录最大值和最小值
             velocity_frame_count_++;
             if (velocity_frame_count_ > VELOCITY_SKIP_FRAMES_) {
                 double vel = filtered_velocity;
@@ -276,7 +270,7 @@ private:
                             velocity_max_, velocity_min_);
                         // 重置速度统计
                         resetVelocityStats();
-                        frame_fps_=0;
+                        frame_fps_ = 0;
                     }
 
                 } else {
@@ -297,8 +291,7 @@ private:
                         if (frame_fps_ > FPS_THRESHOLD) {
                             double velocity_range = velocity_max_ - velocity_min_;
                             auto updated_model    = angle_fitter_->getModel();
-                            if (velocity_range > SWITCH_ERROR_THRESHOLD
-                                && !updated_model.is_big_rune) {
+                            if (velocity_range > SWITCH_THRESHOLD && !updated_model.is_big_rune) {
                                 RCLCPP_WARN(
                                     get_logger(), "速度差值过大(%.2f )，切换类型: 小符 -> 大符",
                                     velocity_range);
@@ -310,8 +303,7 @@ private:
                                 switch_cooldown_count_ = SWITCH_COOLDOWN_FRAMES;
 
                             } else if (
-                                velocity_range < SWITCH_ERROR_THRESHOLD
-                                && updated_model.is_big_rune) {
+                                velocity_range < SWITCH_THRESHOLD && updated_model.is_big_rune) {
                                 RCLCPP_WARN(
                                     get_logger(), "速度差值过小(%.2f )，切换类型: 大符 ->小符 ",
                                     velocity_range);

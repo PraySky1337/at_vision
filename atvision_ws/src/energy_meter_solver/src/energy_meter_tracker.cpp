@@ -173,7 +173,7 @@ bool Tracker::match_all(
         }
 
         if (best_j < 0 || best_id < 0) {
-            break;                                          // 没有更多合格的匹配
+            break;                      // 没有更多合格的匹配
         }
 
         used_obs[best_j] = true;
@@ -190,7 +190,7 @@ void Tracker::state_machine(bool found) {
     case IDLE:
         if (found) {
             detecting_count_++;
-            if (detecting_count_ > 0) {                     // 第一次见到就进 DETECTING
+            if (detecting_count_ > 0) { // 第一次见到就进 DETECTING
                 state = DETECTING;
                 std::cout << "IDLE -> DETECTING" << std::endl;
             }
@@ -212,7 +212,7 @@ void Tracker::state_machine(bool found) {
         } else {
             // 检测中丢了，说明不稳定，回到 IDLE 重新来
             detecting_count_ = 0;
-            energy_ukf.reset();  // 完全重置，下次重新初始化
+            energy_ukf.reset();                    // 完全重置，下次重新初始化
             state = IDLE;
             std::cout << "DETECTING -> IDLE" << std::endl;
         }
@@ -236,8 +236,8 @@ void Tracker::state_machine(bool found) {
             if (lost_count_ > params.lost_thres) { // 丢太久，放弃
                 lost_count_      = 0;
                 detecting_count_ = 0;
-                energy_ukf.reset();  // 完全重置
-                state            = IDLE;
+                energy_ukf.reset();                // 完全重置
+                state = IDLE;
                 std::cout << "TEMP_LOST -> IDLE (lost too long)" << std::endl;
             }
         }
