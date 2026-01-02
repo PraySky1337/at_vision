@@ -54,6 +54,7 @@ private:
     // 配置
     EnergyMeterConfig config_;
 
+    double v_;
     // 组件
     std::shared_ptr<AngleFitter> angle_fitter_;
 
@@ -76,11 +77,26 @@ private:
     // 模型类型判断状态
     bool model_type_determined_           = false; // 是否已确定模型类型
     int detection_frame_count_            = 0;     // 检测帧计数
-    static constexpr int DETECTION_FRAMES = 25;    // 前25帧用于判断类型
+    static constexpr int DETECTION_FRAMES = 20;    // 前20帧用于判断类型
 
     // 防误判机制
-    int switch_cooldown_count_                  = 0;  // 切换后的冷却帧计数
-    static constexpr int SWITCH_COOLDOWN_FRAMES = 30; // 切换后等待30帧再检测
+    static constexpr double SWITCH_ERROR_THRESHOLD = 1.55; // v
+    int switch_cooldown_count_                     = 0;    // 切换后的冷却帧计数
+    static constexpr int SWITCH_COOLDOWN_FRAMES    = 30;   // 切换后等待30帧再检测
+    int frame_fps_                                 = 0;
+    static constexpr int FPS_THRESHOLD             = 100;
+
+    // 速度统计（用于判断大小能量机关）
+    int velocity_frame_count_                  = 0;
+    double velocity_max_                       = -std::numeric_limits<double>::max();
+    double velocity_min_                       = std::numeric_limits<double>::max();
+    static constexpr int VELOCITY_SKIP_FRAMES_ = 10;
+
+    void resetVelocityStats() {
+        velocity_frame_count_ = 0;
+        velocity_max_         = -std::numeric_limits<double>::max();
+        velocity_min_         = std::numeric_limits<double>::max();
+    }
 
     // 验证模型数据的辅助方法
     bool isValidModel(const AngleModel& model) const {
@@ -162,6 +178,7 @@ private:
                 model_type_determined_ = false;
                 detection_frame_count_ = 0;
                 switch_cooldown_count_ = 0;
+                resetVelocityStats();
                 RCLCPP_INFO(
                     get_logger(), "目标丢失超过%.1fs，重置类型判断", TRACKING_LOSS_THRESHOLD_SEC_);
             }
@@ -174,7 +191,7 @@ private:
         // 计算时间间隔
         double dt = (last_update_timestamp_ > 0) ? (timestamp - last_update_timestamp_) : 0.01;
 
-        // 如果间隔超过 0.3s，重置所有状态
+        // 如果间隔超过 2s，重置所有状态
         if (dt > 2) {
             tracker_.state = Tracker::IDLE;
             tracker_.energy_ukf.reset();
@@ -184,6 +201,7 @@ private:
             model_type_determined_ = false;
             detection_frame_count_ = 0;
             switch_cooldown_count_ = 0;
+            resetVelocityStats();
             RCLCPP_INFO(get_logger(), "时间间隔过大(%.2fs)，重置类型判断", dt);
             return;
         }
@@ -203,6 +221,8 @@ private:
         if (tracker_.energy_ukf.has_value()) {
             const auto& state        = tracker_.get_state();
             double filtered_velocity = state(V_ROLL);
+            v_                       = state(V_ROLL);
+
             angle_fitter_->setFilteredVelocity(filtered_velocity, 0.0);
 
             // 添加角度观测用于参数拟合（使用KF滤波后的角度）
@@ -213,23 +233,21 @@ private:
             obs.blade_offset     = tracker_.getCurrentBladeId();
             angle_fitter_->addObservation(obs);
 
-            // 速度统计：从第5帧开始记录最大值和最小值
-            static int velocity_frame_count = 0;
-            static double velocity_max = -std::numeric_limits<double>::max();
-            static double velocity_min = std::numeric_limits<double>::max();
-            constexpr int VELOCITY_SKIP_FRAMES = 5;
+            // 速度统计：从第10帧开始记录最大值和最小值，过滤异常值
+            velocity_frame_count_++;
+            if (velocity_frame_count_ > VELOCITY_SKIP_FRAMES_) {
+                double vel = filtered_velocity;
 
-            velocity_frame_count++;
-            if (velocity_frame_count > VELOCITY_SKIP_FRAMES) {
-                double abs_vel = std::abs(filtered_velocity);
-                if (abs_vel > velocity_max) velocity_max = abs_vel;
-                if (abs_vel < velocity_min) velocity_min = abs_vel;
+                if (vel > velocity_max_)
+                    velocity_max_ = vel;
+                if (vel < velocity_min_)
+                    velocity_min_ = vel;
             }
 
             // 拟合逻辑
             if (angle_fitter_->getDataPointCount() >= 30) {
                 if (!model_type_determined_) {
-                    // 前25帧：判断模型类型
+                    // 前20帧：判断模型类型
                     detection_frame_count_++;
 
                     angle_fitter_->fitAngleModelLSQ();
@@ -238,27 +256,27 @@ private:
                     // 通过速度变化范围判断大小符
                     // 小符: 速度恒定，max-min 很小
                     // 大符: 速度变化大，max-min 较大
-                    double velocity_range = velocity_max - velocity_min;
-                    constexpr double VELOCITY_RANGE_THRESHOLD = 0.3;  // 速度变化阈值
-                    bool velocity_suggests_big_rune = (velocity_range > VELOCITY_RANGE_THRESHOLD);
+                    double velocity_range                     = velocity_max_ - velocity_min_;
+                    constexpr double VELOCITY_RANGE_THRESHOLD = 0.5; // 速度变化阈值
+                    bool velocity_suggests_big_rune =
+                        (std::abs(velocity_range) > VELOCITY_RANGE_THRESHOLD);
 
                     if (!velocity_suggests_big_rune) {
                         // 速度变化小，判定为小符
                         angle_fitter_->fitLinearModelPublic();
                     }
 
-                    // 25帧后锁定类型
+                    // 20帧后锁定类型
                     if (detection_frame_count_ >= DETECTION_FRAMES) {
                         model_type_determined_ = true;
                         auto final_model       = angle_fitter_->getModel();
                         RCLCPP_INFO(
                             get_logger(), "模型类型已确定: %s, 速度范围: %.3f (max=%.3f, min=%.3f)",
-                            final_model.is_big_rune ? "大符" : "小符",
-                            velocity_range, velocity_max, velocity_min);
+                            final_model.is_big_rune ? "大符" : "小符", velocity_range,
+                            velocity_max_, velocity_min_);
                         // 重置速度统计
-                        velocity_frame_count = 0;
-                        velocity_max = -std::numeric_limits<double>::max();
-                        velocity_min = std::numeric_limits<double>::max();
+                        resetVelocityStats();
+                        frame_fps_=0;
                     }
 
                 } else {
@@ -271,27 +289,40 @@ private:
                         angle_fitter_->fitLinearModelPublic();
                     }
 
-                    // 防误判机制：冷却期结束后，误差超过5 rad时切换类型
+                    // 防误判机制：冷却期结束后，误差超过10 rad时切换类型
                     if (switch_cooldown_count_ > 0) {
                         switch_cooldown_count_--;
                     } else {
-                        constexpr double SWITCH_ERROR_THRESHOLD = 10.0; // rad
-                        auto updated_model                      = angle_fitter_->getModel();
-                        if (updated_model.fit_error > SWITCH_ERROR_THRESHOLD) {
-                            RCLCPP_WARN(
-                                get_logger(), "误差过大(%.2f rad)，切换类型: %s -> %s",
-                                updated_model.fit_error,
-                                updated_model.is_big_rune ? "大符" : "小符",
-                                updated_model.is_big_rune ? "小符" : "大符");
+                        frame_fps_++;
+                        if (frame_fps_ > FPS_THRESHOLD) {
+                            double velocity_range = velocity_max_ - velocity_min_;
+                            auto updated_model    = angle_fitter_->getModel();
+                            if (velocity_range > SWITCH_ERROR_THRESHOLD
+                                && !updated_model.is_big_rune) {
+                                RCLCPP_WARN(
+                                    get_logger(), "速度差值过大(%.2f )，切换类型: 小符 -> 大符",
+                                    velocity_range);
 
-                            if (updated_model.is_big_rune) {
-                                angle_fitter_->fitLinearModelPublic();
-                            } else {
                                 angle_fitter_->fitAngleModelLSQ();
                                 angle_fitter_->applyPosteriorConstraints();
+
+                                // 启动冷却
+                                switch_cooldown_count_ = SWITCH_COOLDOWN_FRAMES;
+
+                            } else if (
+                                velocity_range < SWITCH_ERROR_THRESHOLD
+                                && updated_model.is_big_rune) {
+                                RCLCPP_WARN(
+                                    get_logger(), "速度差值过小(%.2f )，切换类型: 大符 ->小符 ",
+                                    velocity_range);
+
+                                angle_fitter_->fitLinearModelPublic();
+
+                                // 启动冷却
+                                switch_cooldown_count_ = SWITCH_COOLDOWN_FRAMES;
                             }
-                            // 启动冷却
-                            switch_cooldown_count_ = SWITCH_COOLDOWN_FRAMES;
+                            frame_fps_ = 0;
+                            resetVelocityStats();
                         }
                     }
                 }
@@ -306,11 +337,16 @@ private:
             double predict_time = config_.predict_time + config_.control_delay;
 
             // 从实际观测计算当前靶的角度和半径
-            Eigen::Vector3d rel_pos       = target_positions[0] - r_center;
-            double current_observed_angle = std::atan2(rel_pos.y(), -rel_pos.z());
-            double radius                 = rel_pos.norm();
+            Eigen::Vector3d rel_pos = target_positions[0] - r_center;
+            double radius           = rel_pos.norm();
             if (radius < 0.1)
                 radius = 0.7;
+
+            // 使用旋转矩阵获取旋转平面基向量，计算角度
+            Eigen::Matrix3d rot           = target_quats[0].toRotationMatrix();
+            Eigen::Vector3d u             = rot.col(2); // Z轴：θ=0 方向
+            Eigen::Vector3d v             = rot.col(1); // Y轴：θ=π/2 方向
+            double current_observed_angle = std::atan2(rel_pos.dot(v), rel_pos.dot(u));
 
             double predicted_roll_current;
             double predicted_roll_base;
@@ -372,11 +408,12 @@ private:
                 predicted_roll_base    = state(ROLL) + v_now * predict_time;
             }
 
-            // 预测位置（绕R中心旋转）
-            Eigen::Vector3d predicted_position;
-            predicted_position.x() = r_center.x();
-            predicted_position.y() = r_center.y() + radius * std::sin(predicted_roll_current);
-            predicted_position.z() = r_center.z() - radius * std::cos(predicted_roll_current);
+            // 预测位置（绕R中心旋转，考虑旋转平面倾斜）
+            // 复用上面计算的 u, v 基向量，大能量机关加上一个靶的偏移（72度）
+            double blade_offset                = model.is_big_rune ? (2.0 * M_PI / 5.0) : 0.0;
+            double adjusted_angle              = predicted_roll_current + blade_offset;
+            Eigen::Vector3d predicted_position = r_center + radius * std::cos(adjusted_angle) * u
+                                               + radius * std::sin(adjusted_angle) * v;
 
             int current_blade_id = tracker_.getCurrentBladeId();
 
@@ -482,8 +519,8 @@ private:
             }
 
             // 【新增】发布卡尔曼滤波的速度
-            state_msg->filtered_velocity = model.filtered_velocity;
-
+            // state_msg->filtered_velocity =model.filtered_velocity
+            state_msg->filtered_velocity = v_;
             state_pub_->publish(std::move(state_msg));
 
             // 发布预测位置和所有靶子 Marker 可视化
@@ -511,11 +548,13 @@ private:
         // 当前追踪靶子的实际位置（从观测直接获取）
         Eigen::Vector3d current_blade_pos = frame.target_center_world;
 
-        // 计算当前靶子相对于R中心的角度
-        // 坐标系模型：y = R·sin(angle), z = -R·cos(angle)
-        // 反向推导：angle = atan2(y, -z)
+        // 使用旋转矩阵获取旋转平面基向量，计算角度
+        Eigen::Matrix3d rot = frame.target_orientation.toRotationMatrix();
+        Eigen::Vector3d u   = rot.col(2); // Z轴：θ=0 方向
+        Eigen::Vector3d v   = rot.col(1); // Y轴：θ=π/2 方向
+
         Eigen::Vector3d rel_pos    = current_blade_pos - frame.R_center_world;
-        double current_blade_angle = std::atan2(rel_pos.y(), -rel_pos.z());
+        double current_blade_angle = std::atan2(rel_pos.dot(v), rel_pos.dot(u));
 
         // 使用真实的靶ID（从angle_obs.blade_offset获取）
         int current_blade_id = angle_obs.blade_offset;
@@ -535,11 +574,13 @@ private:
                 int blade_diff = i - current_blade_id;
                 double angle_i = current_blade_angle + blade_diff * blade_angle;
 
-                Eigen::Vector3d position_relative;
-                position_relative.x() = 0;
-                position_relative.y() = target_radius * std::sin(angle_i);
-                position_relative.z() = -target_radius * std::cos(angle_i);
-                position_world        = frame.R_center_world + position_relative;
+                // 使用旋转矩阵的列向量作为旋转平面基向量
+                Eigen::Matrix3d rot = frame.target_orientation.toRotationMatrix();
+                Eigen::Vector3d u   = rot.col(2); // Z轴：θ=0 方向
+                Eigen::Vector3d v   = rot.col(1); // Y轴：θ=π/2 方向
+
+                position_world = frame.R_center_world + target_radius * std::cos(angle_i) * u
+                               + target_radius * std::sin(angle_i) * v;
             }
 
             // 创建靶子 Marker

@@ -147,13 +147,12 @@ ros2 run energy_meter_solver energy_meter_solver_node \
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `rune_type` | `"big"` | 初始类型（会被自动检测覆盖） |
+| `rune_type` | `"big"` | 默认类型（会被自动检测覆盖） |
 | `predict_time` | `0.3` | 预测时间偏移 (s) |
 | `gimbal_frame` | `"gimbal"` | 云台坐标系 |
 | `world_frame` | `"odom"` | 世界坐标系 |
 | `smooth_alpha` | `0.8` | 参数平滑系数 |
 | `min_data_points` | `15` | 最小拟合点数 |
-| `auto_detect_type` | `true` | 自动检测大/小符 |
 | `control_delay` | `0.05` | 控制延迟补偿 (s) |
 
 ## 预测算法
@@ -180,19 +179,9 @@ double delta_theta = omega * predict_time;
 delta_theta += 2.0 * M_PI / 5.0;
 ```
 
-### 位置计算
-
-```cpp
-// 绕R中心的圆周运动
-predicted_position.x = r_center.x;
-predicted_position.y = r_center.y + radius * sin(predicted_angle);
-predicted_position.z = r_center.z - radius * cos(predicted_angle);
-```
-
 ## RViz 可视化
 
 添加 MarkerArray 显示：
-- **红色方块**: 当前追踪靶 (带 `*` 标记)
 - **蓝绿色方块**: 其他 4 个靶位
 - **黄色方块**: 预测位置 (`PREDICT`)
 
@@ -215,11 +204,6 @@ predicted_position.z = r_center.z - radius * cos(predicted_angle);
 - 调整 `predict_time` 补偿系统延迟
 - 增大 `min_data_points` 提高拟合精度
 - 检查 `control_delay` 是否匹配实际云台延迟
-
-### 模型切换频繁
-
-- 增大速度变化阈值 (代码中 `VELOCITY_RANGE_THRESHOLD`)
-- 增大切换误差阈值 (代码中 `SWITCH_ERROR_THRESHOLD`)
 
 ## 性能指标
 
