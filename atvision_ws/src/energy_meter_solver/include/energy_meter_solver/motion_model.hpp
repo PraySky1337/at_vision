@@ -16,9 +16,6 @@ namespace energy_meter {
 //  update之前 传id
 // 算出观测靶*id
 
-// ============================================================================
-// RobotModel 和 OutpostModel
-// ============================================================================
 
 struct EnergyMeter {
     using Scalar            = double;

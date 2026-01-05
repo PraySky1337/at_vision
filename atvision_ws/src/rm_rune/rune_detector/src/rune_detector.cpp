@@ -1233,6 +1233,10 @@ Eigen::Matrix4d RuneDetector::solve(
         }
     }
 
+    if (has_last_target_ && stamp.seconds() - last_timestamp_ > 2) {
+        has_last_target_ = false;
+    }
+
     Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
     cv::Mat rvec, tvec;
 
@@ -1269,9 +1273,20 @@ Eigen::Matrix4d RuneDetector::solve(
         }
 
     } else if (targets.size() == 2) {
-        if (targets[0].center.y < targets[1].center.y) {
-            std::swap(targets[0], targets[1]);
-            std::swap(arrows[0], arrows[1]);
+        // 选择距离上一帧最近的靶作为主目标，保证追踪连续性
+        if (has_last_target_) {
+            double dist0 = cv::norm(targets[0].center - last_tracked_target_center_);
+            double dist1 = cv::norm(targets[1].center - last_tracked_target_center_);
+            if (dist1 < dist0) {
+                std::swap(targets[0], targets[1]);
+                std::swap(arrows[0], arrows[1]);
+            }
+        } else {
+            // 第一帧没有历史，选择 y 坐标更大的（图像下方）
+            if (targets[0].center.y < targets[1].center.y) {
+                std::swap(targets[0], targets[1]);
+                std::swap(arrows[0], arrows[1]);
+            }
         }
         std::vector<cv::Point2f> image_points;
         std::vector<cv::Point3f> object_points;
@@ -1346,6 +1361,13 @@ Eigen::Matrix4d RuneDetector::solve(
         ps_odom.pose.orientation.w, ps_odom.pose.orientation.x, ps_odom.pose.orientation.y,
         ps_odom.pose.orientation.z);
     pose.block<3, 3>(0, 0) = quat_odom.toRotationMatrix();
+
+    // 保存当前追踪的靶位置，供下一帧使用
+    if (!targets.empty()) {
+        last_tracked_target_center_ = targets[0].center;
+        has_last_target_            = true;
+        last_timestamp_             = stamp.seconds();
+    }
 
     return pose;
 }

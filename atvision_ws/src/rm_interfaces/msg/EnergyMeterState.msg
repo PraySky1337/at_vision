@@ -31,3 +31,5 @@ float64 lin_offset          # b: 初始偏移（rad）
 
 # 【新增】卡尔曼滤波后的速度和加速度
 float64 filtered_velocity        # 卡尔曼滤波后的角速度（rad/s）
+
+float64 predicted_time

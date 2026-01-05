@@ -11,44 +11,67 @@ bool Tracker::update(
     const std::vector<Eigen::Vector3d>& target_positions,
     const std::vector<Eigen::Quaterniond>& target_quats) {
 
-    std::vector<int> matched_blade_ids;
     measurement_.fill(0.0);
 
-    if (!energy_ukf.has_value()) {
-        return false;
-    }
-
-    if (!match_all(target_positions, target_quats, matched_blade_ids, energy_ukf->x())) {
-        // 没有任何通过门控的观测，这一帧只做 predict
+    if (!energy_ukf.has_value() || target_positions.empty()) {
         state_machine(false);
         return false;
     }
 
-    // 有观测，就认为 found = true
+    // 只处理第一个靶（rune_detector 已保证 targets[0] 是距离上一帧最近的）
+    const auto& pos = target_positions[0];
+    const auto& quat = target_quats[0];
+
+    // 为第一个靶找到最佳匹配的 blade_id
+    using VecZ = EnergyMeter::VecZ;
+    VecZ meas;
+    meas[0] = pos.x();
+    meas[1] = pos.y();
+    meas[2] = pos.z();
+    meas[3] = orientation2roll(quat);
+
+    const auto& x_pre = energy_ukf->x();
+    const int armors_num = 5;
+
+    double best_cost = std::numeric_limits<double>::max();
+    int best_id = -1;
+
+    for (int id = 0; id < armors_num; ++id) {
+        VecZ z_pred = energy_model_.h(x_pre, id);
+        VecZ nu = meas - z_pred;
+        nu[3] = normalize_rad(nu[3]);
+
+        auto R = energy_model_.R_sqrt(z_pred);
+        Eigen::Matrix<double, EnergyMeter::NZ, EnergyMeter::NZ> Rinv = R.inverse();
+        double d2 = (nu.transpose() * Rinv * nu)(0, 0);
+
+        if (std::isfinite(d2) && d2 < params.matcher_gate && d2 < best_cost) {
+            best_cost = d2;
+            best_id = id;
+        }
+    }
+
+    // 门控检查：没有合格匹配
+    if (best_id < 0) {
+        state_machine(false);
+        return false;
+    }
+
+    // 有观测，更新状态机
     state_machine(true);
+    current_matched_blade_id_ = best_id;
 
-    // 记录当前追踪的靶ID（取第一个匹配的）
-    if (!matched_blade_ids.empty()) {
-        current_matched_blade_id_ = matched_blade_ids[0];
-    }
+    // 构造量测向量并更新 UKF
+    EnergyUKF::VecZ z;
+    z[0] = pos.x();
+    z[1] = pos.y();
+    z[2] = pos.z();
+    z[3] = unwrap_rad(x_pre[ROLL] + best_id * 2 * M_PI / 5, meas[3]);
 
-    for (size_t i = 0; i < matched_blade_ids.size(); ++i) {
-        EnergyUKF::VecZ z;
-        z[0] = target_positions[i].x();
-        z[1] = target_positions[i].y();
-        z[2] = target_positions[i].z();
+    energy_model_.armor_id = best_id;
+    this->set_measurement(z);
+    energy_ukf->update(z);
 
-        // 从四元数提取 roll 角
-        double observed_roll = orientation2roll(target_quats[i]);
-
-        // 角度连续化处理：关键逻辑！
-        z[3] =
-            unwrap_rad(energy_ukf->x()[ROLL] + matched_blade_ids[i] * 2 * M_PI / 5, observed_roll);
-
-        energy_model_.armor_id = matched_blade_ids[i];
-        this->set_measurement(z);
-        energy_ukf->update(z);
-    }
     return true;
 }
 
@@ -91,98 +114,6 @@ bool Tracker::first_meet_u(
 
     state_machine(true);
     return true;
-}
-
-bool Tracker::match_all(
-    const std::vector<Eigen::Vector3d>& target_positions,
-    const std::vector<Eigen::Quaterniond>& target_quats, std::vector<int>& matched_blade_ids,
-    const EnergyUKF::VecX& x_pre) {
-
-    matched_blade_ids.clear();
-
-    if (target_positions.empty()) {
-        return false;
-    }
-
-    const int n_obs      = static_cast<int>(target_positions.size());
-    const int armors_num = 5;
-
-    // 代价矩阵：观测 j 与 armor_id k 的匹配代价
-    std::vector<std::vector<double>> cost(
-        n_obs, std::vector<double>(armors_num, std::numeric_limits<double>::infinity()));
-
-    using VecZ = EnergyMeter::VecZ;
-
-    // 预计算每个观测的量测向量
-    std::vector<VecZ> meas_list(n_obs);
-    for (int j = 0; j < n_obs; ++j) {
-        VecZ z;
-        z[0] = target_positions[j].x();
-        z[1] = target_positions[j].y();
-        z[2] = target_positions[j].z();
-        z[3] = orientation2roll(target_quats[j]);
-
-        meas_list[j] = z;
-    }
-
-    // 给每个 (观测, armor_id) 计算残差 + 代价
-    for (int j = 0; j < n_obs; ++j) {
-        for (int id = 0; id < armors_num; ++id) {
-            // 预测该 armor_id 对应的量测
-            VecZ z_pred = energy_model_.h(x_pre, id);
-
-            VecZ nu = meas_list[j] - z_pred;
-
-            auto R = energy_model_.R_sqrt(z_pred); // 实际上返回的是对角协方差
-            // yaw 残差归一化到 [-pi, pi]
-            nu[3] = normalize_rad(nu[3]);
-
-            // 这里用量测噪声协方差 R 近似创新协方差 S
-            Eigen::Matrix<double, EnergyMeter::NZ, EnergyMeter::NZ> Rinv = R.inverse();
-
-            double d2 = (nu.transpose() * Rinv * nu)(0, 0);
-
-            // 门控
-            if (std::isfinite(d2) && d2 < params.matcher_gate) {
-                cost[j][id] = d2;
-            }
-        }
-    }
-
-    // 一对一贪心分配：每个观测最多配一个 armor_id，每个 armor_id 只用一次
-    std::vector<bool> used_obs(n_obs, false);
-    std::vector<bool> used_id(armors_num, false);
-
-    while (true) {
-        double best = std::numeric_limits<double>::infinity();
-        int best_j  = -1;
-        int best_id = -1;
-
-        for (int j = 0; j < n_obs; ++j) {
-            if (used_obs[j])
-                continue;
-            for (int id = 0; id < armors_num; ++id) {
-                if (used_id[id])
-                    continue;
-                if (cost[j][id] < best) {
-                    best    = cost[j][id];
-                    best_j  = j;
-                    best_id = id;
-                }
-            }
-        }
-
-        if (best_j < 0 || best_id < 0) {
-            break;                      // 没有更多合格的匹配
-        }
-
-        used_obs[best_j] = true;
-        used_id[best_id] = true;
-
-        matched_blade_ids.push_back(best_id);
-    }
-
-    return !matched_blade_ids.empty();
 }
 
 void Tracker::state_machine(bool found) {

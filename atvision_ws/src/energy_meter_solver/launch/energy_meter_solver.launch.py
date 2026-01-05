@@ -1,18 +1,17 @@
+import os
 from launch import LaunchDescription
-from launch_ros.actions import Node
+from launch_ros.actions import Node, ComposableNodeContainer
+from launch_ros.descriptions import ComposableNode
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, Shutdown
+from ament_index_python.packages import get_package_share_directory
+
+node_params = os.path.join(
+    get_package_share_directory('rm_bringup'), 'config', 'config.yaml')
 
 
 def generate_launch_description():
-    # Auto-detect rune type argument
-    auto_detect_arg = DeclareLaunchArgument(
-        'auto_detect_rune_type',
-        default_value='false',
-        choices=['true', 'false'],
-        description='Auto-detect rune type (big/small) from motion pattern. If false, use rune_type from config file'
-    )
 
     # Config file argument
     config_arg = DeclareLaunchArgument(
@@ -30,18 +29,31 @@ def generate_launch_description():
         package='energy_meter_solver',
         executable='energy_meter_solver_node',
         name='energy_meter_solver_node',
-        output='screen',
-        parameters=[
-            LaunchConfiguration('config_file'),
-            {'auto_detect_type': LaunchConfiguration('auto_detect_rune_type')}
-        ],
-        remappings=[
-            ('energy_meter_solver/cmd_gimbal', 'armor_solver/cmd_gimbal'),
-        ]
+        output='screen'
     )
 
+    # rm_gimbal node
+    gimbal_container = ComposableNodeContainer(
+        name='rest_container',
+        namespace='',
+        package='rclcpp_components',
+        executable='component_container_mt',
+        composable_node_descriptions=[
+            ComposableNode(
+            package='rm_gimbal',
+            plugin='rm_gimbal::GimbalNode',
+            name='rm_gimbal',
+            parameters=[node_params],
+            extra_arguments=[{'use_intra_process_comms': False}],
+        )],
+        output='both',
+        emulate_tty=True,
+        on_exit=Shutdown()
+    )
+
+
     return LaunchDescription([
-        auto_detect_arg,
         config_arg,
         energy_meter_solver_node,
+        gimbal_container,
     ])

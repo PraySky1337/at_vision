@@ -18,6 +18,7 @@
 #include <rclcpp/qos.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include <tf2/LinearMath/Transform.hpp>
@@ -92,6 +93,10 @@ private:
     rm_interfaces::msg::Target armor_target_;
     std::mutex target_mutex_;
 
+    // Rune marker subscription (energy mechanism predicted position)
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr rune_marker_sub_;
+    void rune_marker_callback(visualization_msgs::msg::MarkerArray::ConstSharedPtr msg);
+
     // Ballistic solver
     std::unique_ptr<BallisticSolver> solver_;
     SolverParams solver_params_;
@@ -113,6 +118,9 @@ private:
     // Debug publisher for PlanGimbalCmd (MPC planning data)
     rclcpp::Publisher<rm_interfaces::msg::PlanGimbalCmd>::SharedPtr plan_cmd_pub_;
 
+    // Publisher for ballistic params (flying_time, prediction_delay) to energy_meter_solver
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr ballistic_params_pub_;
+
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_params_cb_;
 
     // usb thread
@@ -123,6 +131,7 @@ private:
     std::atomic<double> timestamp_offset_ms_;
     bool debug_;
     bool use_roll_;
+    bool use_simulator_;  // true: 模拟器模式，不连接下位机
 };
 
 } // namespace rm_gimbal

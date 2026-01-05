@@ -36,11 +36,21 @@ public:
         const rm_interfaces::msg::Target& target_msg, const rclcpp::Time& current_time,
         std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
 
+    // Solve the gimbal command for rune target (energy mechanism)
+    // Only needs predicted position, simpler than armor tracking
+    rm_interfaces::msg::GimbalCmd solveRune(
+        const Eigen::Vector3d& target_position, const std_msgs::msg::Header& header,
+        std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
+
     enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state{TRACKING_ARMOR};
 
     std::vector<std::pair<double, double>> getTrajectory() const noexcept;
 
     std::optional<Eigen::Vector3d> getPredictedPosition() const noexcept;
+
+    // 获取弹道参数（用于传递给能量机关求解器）
+    double getLastFlyingTime() const noexcept { return last_flying_time_; }
+    double getLastPredictionDelay() const noexcept { return last_prediction_delay_; }
 
     // 获取MPC前馈量
     FeedforwardCache getFeedforward() const noexcept { return feedforward_cache_; }
@@ -99,6 +109,10 @@ private:
     // 云台角速度（从IMU获取）
     double gimbal_yaw_vel_{0.0};
     double gimbal_pitch_vel_{0.0};
+
+    // 弹道参数缓存（用于传递给能量机关求解器）
+    double last_flying_time_{0.0};
+    double last_prediction_delay_{0.0};
 };
 
 } // namespace rm_gimbal

@@ -70,6 +70,11 @@ private:
 
     int image_width_;
     int image_height_;
+
+    // 上一帧追踪的靶位置（用于目标连续性）
+    cv::Point2f last_tracked_target_center_{0, 0};
+    double last_timestamp_=0;
+    bool has_last_target_{false};
 };
 } // namespace fyt::rune
 #endif // RUNE_DETECTOR_RUNE_DETECTOR_HPP_

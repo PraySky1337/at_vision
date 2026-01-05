@@ -378,4 +378,61 @@ void BallisticSolver::setGimbalAngularVelocity(double yaw_vel, double pitch_vel)
     gimbal_pitch_vel_ = pitch_vel;
 }
 
+rm_interfaces::msg::GimbalCmd BallisticSolver::solveRune(
+    const Eigen::Vector3d& target_position, const std_msgs::msg::Header& header,
+    std::shared_ptr<tf2_ros::Buffer> tf2_buffer_) {
+
+    // Get current gimbal pose
+    try {
+        auto gimbal_tf = tf2_buffer_->lookupTransform(header.frame_id, "muzzle_link", tf2::TimePointZero);
+        auto msg_q = gimbal_tf.transform.rotation;
+        auto translation = gimbal_tf.transform.translation;
+
+        tf2::Quaternion tf_q;
+        tf2::fromMsg(msg_q, tf_q);
+        tf2::Matrix3x3(tf_q).getRPY(rpy_[0], rpy_[1], rpy_[2]);
+        xyza_[0] = translation.x;
+        xyza_[1] = translation.y;
+        xyza_[2] = translation.z;
+
+        rpy_[1] = -rpy_[1];
+    } catch (tf2::TransformException& ex) {
+        throw ex;
+    }
+
+    // Target position relative to muzzle
+    Eigen::Vector3d armor_position = target_position - Eigen::Vector3d(xyza_[0], xyza_[1], xyza_[2]);
+    double distance = armor_position.norm();
+
+    // 缓存弹道参数用于外部获取
+    last_flying_time_ = trajectory_compensator_->getFlyingTime(armor_position);
+    last_prediction_delay_ = atomic_params_.prediction_delay.load(std::memory_order_relaxed);
+
+    // Calculate yaw and pitch with ballistic compensation
+    double yaw, pitch;
+    calcYawAndPitch(armor_position, yaw, pitch);
+
+    // Build gimbal command
+    rm_interfaces::msg::GimbalCmd gimbal_cmd;
+    gimbal_cmd.header = header;
+    gimbal_cmd.distance = distance;
+
+    double cmd_yaw = angles::normalize_angle(yaw);
+    double cmd_pitch = pitch;
+
+    gimbal_cmd.yaw = cmd_yaw * 180 / M_PI;
+    gimbal_cmd.pitch = cmd_pitch * 180 / M_PI;
+    gimbal_cmd.yaw_diff = (cmd_yaw - rpy_[2]) * 180 / M_PI;
+    gimbal_cmd.pitch_diff = (cmd_pitch - rpy_[1]) * 180 / M_PI;
+
+    // Fire advice: check if on target
+    gimbal_cmd.fire_advice = isOnTarget(rpy_[2], rpy_[1], cmd_yaw, cmd_pitch, distance);
+
+    // Store predicted position for visualization
+    predicted_position_ = target_position;
+    has_prediction_ = true;
+
+    return gimbal_cmd;
+}
+
 } // namespace rm_gimbal

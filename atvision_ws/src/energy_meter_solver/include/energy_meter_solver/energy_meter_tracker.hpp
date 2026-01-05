@@ -72,11 +72,6 @@ struct Tracker {
         const std::vector<Eigen::Quaterniond>& target_quats);
 
 private:
-    bool match_all(
-        const std::vector<Eigen::Vector3d>& target_positions,
-        const std::vector<Eigen::Quaterniond>& target_quats, std::vector<int>& matched_blade_ids,
-        const EnergyUKF::VecX& x_pre);
-
     void state_machine(bool found);
     void set_measurement(const EnergyUKF::VecZ& z);
     std::array<double, EnergyMeter::NZ> measurement_;

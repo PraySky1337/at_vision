@@ -1,8 +1,15 @@
 #include <algorithm>
 #include <cmath>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <optional>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <rm_interfaces/msg/energy_meter_state.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <vector>
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -38,10 +45,20 @@ public:
         // 初始化组件
         angle_fitter_ = std::make_shared<AngleFitter>(config_);
 
+        // 初始化tf2 buffer和listener
+        tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
         // 创建订阅
         marker_sub_ = create_subscription<visualization_msgs::msg::MarkerArray>(
             "rune_detector/marker", rclcpp::SensorDataQoS(),
             std::bind(&EnergyMeterSolverNode::markerCallback, this, std::placeholders::_1));
+
+        // 订阅弹道参数 (flying_time, prediction_delay) from rm_gimbal
+        ballistic_params_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
+            "rm_gimbal/ballistic_params", rclcpp::SensorDataQoS(),
+            std::bind(
+                &EnergyMeterSolverNode::ballisticParamsCallback, this, std::placeholders::_1));
 
         debug_marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
             "energy_meter_solver/marker", rclcpp::SensorDataQoS());
@@ -54,6 +71,7 @@ private:
     // 配置
     EnergyMeterConfig config_;
 
+    double predict_time_;
     double v_;
     // 组件
     std::shared_ptr<AngleFitter> angle_fitter_;
@@ -62,8 +80,25 @@ private:
     Tracker tracker_;
     double last_update_timestamp_ = -1.0;
 
+    // tf2 buffer和listener
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+    // tf状态跟踪（用于计算实际速度）
+    std::optional<Eigen::Quaterniond> last_tf_rotation_small_; // id==6 小符上一帧旋转矩阵
+    std::optional<Eigen::Quaterniond> last_tf_rotation_big_;   // id==12 大符上一帧旋转矩阵
+    double last_tf_timestamp_small_ = -1.0;
+    double last_tf_timestamp_big_   = -1.0;
+   
+
     // 订阅
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr ballistic_params_sub_;
+
+    // 弹道参数缓存 (from rm_gimbal)
+    double cached_flying_time_{0.0};
+    double cached_prediction_delay_{0.0};
+    bool ballistic_params_received_{false};
 
     // 发布者
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_marker_pub_;
@@ -80,9 +115,9 @@ private:
     static constexpr int DETECTION_FRAMES = 20;    // 前20帧用于判断类型
 
     // 防误判机制
-    static constexpr double SWITCH_THRESHOLD    = 1.55; // v
-    int switch_cooldown_count_                  = 0;    // 切换后的冷却帧计数
-    static constexpr int SWITCH_COOLDOWN_FRAMES = 30;   // 切换后等待30帧再检测
+    static constexpr double SWITCH_THRESHOLD    = 1.5; // v
+    int switch_cooldown_count_                  = 0;   // 切换后的冷却帧计数
+    static constexpr int SWITCH_COOLDOWN_FRAMES = 30;  // 切换后等待30帧再检测
     int frame_fps_                              = 0;
     static constexpr int FPS_THRESHOLD          = 100;
 
@@ -90,7 +125,7 @@ private:
     int velocity_frame_count_                  = 0;
     double velocity_max_                       = -std::numeric_limits<double>::max();
     double velocity_min_                       = std::numeric_limits<double>::max();
-    static constexpr int VELOCITY_SKIP_FRAMES_ = 10;
+    static constexpr int VELOCITY_SKIP_FRAMES_ = 5;
 
     void resetVelocityStats() {
         velocity_frame_count_ = 0;
@@ -105,6 +140,15 @@ private:
                 && std::isfinite(model.sin_phase) && std::isfinite(model.sin_offset);
         } else {
             return std::isfinite(model.lin_omega) && std::isfinite(model.lin_offset);
+        }
+    }
+
+    // 弹道参数回调 (from rm_gimbal)
+    void ballisticParamsCallback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
+        if (msg->data.size() >= 2) {
+            cached_flying_time_        = msg->data[0];
+            cached_prediction_delay_   = msg->data[1];
+            ballistic_params_received_ = true;
         }
     }
 
@@ -214,7 +258,7 @@ private:
         if (tracker_.energy_ukf.has_value()) {
             const auto& state        = tracker_.get_state();
             double filtered_velocity = state(V_ROLL);
-            v_                       = state(V_ROLL);
+            v_                       = std::abs(state(V_ROLL));
 
             angle_fitter_->setFilteredVelocity(filtered_velocity);
 
@@ -227,7 +271,7 @@ private:
             obs.blade_offset     = tracker_.getCurrentBladeId();
             angle_fitter_->addObservation(obs);
 
-            // 速度统计：从第10帧开始记录最大值和最小值
+            // 速度统计：从第5帧开始记录最大值和最小值
             velocity_frame_count_++;
             if (velocity_frame_count_ > VELOCITY_SKIP_FRAMES_) {
                 double vel = filtered_velocity;
@@ -239,7 +283,8 @@ private:
             }
 
             // 拟合逻辑
-            if (angle_fitter_->getDataPointCount() >= 30) {
+            if (angle_fitter_->getDataPointCount() >= config_.min_data_points) {
+
                 if (!model_type_determined_) {
                     // 前20帧：判断模型类型
                     detection_frame_count_++;
@@ -265,7 +310,7 @@ private:
                         model_type_determined_ = true;
                         auto final_model       = angle_fitter_->getModel();
                         RCLCPP_INFO(
-                            get_logger(), "模型类型已确定: %s, 速度范围: %.3f (max=%.3f, min=%.3f)",
+                            get_logger(), "模型类型已确定: %s, 速度范围: %.3f (max=%.3f,min=%.3f)",
                             final_model.is_big_rune ? "大符" : "小符", velocity_range,
                             velocity_max_, velocity_min_);
                         // 重置速度统计
@@ -326,7 +371,18 @@ private:
             const auto& state = tracker_.get_state();
             const auto& model = angle_fitter_->getModel();
 
-            double predict_time = config_.predict_time + config_.control_delay;
+          
+
+            // 使用 rm_gimbal 发送的弹道参数，如果没有收到则使用配置值
+            // flying_time = 弹丸飞行时间, prediction_delay = 云台响应延迟
+            // 加上图像发布时间到当前时间的延迟
+            double image_delay  = (now() - stamp).seconds();
+            double predict_time = ballistic_params_received_
+                                    ? (cached_flying_time_ + cached_prediction_delay_ + image_delay)
+                                    : (config_.predict_time + config_.control_delay + image_delay);
+
+            // double predict_time = (config_.predict_time + config_.control_delay );
+            predict_time_ = predict_time;
 
             // 从实际观测计算当前靶的角度和半径
             Eigen::Vector3d rel_pos = target_positions[0] - r_center;
@@ -374,12 +430,12 @@ private:
                     double delta_theta = -a / omega * std::cos(phi_future)
                                        + a / omega * std::cos(phi_now) + b * predict_time;
 
-                    predicted_roll_current = current_observed_angle + delta_theta;
-                    predicted_roll_base    = state(ROLL) + delta_theta;
+                    predicted_roll_current = current_observed_angle - delta_theta;
+                    predicted_roll_base    = state(ROLL) - delta_theta;
                 } else {
                     // 速度超出范围，回退到 KF 速度线性预测
-                    predicted_roll_current = current_observed_angle + v_now * predict_time;
-                    predicted_roll_base    = state(ROLL) + v_now * predict_time;
+                    predicted_roll_current = current_observed_angle - v_now * predict_time;
+                    predicted_roll_base    = state(ROLL) - v_now * predict_time;
                 }
 
             } else if (model.is_valid && !model.is_big_rune) {
@@ -387,25 +443,19 @@ private:
                 double omega       = model.lin_omega; // 拟合得到的角速度
                 double delta_theta = omega * predict_time;
 
-                // 小符补偿：增加一个靶的角度偏移 (2π/5)
-                constexpr double BLADE_ANGLE_OFFSET = 2.0 * M_PI / 5.0;
-                delta_theta += BLADE_ANGLE_OFFSET;
-
-                predicted_roll_current = current_observed_angle + delta_theta;
-                predicted_roll_base    = state(ROLL) + delta_theta;
+                predicted_roll_current = current_observed_angle - delta_theta;
+                predicted_roll_base    = state(ROLL) - delta_theta;
 
             } else {
                 // 模型无效，回退到 KF 速度线性预测
-                predicted_roll_current = current_observed_angle + v_now * predict_time;
-                predicted_roll_base    = state(ROLL) + v_now * predict_time;
+                predicted_roll_current = current_observed_angle - v_now * predict_time;
+                predicted_roll_base    = state(ROLL) - v_now * predict_time;
             }
 
             // 预测位置（绕R中心旋转，考虑旋转平面倾斜）
-            // 复用上面计算的 u, v 基向量，大能量机关加上一个靶的偏移（72度）
-            double blade_offset                = model.is_big_rune ? (2.0 * M_PI / 5.0) : 0.0;
-            double adjusted_angle              = predicted_roll_current + blade_offset;
-            Eigen::Vector3d predicted_position = r_center + radius * std::cos(adjusted_angle) * u
-                                               + radius * std::sin(adjusted_angle) * v;
+            Eigen::Vector3d predicted_position = r_center
+                                               + radius * std::cos(predicted_roll_current) * u
+                                               + radius * std::sin(predicted_roll_current) * v;
 
             int current_blade_id = tracker_.getCurrentBladeId();
 
@@ -430,6 +480,8 @@ private:
             publishDebugInfo(angle_obs, prediction, frame, stamp, msg);
         }
     }
+
+    
 
     void publishDebugInfo(
         const AngleObservation& angle_obs, const PredictionResult& prediction,
@@ -513,6 +565,12 @@ private:
             // 【新增】发布卡尔曼滤波的速度
             // state_msg->filtered_velocity =model.filtered_velocity
             state_msg->filtered_velocity = v_;
+
+            
+        
+
+            state_msg->predicted_time = predict_time_;
+
             state_pub_->publish(std::move(state_msg));
 
             // 发布预测位置和所有靶子 Marker 可视化
