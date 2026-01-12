@@ -45,10 +45,6 @@ public:
         // 初始化组件
         angle_fitter_ = std::make_shared<AngleFitter>(config_);
 
-        // 初始化tf2 buffer和listener
-        tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
-        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
         // 创建订阅
         marker_sub_ = create_subscription<visualization_msgs::msg::MarkerArray>(
             "rune_detector/marker", rclcpp::SensorDataQoS(),
@@ -71,25 +67,14 @@ private:
     // 配置
     EnergyMeterConfig config_;
 
-    double predict_time_;
-    double v_;
+    double predict_time_ = 0.0;
+    double v_            = 0.0;
     // 组件
     std::shared_ptr<AngleFitter> angle_fitter_;
 
     // 能量机关追踪器
     Tracker tracker_;
     double last_update_timestamp_ = -1.0;
-
-    // tf2 buffer和listener
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-
-    // tf状态跟踪（用于计算实际速度）
-    std::optional<Eigen::Quaterniond> last_tf_rotation_small_; // id==6 小符上一帧旋转矩阵
-    std::optional<Eigen::Quaterniond> last_tf_rotation_big_;   // id==12 大符上一帧旋转矩阵
-    double last_tf_timestamp_small_ = -1.0;
-    double last_tf_timestamp_big_   = -1.0;
-   
 
     // 订阅
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_sub_;
@@ -109,6 +94,7 @@ private:
     rclcpp::Time last_tracking_timestamp_                = rclcpp::Time(0);
     static constexpr double TRACKING_LOSS_THRESHOLD_SEC_ = 0.5;
 
+    static constexpr double RADIUS_THRESHOLD = 0.1;
     // 模型类型判断状态
     bool model_type_determined_           = false; // 是否已确定模型类型
     int detection_frame_count_            = 0;     // 检测帧计数
@@ -258,7 +244,7 @@ private:
         if (tracker_.energy_ukf.has_value()) {
             const auto& state        = tracker_.get_state();
             double filtered_velocity = state(V_ROLL);
-            v_                       = std::abs(state(V_ROLL));
+            v_                       = state(V_ROLL);
 
             angle_fitter_->setFilteredVelocity(filtered_velocity);
 
@@ -371,8 +357,6 @@ private:
             const auto& state = tracker_.get_state();
             const auto& model = angle_fitter_->getModel();
 
-          
-
             // 使用 rm_gimbal 发送的弹道参数，如果没有收到则使用配置值
             // flying_time = 弹丸飞行时间, prediction_delay = 云台响应延迟
             // 加上图像发布时间到当前时间的延迟
@@ -381,13 +365,12 @@ private:
                                     ? (cached_flying_time_ + cached_prediction_delay_ + image_delay)
                                     : (config_.predict_time + config_.control_delay + image_delay);
 
-            // double predict_time = (config_.predict_time + config_.control_delay );
             predict_time_ = predict_time;
 
             // 从实际观测计算当前靶的角度和半径
             Eigen::Vector3d rel_pos = target_positions[0] - r_center;
             double radius           = rel_pos.norm();
-            if (radius < 0.1)
+            if (radius < RADIUS_THRESHOLD)
                 radius = 0.7;
 
             // 使用旋转矩阵获取旋转平面基向量，计算角度
@@ -481,8 +464,6 @@ private:
         }
     }
 
-    
-
     void publishDebugInfo(
         const AngleObservation& angle_obs, const PredictionResult& prediction,
         const ObservedFrame& frame, const rclcpp::Time& stamp,
@@ -529,6 +510,13 @@ private:
             state_msg->predicted_position.y = prediction.predicted_position.y();
             state_msg->predicted_position.z = prediction.predicted_position.z();
 
+            // 几何信息（供MPC使用）
+            state_msg->r_center.x = frame.R_center_world.x();
+            state_msg->r_center.y = frame.R_center_world.y();
+            state_msg->r_center.z = frame.R_center_world.z();
+            Eigen::Vector3d rel   = frame.target_center_world - frame.R_center_world;
+            state_msg->radius     = rel.norm();
+
             // Model state
             const auto& model           = angle_fitter_->getModel();
             state_msg->model_valid      = model.is_valid;
@@ -566,9 +554,6 @@ private:
             // state_msg->filtered_velocity =model.filtered_velocity
             state_msg->filtered_velocity = v_;
 
-            
-        
-
             state_msg->predicted_time = predict_time_;
 
             state_pub_->publish(std::move(state_msg));
@@ -592,8 +577,11 @@ private:
 
         // 获取目标半径和叶片角度间隔
         constexpr int BLADE_COUNT = 5;
-        double target_radius      = 0.7;
-        double blade_angle        = 2.0 * M_PI / BLADE_COUNT; // 72° = 2π/5
+        double target_radius      = (frame.target_center_world - frame.R_center_world).norm();
+        if (target_radius < RADIUS_THRESHOLD)
+            target_radius = 0.7;
+
+        double blade_angle = 2.0 * M_PI / BLADE_COUNT; // 72° = 2π/5
 
         // 当前追踪靶子的实际位置（从观测直接获取）
         Eigen::Vector3d current_blade_pos = frame.target_center_world;
@@ -642,10 +630,14 @@ private:
             blade_marker.type            = visualization_msgs::msg::Marker::CUBE;
             blade_marker.action          = visualization_msgs::msg::Marker::ADD;
 
-            blade_marker.pose.position.x    = position_world.x();
-            blade_marker.pose.position.y    = position_world.y();
-            blade_marker.pose.position.z    = position_world.z();
-            blade_marker.pose.orientation.w = 1.0;
+            blade_marker.pose.position.x = position_world.x();
+            blade_marker.pose.position.y = position_world.y();
+            blade_marker.pose.position.z = position_world.z();
+            // 设置正确的旋转方向（用于MPC计算旋转平面基向量）
+            blade_marker.pose.orientation.w = frame.target_orientation.w();
+            blade_marker.pose.orientation.x = frame.target_orientation.x();
+            blade_marker.pose.orientation.y = frame.target_orientation.y();
+            blade_marker.pose.orientation.z = frame.target_orientation.z();
 
             blade_marker.scale.x = 0.08;
             blade_marker.scale.y = 0.08;
@@ -756,6 +748,33 @@ private:
 
         pred_text.lifetime = rclcpp::Duration::from_seconds(0.1);
         marker_array->markers.push_back(pred_text);
+
+        // ========== 发布R中心 Marker (SPHERE) ==========
+        visualization_msgs::msg::Marker r_center_marker;
+        r_center_marker.header.stamp    = stamp;
+        r_center_marker.header.frame_id = config_.world_frame;
+        r_center_marker.ns              = "r_center";
+        r_center_marker.id              = 0;
+        r_center_marker.type            = visualization_msgs::msg::Marker::SPHERE;
+        r_center_marker.action          = visualization_msgs::msg::Marker::ADD;
+
+        r_center_marker.pose.position.x    = frame.R_center_world.x();
+        r_center_marker.pose.position.y    = frame.R_center_world.y();
+        r_center_marker.pose.position.z    = frame.R_center_world.z();
+        r_center_marker.pose.orientation.w = 1.0;
+
+        r_center_marker.scale.x = 0.1;
+        r_center_marker.scale.y = 0.1;
+        r_center_marker.scale.z = 0.1;
+
+        // 蓝色表示R中心
+        r_center_marker.color.r = 0.0f;
+        r_center_marker.color.g = 0.5f;
+        r_center_marker.color.b = 1.0f;
+        r_center_marker.color.a = 1.0f;
+
+        r_center_marker.lifetime = rclcpp::Duration::from_seconds(0.1);
+        marker_array->markers.push_back(r_center_marker);
 
         debug_marker_pub_->publish(std::move(marker_array));
     }

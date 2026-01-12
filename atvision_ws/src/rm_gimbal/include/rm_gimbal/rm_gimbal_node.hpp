@@ -30,6 +30,7 @@
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
 #include "rm_interfaces/msg/plan_gimbal_cmd.hpp"
 #include "rm_interfaces/msg/target.hpp"
+#include "rm_interfaces/msg/energy_meter_state.hpp"
 
 namespace rm_gimbal {
 
@@ -96,6 +97,13 @@ private:
     // Rune marker subscription (energy mechanism predicted position)
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr rune_marker_sub_;
     void rune_marker_callback(visualization_msgs::msg::MarkerArray::ConstSharedPtr msg);
+
+    // Energy meter state subscription (for MPC)
+    rclcpp::Subscription<rm_interfaces::msg::EnergyMeterState>::SharedPtr energy_state_sub_;
+    void energy_state_callback(rm_interfaces::msg::EnergyMeterState::ConstSharedPtr msg);
+    rm_interfaces::msg::EnergyMeterState cached_energy_state_;
+    std::mutex energy_state_mutex_;
+    bool energy_state_valid_{false};
 
     // Ballistic solver
     std::unique_ptr<BallisticSolver> solver_;

@@ -19,7 +19,7 @@ bool Tracker::update(
     }
 
     // 只处理第一个靶（rune_detector 已保证 targets[0] 是距离上一帧最近的）
-    const auto& pos = target_positions[0];
+    const auto& pos  = target_positions[0];
     const auto& quat = target_quats[0];
 
     // 为第一个靶找到最佳匹配的 blade_id
@@ -30,24 +30,24 @@ bool Tracker::update(
     meas[2] = pos.z();
     meas[3] = orientation2roll(quat);
 
-    const auto& x_pre = energy_ukf->x();
+    const auto& x_pre    = energy_ukf->x();
     const int armors_num = 5;
 
     double best_cost = std::numeric_limits<double>::max();
-    int best_id = -1;
+    int best_id      = -1;
 
     for (int id = 0; id < armors_num; ++id) {
         VecZ z_pred = energy_model_.h(x_pre, id);
-        VecZ nu = meas - z_pred;
-        nu[3] = normalize_rad(nu[3]);
+        VecZ nu     = meas - z_pred;
+        nu[3]       = normalize_rad(nu[3]);
 
-        auto R = energy_model_.R_sqrt(z_pred);
+        auto R                                                       = energy_model_.R_sqrt(z_pred);
         Eigen::Matrix<double, EnergyMeter::NZ, EnergyMeter::NZ> Rinv = R.inverse();
         double d2 = (nu.transpose() * Rinv * nu)(0, 0);
 
         if (std::isfinite(d2) && d2 < params.matcher_gate && d2 < best_cost) {
             best_cost = d2;
-            best_id = id;
+            best_id   = id;
         }
     }
 
@@ -106,6 +106,13 @@ bool Tracker::first_meet_u(
     double yc = r_center.y();
     double zc = r_center.z();
     double v0 = 0.0;
+
+    // 计算实际半径（R中心到靶心的距离）
+    double observed_radius = (target_pos - r_center).norm();
+    if (observed_radius > 0.1) {
+        energy_model_.params.radius = observed_radius;
+    }
+    // 否则保持默认值 0.7
 
     // 初始化 UKF
     EnergyMeter::VecX xp0{xc, yc, zc, initial_roll, v0};

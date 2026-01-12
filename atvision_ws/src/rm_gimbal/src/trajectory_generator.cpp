@@ -228,4 +228,72 @@ void TrajectoryGenerator::calculateYawPitch(
     pitch = std::atan2(relative_pos.z(), relative_pos.head<2>().norm());
 }
 
+Trajectory TrajectoryGenerator::generateShootingTrajectoryRune(
+    const Eigen::Vector3d& predicted_position,
+    const Eigen::Vector3d& r_center,
+    double radius,
+    const Eigen::Vector3d& rotation_u,
+    const Eigen::Vector3d& rotation_v,
+    double angular_velocity,
+    const Eigen::Vector3d& muzzle_position,
+    const std::unique_ptr<fyt::TrajectoryCompensator>& trajectory_compensator) {
+
+    Trajectory trajectory;
+    trajectory.dt = params_.dt;
+    trajectory.horizon = params_.horizon();
+    trajectory.points.reserve(params_.horizon());
+
+    // 从预测位置计算当前角度
+    Eigen::Vector3d rel_pos = predicted_position - r_center;
+    double current_angle = std::atan2(rel_pos.dot(rotation_v), rel_pos.dot(rotation_u));
+
+    const int half_horizon = params_.half_horizon;
+
+    for (int step = 0; step < params_.horizon(); ++step) {
+        // 相对于当前时刻的时间偏移
+        // step=0 对应 t = -half_horizon * dt（过去）
+        // step=half_horizon 对应 t = 0（当前）
+        double t = (step - half_horizon) * params_.dt;
+
+        // 1. 用匀速模型预测t时刻的角度
+        double predicted_angle = current_angle + angular_velocity * t;
+
+        // 2. 计算t时刻的靶位置（绕R中心旋转）
+        Eigen::Vector3d target_pos = r_center
+                                   + radius * std::cos(predicted_angle) * rotation_u
+                                   + radius * std::sin(predicted_angle) * rotation_v;
+
+        // 3. 计算子弹飞行时间
+        Eigen::Vector3d armor_rel = target_pos - muzzle_position;
+        double t_fly = 0.0;
+        if (trajectory_compensator) {
+            t_fly = trajectory_compensator->getFlyingTime(armor_rel);
+        } else {
+            t_fly = armor_rel.norm() / 25.0;  // 默认25m/s
+        }
+
+        // 4. 重新预测（考虑飞行时间）
+        double shooting_angle = current_angle + angular_velocity * (t + t_fly);
+        Eigen::Vector3d shooting_pos = r_center
+                                     + radius * std::cos(shooting_angle) * rotation_u
+                                     + radius * std::sin(shooting_angle) * rotation_v;
+
+        // 5. 计算yaw和pitch（相对于枪口）
+        double yaw, pitch;
+        calculateYawPitch(shooting_pos, muzzle_position, yaw, pitch);
+
+        // 6. 构建轨迹点
+        TrajectoryPoint point;
+        point.time = t;
+        point.yaw = yaw;
+        point.pitch = pitch;
+        point.armor_id = 0;  // 能量机关只追踪一个靶
+        point.is_switching = false;
+
+        trajectory.points.push_back(point);
+    }
+
+    return trajectory;
+}
+
 } // namespace rm_gimbal

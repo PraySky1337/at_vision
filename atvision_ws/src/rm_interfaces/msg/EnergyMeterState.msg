@@ -12,6 +12,10 @@ int32 blade_offset          # 扇叶偏移计数（补偿叶片切换导致的�
 float64 predicted_angle     # 预测的未来角度，单位：弧度
 geometry_msgs/Vector3 predicted_position  # 预测的目标位置（世界坐标系），单位：米
 
+# 几何信息（供MPC使用）
+geometry_msgs/Vector3 r_center  # R标中心位置（世界坐标系），单位：米
+float64 radius                  # 能量机关半径（R中心到靶心距离），单位：米
+
 # 模型状态
 bool model_valid            # 模型是否有效
 bool is_big_rune            # 是否为大符

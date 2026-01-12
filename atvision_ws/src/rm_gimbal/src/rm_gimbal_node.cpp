@@ -91,6 +91,11 @@ GimbalNode::GimbalNode(const rclcpp::NodeOptions& options)
         "energy_meter_solver/marker", rclcpp::SensorDataQoS(),
         std::bind(&GimbalNode::rune_marker_callback, this, std::placeholders::_1));
 
+    // Subscribe to energy meter state (for MPC)
+    energy_state_sub_ = create_subscription<rm_interfaces::msg::EnergyMeterState>(
+        "energy_meter_solver/state", rclcpp::SensorDataQoS(),
+        std::bind(&GimbalNode::energy_state_callback, this, std::placeholders::_1));
+
     // Create 250Hz solve timer
     solve_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(4), std::bind(&GimbalNode::solve_timer_callback, this),
@@ -368,98 +373,182 @@ void GimbalNode::rune_marker_callback(visualization_msgs::msg::MarkerArray::Cons
         std::lock_guard<std::mutex> lock(target_mutex_);
         if (solver_ == nullptr) {
             solver_ = std::make_unique<BallisticSolver>(solver_params_, atomic_solver_params_);
-        }
-    }
-
-    // Find prediction marker (ns="prediction")
-    for (const auto& marker : msg->markers) {
-        if (marker.ns == "prediction" && marker.action != visualization_msgs::msg::Marker::DELETE) {
-            Eigen::Vector3d target_pos(
-                marker.pose.position.x, marker.pose.position.y, marker.pose.position.z);
-
-            try {
-                auto cmd = solver_->solveRune(target_pos, marker.header, tf_buffer_);
-                send_to_device(cmd);
-
-                // Publish ballistic params to energy_meter_solver
-                // data[0] = flying_time, data[1] = prediction_delay
-                std_msgs::msg::Float64MultiArray ballistic_params;
-                ballistic_params.data.push_back(solver_->getLastFlyingTime());
-                ballistic_params.data.push_back(solver_->getLastPredictionDelay());
-                ballistic_params_pub_->publish(ballistic_params);
-
-                // Publish debug info
-                if (debug_ && gimbal_cmd_pub_ != nullptr) {
-                    gimbal_cmd_pub_->publish(cmd);
-                }
-
-                // Publish PlanGimbalCmd for debug monitoring
-                if (debug_ && plan_cmd_pub_ != nullptr) {
-                    rm_interfaces::msg::PlanGimbalCmd plan_cmd;
-                    plan_cmd.header = marker.header;
-
-                    plan_cmd.raw_yaw   = static_cast<float>(cmd.yaw * M_PI / 180.0);
-                    plan_cmd.raw_pitch = static_cast<float>(cmd.pitch * M_PI / 180.0);
-
-                    // Rune mode: no MPC feedforward
-                    plan_cmd.mpc_valid = false;
-                    plan_cmd.ref_yaw   = plan_cmd.raw_yaw;
-                    plan_cmd.ref_pitch = plan_cmd.raw_pitch;
-
-                    // Get current gimbal state from TF
-                    try {
-                        auto gimbal_tf = tf_buffer_->lookupTransform(
-                            marker.header.frame_id, "gimbal_link", tf2::TimePointZero);
-                        tf2::Quaternion q;
-                        tf2::fromMsg(gimbal_tf.transform.rotation, q);
-                        double roll, pitch, yaw;
-                        tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-                        plan_cmd.cur_yaw   = static_cast<float>(yaw);
-                        plan_cmd.cur_pitch = static_cast<float>(-pitch);
-                    } catch (const tf2::TransformException&) {
-                        plan_cmd.cur_yaw   = 0.0f;
-                        plan_cmd.cur_pitch = 0.0f;
-                    }
-
-                    plan_cmd.fire_advice = cmd.fire_advice;
-                    plan_cmd.distance    = static_cast<float>(cmd.distance);
-
-                    plan_cmd_pub_->publish(plan_cmd);
-                }
-
-                // Publish visualization markers for rune
-                if (debug_ && marker_pub_ != nullptr) {
-                    visualization_msgs::msg::MarkerArray marker_array;
-
-                    // Target position marker
-                    visualization_msgs::msg::Marker target_marker;
-                    target_marker.header             = marker.header;
-                    target_marker.ns                 = "rune_target";
-                    target_marker.id                 = 0;
-                    target_marker.type               = visualization_msgs::msg::Marker::SPHERE;
-                    target_marker.action             = visualization_msgs::msg::Marker::ADD;
-                    target_marker.pose.position.x    = target_pos.x();
-                    target_marker.pose.position.y    = target_pos.y();
-                    target_marker.pose.position.z    = target_pos.z();
-                    target_marker.pose.orientation.w = 1.0;
-                    target_marker.scale.x            = 0.1;
-                    target_marker.scale.y            = 0.1;
-                    target_marker.scale.z            = 0.1;
-                    target_marker.color.r            = 1.0f;
-                    target_marker.color.g            = 0.5f;
-                    target_marker.color.a            = 1.0f;
-                    target_marker.lifetime           = rclcpp::Duration::from_seconds(0.1);
-                    marker_array.markers.push_back(target_marker);
-
-                    marker_pub_->publish(marker_array);
-                }
-            } catch (const tf2::TransformException& ex) {
-                RCLCPP_WARN_THROTTLE(
-                    get_logger(), *get_clock(), 1000, "Rune TF error: %s", ex.what());
+            if (solver_params_.mpc.enable) {
+                solver_->initializeMPC();
             }
-            return;
         }
     }
+
+    // Extract R center (SPHERE marker) and current blade info
+    Eigen::Vector3d r_center = Eigen::Vector3d::Zero();
+    Eigen::Vector3d target_pos = Eigen::Vector3d::Zero();
+    Eigen::Vector3d current_blade_pos = Eigen::Vector3d::Zero();  // 当前靶位置（用于计算半径）
+    Eigen::Quaterniond target_quat = Eigen::Quaterniond::Identity();
+    std_msgs::msg::Header header;
+    bool found_r_center = false;
+    bool found_prediction = false;
+    bool found_current_blade = false;
+
+    static constexpr uint32_t SPHERE_TYPE = 2;
+    static constexpr uint32_t CUBE_TYPE = 1;
+
+    for (const auto& marker : msg->markers) {
+        if (marker.action == visualization_msgs::msg::Marker::DELETE) {
+            continue;
+        }
+
+        // R center (SPHERE)
+        if (marker.type == SPHERE_TYPE && !found_r_center) {
+            r_center = Eigen::Vector3d(
+                marker.pose.position.x, marker.pose.position.y, marker.pose.position.z);
+            found_r_center = true;
+        }
+
+        // Prediction marker
+        if (marker.ns == "prediction") {
+            target_pos = Eigen::Vector3d(
+                marker.pose.position.x, marker.pose.position.y, marker.pose.position.z);
+            found_prediction = true;
+            header = marker.header;  // 使用prediction marker的header
+        }
+
+        // Current blade (ns="blades") for orientation and position
+        // 使用当前追踪靶（红色，id可能不是0）
+        if (marker.ns == "blades" && marker.type == CUBE_TYPE) {
+            // 检查是否是当前追踪的靶（红色: r=1, g=0, b=0）
+            if (marker.color.r > 0.9 && marker.color.g < 0.1 && marker.color.b < 0.1) {
+                current_blade_pos = Eigen::Vector3d(
+                    marker.pose.position.x, marker.pose.position.y, marker.pose.position.z);
+                const auto& q = marker.pose.orientation;
+                target_quat = Eigen::Quaterniond(q.w, q.x, q.y, q.z);
+                found_current_blade = true;
+            }
+        }
+    }
+
+    if (!found_prediction || !found_r_center || !found_current_blade) {
+        return;
+    }
+
+    // Get angular velocity, r_center, and radius from cached energy state
+    double angular_velocity = 0.0;
+    double radius = 0.7;  // 默认半径
+    {
+        std::lock_guard<std::mutex> lock(energy_state_mutex_);
+        if (energy_state_valid_) {
+            angular_velocity = cached_energy_state_.filtered_velocity;
+            // 使用energy_meter_solver计算的准确半径
+            if (cached_energy_state_.radius > 0.1) {
+                radius = cached_energy_state_.radius;
+            }
+            // 使用energy_meter_solver的R中心（更准确）
+            r_center = Eigen::Vector3d(
+                cached_energy_state_.r_center.x,
+                cached_energy_state_.r_center.y,
+                cached_energy_state_.r_center.z);
+        }
+    }
+
+    // Calculate rotation plane basis vectors from blade orientation
+    Eigen::Matrix3d rot = target_quat.toRotationMatrix();
+    Eigen::Vector3d rotation_u = rot.col(2);  // Z轴：θ=0 方向
+    Eigen::Vector3d rotation_v = rot.col(1);  // Y轴：θ=π/2 方向
+
+    try {
+        auto cmd = solver_->solveRune(
+            target_pos, r_center, radius,
+            rotation_u, rotation_v, angular_velocity,
+            header, tf_buffer_);
+        send_to_device(cmd);
+
+        // Publish ballistic params to energy_meter_solver
+        std_msgs::msg::Float64MultiArray ballistic_params;
+        ballistic_params.data.push_back(solver_->getLastFlyingTime());
+        ballistic_params.data.push_back(solver_->getLastPredictionDelay());
+        ballistic_params_pub_->publish(ballistic_params);
+
+        // Publish debug info
+        if (debug_ && gimbal_cmd_pub_ != nullptr) {
+            gimbal_cmd_pub_->publish(cmd);
+        }
+
+        // Publish PlanGimbalCmd for debug monitoring
+        if (debug_ && plan_cmd_pub_ != nullptr) {
+            rm_interfaces::msg::PlanGimbalCmd plan_cmd;
+            plan_cmd.header = header;
+
+            plan_cmd.raw_yaw   = static_cast<float>(cmd.yaw * M_PI / 180.0);
+            plan_cmd.raw_pitch = static_cast<float>(cmd.pitch * M_PI / 180.0);
+
+            // Get MPC feedforward
+            auto ff = solver_->getFeedforward();
+            plan_cmd.mpc_valid = ff.valid;
+            if (ff.valid) {
+                plan_cmd.ref_yaw       = plan_cmd.raw_yaw;
+                plan_cmd.ref_yaw_vel   = static_cast<float>(ff.yaw_vel);
+                plan_cmd.ref_yaw_acc   = static_cast<float>(ff.yaw_acc);
+                plan_cmd.ref_pitch     = plan_cmd.raw_pitch;
+                plan_cmd.ref_pitch_vel = static_cast<float>(ff.pitch_vel);
+                plan_cmd.ref_pitch_acc = static_cast<float>(ff.pitch_acc);
+            }
+
+            // Get current gimbal state from TF
+            try {
+                auto gimbal_tf = tf_buffer_->lookupTransform(
+                    header.frame_id, "gimbal_link", tf2::TimePointZero);
+                tf2::Quaternion q;
+                tf2::fromMsg(gimbal_tf.transform.rotation, q);
+                double roll, pitch, yaw;
+                tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+                plan_cmd.cur_yaw   = static_cast<float>(yaw);
+                plan_cmd.cur_pitch = static_cast<float>(-pitch);
+            } catch (const tf2::TransformException&) {
+                plan_cmd.cur_yaw   = 0.0f;
+                plan_cmd.cur_pitch = 0.0f;
+            }
+
+            plan_cmd.fire_advice = cmd.fire_advice;
+            plan_cmd.distance    = static_cast<float>(cmd.distance);
+
+            plan_cmd_pub_->publish(plan_cmd);
+        }
+
+        // Publish visualization markers for rune
+        if (debug_ && marker_pub_ != nullptr) {
+            visualization_msgs::msg::MarkerArray marker_array;
+
+            // Target position marker
+            visualization_msgs::msg::Marker target_marker;
+            target_marker.header             = header;
+            target_marker.ns                 = "rune_target";
+            target_marker.id                 = 0;
+            target_marker.type               = visualization_msgs::msg::Marker::SPHERE;
+            target_marker.action             = visualization_msgs::msg::Marker::ADD;
+            target_marker.pose.position.x    = target_pos.x();
+            target_marker.pose.position.y    = target_pos.y();
+            target_marker.pose.position.z    = target_pos.z();
+            target_marker.pose.orientation.w = 1.0;
+            target_marker.scale.x            = 0.1;
+            target_marker.scale.y            = 0.1;
+            target_marker.scale.z            = 0.1;
+            target_marker.color.r            = 1.0f;
+            target_marker.color.g            = 0.5f;
+            target_marker.color.a            = 1.0f;
+            target_marker.lifetime           = rclcpp::Duration::from_seconds(0.1);
+            marker_array.markers.push_back(target_marker);
+
+            marker_pub_->publish(marker_array);
+        }
+    } catch (const tf2::TransformException& ex) {
+        RCLCPP_WARN_THROTTLE(
+            get_logger(), *get_clock(), 1000, "Rune TF error: %s", ex.what());
+    }
+}
+
+void GimbalNode::energy_state_callback(rm_interfaces::msg::EnergyMeterState::ConstSharedPtr msg) {
+    std::lock_guard<std::mutex> lock(energy_state_mutex_);
+    cached_energy_state_ = *msg;
+    energy_state_valid_ = true;
 }
 
 void GimbalNode::solve_timer_callback() {

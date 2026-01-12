@@ -379,7 +379,13 @@ void BallisticSolver::setGimbalAngularVelocity(double yaw_vel, double pitch_vel)
 }
 
 rm_interfaces::msg::GimbalCmd BallisticSolver::solveRune(
-    const Eigen::Vector3d& target_position, const std_msgs::msg::Header& header,
+    const Eigen::Vector3d& target_position,
+    const Eigen::Vector3d& r_center,
+    double radius,
+    const Eigen::Vector3d& rotation_u,
+    const Eigen::Vector3d& rotation_v,
+    double angular_velocity,
+    const std_msgs::msg::Header& header,
     std::shared_ptr<tf2_ros::Buffer> tf2_buffer_) {
 
     // Get current gimbal pose
@@ -431,6 +437,60 @@ rm_interfaces::msg::GimbalCmd BallisticSolver::solveRune(
     // Store predicted position for visualization
     predicted_position_ = target_position;
     has_prediction_ = true;
+
+    // MPC轨迹规划
+    const bool mpc_enable = atomic_params_.mpc_enable.load(std::memory_order_relaxed);
+    if (mpc_enable && mpc_enabled_ && trajectory_planner_ && trajectory_planner_->isInitialized()) {
+        try {
+            // 枪口位置
+            Eigen::Vector3d muzzle_position(xyza_[0], xyza_[1], xyza_[2]);
+
+            // 生成能量机关射击轨迹
+            auto shooting_traj = trajectory_generator_->generateShootingTrajectoryRune(
+                target_position, r_center, radius,
+                rotation_u, rotation_v, angular_velocity,
+                muzzle_position, trajectory_compensator_);
+
+            // 当前云台状态
+            Eigen::Vector2d state_yaw(rpy_[2], gimbal_yaw_vel_);
+            Eigen::Vector2d state_pitch(rpy_[1], gimbal_pitch_vel_);
+
+            // MPC求解
+            auto solution = trajectory_planner_->solve(shooting_traj, state_yaw, state_pitch);
+
+            // 检查输出是否有效
+            auto out = solution.getOutput();
+            bool has_valid_data = !solution.yaw_positions.empty() && !solution.pitch_positions.empty();
+            if (has_valid_data) {
+                // 使用MPC输出的平滑位置替代直接计算的角度
+                cmd_yaw = out.yaw;
+                cmd_pitch = out.pitch;
+
+                // 重新计算gimbal_cmd
+                gimbal_cmd.yaw = cmd_yaw * 180 / M_PI;
+                gimbal_cmd.pitch = cmd_pitch * 180 / M_PI;
+                gimbal_cmd.yaw_diff = (cmd_yaw - rpy_[2]) * 180 / M_PI;
+                gimbal_cmd.pitch_diff = (cmd_pitch - rpy_[1]) * 180 / M_PI;
+
+                // 重新计算fire_advice（使用MPC位置与参考位置的误差）
+                double ref_yaw = out.ref_yaw;
+                double ref_pitch = out.ref_pitch;
+                gimbal_cmd.fire_advice = isOnTarget(cmd_yaw, cmd_pitch, ref_yaw, ref_pitch, distance);
+
+                feedforward_cache_.yaw_vel = out.yaw_vel;
+                feedforward_cache_.yaw_acc = out.yaw_acc;
+                feedforward_cache_.pitch_vel = out.pitch_vel;
+                feedforward_cache_.pitch_acc = out.pitch_acc;
+                feedforward_cache_.valid = true;
+            } else {
+                feedforward_cache_.valid = false;
+            }
+        } catch (const std::exception& e) {
+            feedforward_cache_.valid = false;
+        }
+    } else {
+        feedforward_cache_.valid = false;
+    }
 
     return gimbal_cmd;
 }

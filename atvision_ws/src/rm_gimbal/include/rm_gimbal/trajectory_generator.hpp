@@ -58,6 +58,27 @@ public:
         double bullet_speed,
         const std::unique_ptr<fyt::TrajectoryCompensator>& trajectory_compensator);
 
+    // 生成能量机关射击轨迹
+    // 基于energy_meter_solver发布的预测位置和角速度，生成MPC参考轨迹
+    // @param predicted_position 预测的靶位置（世界坐标系，来自energy_meter_solver）
+    // @param r_center R标记中心位置（世界坐标系）
+    // @param radius 能量机关半径（米）
+    // @param rotation_u 旋转平面U轴向量（θ=0方向）
+    // @param rotation_v 旋转平面V轴向量（θ=π/2方向）
+    // @param angular_velocity 角速度（rad/s，来自state.filtered_velocity）
+    // @param muzzle_position 枪口位置（世界坐标系）
+    // @param trajectory_compensator 弹道补偿器
+    // @return 射击轨迹
+    Trajectory generateShootingTrajectoryRune(
+        const Eigen::Vector3d& predicted_position,
+        const Eigen::Vector3d& r_center,
+        double radius,
+        const Eigen::Vector3d& rotation_u,
+        const Eigen::Vector3d& rotation_v,
+        double angular_velocity,
+        const Eigen::Vector3d& muzzle_position,
+        const std::unique_ptr<fyt::TrajectoryCompensator>& trajectory_compensator);
+
     // 更新参数
     void updateParams(const GeneratorParams& params);
 

@@ -13,13 +13,13 @@
 // 3rd party
 #include <Eigen/Dense>
 // project
+#include "rm_gimbal/solver_params.hpp"
+#include "rm_gimbal/trajectory_generator.hpp"
+#include "rm_gimbal/trajectory_planner.hpp"
+#include "rm_gimbal/util.hpp"
 #include "rm_interfaces/msg/gimbal_cmd.hpp"
 #include "rm_interfaces/msg/target.hpp"
 #include "rm_utils/math/trajectory_compensator.hpp"
-#include "rm_gimbal/solver_params.hpp"
-#include "rm_gimbal/util.hpp"
-#include "rm_gimbal/trajectory_generator.hpp"
-#include "rm_gimbal/trajectory_planner.hpp"
 
 namespace rm_gimbal {
 
@@ -36,10 +36,11 @@ public:
         const rm_interfaces::msg::Target& target_msg, const rclcpp::Time& current_time,
         std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
 
-    // Solve the gimbal command for rune target (energy mechanism)
-    // Only needs predicted position, simpler than armor tracking
+    // Solve the gimbal command for rune target (energy mechanism) with MPC support
     rm_interfaces::msg::GimbalCmd solveRune(
-        const Eigen::Vector3d& target_position, const std_msgs::msg::Header& header,
+        const Eigen::Vector3d& target_position, const Eigen::Vector3d& r_center, double radius,
+        const Eigen::Vector3d& rotation_u, const Eigen::Vector3d& rotation_v,
+        double angular_velocity, const std_msgs::msg::Header& header,
         std::shared_ptr<tf2_ros::Buffer> tf2_buffer_);
 
     enum State { TRACKING_ARMOR = 0, TRACKING_CENTER = 1 } state{TRACKING_ARMOR};

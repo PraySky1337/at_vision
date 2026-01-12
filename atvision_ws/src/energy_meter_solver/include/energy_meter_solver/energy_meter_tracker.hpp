@@ -53,6 +53,9 @@ struct Tracker {
     // 获取当前追踪的靶ID（用于预测时的角度偏移）
     int getCurrentBladeId() const { return current_matched_blade_id_; }
 
+    // 获取当前使用的半径（R中心到靶心距离）
+    double getRadius() const { return energy_model_.params.radius; }
+
     // 初始化跟踪器（直接传原始四元数和位置）
     bool first_meet_u(
         const Eigen::Vector3d& r_center, const Eigen::Vector3d& target_pos,
